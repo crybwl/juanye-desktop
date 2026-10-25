@@ -1,0 +1,90 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { sampleExam, defaultLayout } from "../src/data";
+import { exportProject, exportTex, parseProject } from "../src/documents";
+import { buildBlocks } from "../src/components/Paper";
+import { appendFigures, questionFigures } from "../src/figures";
+import { CUBE_TIKZ, drawingSegments, extractTikzBlocks, stripTikzBlocks } from "../src/drawing";
+import { normalizeOcrMath, removeAnswerPlaceholders } from "../src/text-normalization";
+import { changeQuestionType, convertQuestions, copyQuestions, createSection, defaultScore, moveSection, removeLeadingNumber, repairOcrText, transferQuestions } from "../src/structure";
+Object.assign(globalThis, { React });
+const copy = () => structuredClone(sampleExam);
+const PNG = "data:image/png;base64,aGVsbG8=";
+
+test("extended project preserves all figure, type, metadata, spacing and pagination properties", () => {
+  const exam = copy(), q = exam.sections[0].questions[0];
+  q.figures = [{ id: "f1", src: PNG, layout: "right", caption: "$A$", width: 30, maxHeight: 180 }];
+  q.drawing = CUBE_TIKZ; q.source = "来源"; q.knowledge = ["几何"]; q.difficulty = "hard"; q.pageBreakBefore = true;
+  exam.sections[0].pageBreakBefore = true;
+  for (const type of ["judge", "material", "custom"] as const) exam.sections.push(createSection(type));
+  const layout = { ...defaultLayout, questionGap: 2.2, optionGap: 1, figureWidth: 32, figureGap: 2, quickAnswers: false, answerMode: "brief" as const };
+  const parsed = parseProject(exportProject(exam, layout));
+  assert.deepEqual(parsed.layout, layout);
+  assert.deepEqual(parsed.exam.sections[0].questions[0].figures, q.figures);
+  assert.equal(parsed.exam.sections[0].questions[0].drawing, CUBE_TIKZ);
+  assert.equal(parsed.exam.sections[0].questions[0].difficulty, "hard");
+  assert.equal(parsed.exam.sections[0].pageBreakBefore, true);
+  assert.equal(parsed.exam.sections.at(-2)?.type, "material");
+  const bad = copy(); bad.sections[0].questions[0].figures = [{ id: "f", src: "file:///secret.png", layout: "right" }];
+  assert.throws(() => parseProject(exportProject(bad, layout)), /题图/);
+});
+test("figure append preserves old images and enforces eight images per question", () => {
+  const q = copy().sections[0].questions[0]; q.figure = PNG;
+  const figures = questionFigures(q);
+  assert.equal(figures.length, 1);
+  assert.equal(appendFigures(figures, [{ id: "new", src: PNG, layout: "full" }]).length, 2);
+  assert.throws(() => appendFigures(Array(8).fill(figures[0]), [figures[0]]), /最多 8/);
+});
+test("structure copying, cross-section movement, conversion and section order are immutable", () => {
+  const exam = copy(), id = exam.sections[0].questions[0].id;
+  const next = copyQuestions(exam, new Set([id]));
+  assert.equal(next.sections[0].questions.length, exam.sections[0].questions.length + 1);
+  assert.notEqual(next.sections[0].questions[1].id, id);
+  const moved = transferQuestions(exam, new Set([id]), exam.sections[3].id);
+  assert.ok(!moved.sections[0].questions.some(q => q.id === id));
+  assert.equal(moved.sections[3].questions.at(-1)?.type, "essay");
+  assert.ok(exam.sections[0].questions.some(q => q.id === id));
+  const converted = convertQuestions(exam, new Set([id]), "judge");
+  assert.deepEqual(converted.sections.find(s => s.type === "judge")?.questions[0].options, ["正确", "错误"]);
+  assert.equal(moveSection(exam, exam.sections[0].id, 1).sections[1].id, exam.sections[0].id);
+  assert.equal(changeQuestionType(exam.sections[0].questions[0], "judge").options.length, 2);
+  assert.equal(defaultScore("material"), 15);
+});
+test("cleaning preserves subquestions, decimal values and mathematical meaning", () => {
+  assert.equal(removeLeadingNumber("12. 已知 $x$"), "已知 $x$");
+  assert.equal(removeLeadingNumber("(1) 已知 $x$"), "(1) 已知 $x$");
+  assert.equal(removeLeadingNumber("0.34 是概率"), "0.34 是概率");
+  assert.equal(repairOcrText(String.raw`$\\frac{1}{2}$`), String.raw`$\frac{1}{2}$`);
+});
+test("TikZ blocks protect inner label math; TeX exports original drawing code", () => {
+  const src = `前文 $x$\n${CUBE_TIKZ}\n后文`;
+  assert.equal(drawingSegments(src).length, 3);
+  assert.equal(extractTikzBlocks(src)[0], CUBE_TIKZ);
+  assert.equal(stripTikzBlocks(src), "前文 $x$\n\n后文");
+  const exam = copy(); exam.sections[0].questions[0].drawing = CUBE_TIKZ;
+  assert.ok(exportTex(exam, defaultLayout).includes(CUBE_TIKZ));
+});
+test("missing OCR math delimiters and printed answer parentheses match mobile behavior", () => {
+  assert.equal(normalizeOcrMath('0.34', true), '$0.34$');
+  assert.equal(normalizeOcrMath(String.raw`\frac{1}{2}`, true), String.raw`$\frac{1}{2}$`);
+  assert.equal(normalizeOcrMath('已知 x_1，求值。'), '已知 $x_1$，求值。');
+  assert.equal(normalizeOcrMath('随机抽取 1000 名学生'), '随机抽取 1000 名学生');
+  assert.equal(normalizeOcrMath(CUBE_TIKZ), CUBE_TIKZ);
+  assert.equal(removeAnswerPlaceholders('$x$$y$'), '$x$$y$');
+  assert.equal(removeAnswerPlaceholders(String.raw`正确的是（\quad）。坐标 $(1,2)$；(1) 求值。`), '正确的是。坐标 $(1,2)$；(1) 求值。');
+});
+test("paper uses right float, custom instructions and breaks, with selectable tail answers", () => {
+  const exam = copy(), q = exam.sections[0].questions[0];
+  q.figure = PNG; q.pageBreakBefore = true;
+  exam.sections[0].note = "自定大题说明"; exam.sections[0].pageBreakBefore = true;
+  const blocks = buildBlocks(exam, defaultLayout, 51, 7);
+  const section = blocks.find(block => block.key === exam.sections[0].id)!;
+  const question = blocks.find(block => block.key === q.id)!;
+  assert.equal(section.breakBefore, true); assert.equal(question.breakBefore, true);
+  assert.match(renderToStaticMarkup(section.node), /自定大题说明/);
+  assert.match(renderToStaticMarkup(question.node), /float:right/);
+  assert.ok(!buildBlocks(exam, { ...defaultLayout, answerMode: "none" }, 51, 7).some(block => block.key === "answer-title"));
+  assert.ok(!buildBlocks(exam, { ...defaultLayout, quickAnswers: false }, 51, 7).some(block => block.key === "quick-0"));
+});

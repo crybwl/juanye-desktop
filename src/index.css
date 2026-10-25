@@ -1,0 +1,837 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-serif: "Source Han Serif SC", "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, "Noto Sans SC", monospace;
+
+  --color-bg: #08090c;
+  --color-panel: #0d0f14;
+  --color-raised: #141720;
+  --color-line: rgb(255 255 255 / 0.065);
+  --color-line-strong: rgb(255 255 255 / 0.1);
+  --color-fg: #eceef4;
+  --color-muted: #9ba1b3;
+  --color-faint: #666c7d;
+  --color-accent: #9db1ff;
+  --color-accent-2: #c4b2ff;
+  --color-ok: #74d6a6;
+  --color-warn: #f4b870;
+  --color-danger: #f28585;
+}
+
+:root {
+  color-scheme: dark;
+  --accent-fill: #9db1ff;
+  --accent-fill-2: #c4b2ff;
+  --surface-input: #0a0c11;
+  --surface-popup: #1c1f29;
+  --surface-selected: #262a37;
+  --surface-glass: rgb(19 21 29 / 0.94);
+  --surface-inset: rgb(0 0 0 / 0.2);
+  --surface-overlay: rgb(5 6 10 / 0.6);
+  --canvas-bg: #0b0c11;
+  --canvas-dot: rgb(255 255 255 / 0.055);
+  --scroll-thumb: rgb(255 255 255 / 0.12);
+  --syntax-math: #c9d4ff;
+  --syntax-brace: #7f86a0;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f4f5f9;
+  --color-panel: #fff;
+  --color-raised: #fff;
+  --color-line: rgb(39 52 82 / 0.105);
+  --color-line-strong: rgb(39 52 82 / 0.17);
+  --color-fg: #242d40;
+  --color-muted: #576277;
+  --color-faint: #657086;
+  --color-accent: #555f8a;
+  --color-accent-2: #6a608a;
+  --color-ok: #187247;
+  --color-warn: #8a5a15;
+  --color-danger: #b23b4d;
+  --surface-input: #fff;
+  --surface-popup: #fff;
+  --surface-selected: #fff;
+  --surface-glass: rgb(255 255 255 / 0.97);
+  --surface-inset: rgb(39 52 82 / 0.035);
+  --surface-overlay: rgb(43 51 76 / 0.26);
+  --canvas-bg: #e9edf4;
+  --canvas-dot: rgb(59 75 110 / 0.13);
+  --scroll-thumb: rgb(73 87 117 / 0.28);
+  --syntax-math: #394f99;
+  --syntax-brace: #66729a;
+}
+
+:root[data-theme="telegram"] {
+  color-scheme: dark;
+  --color-bg: #0b0e13;
+  --color-panel: #171b21;
+  --color-raised: #20252c;
+  --color-fg: #edf0f3;
+  --color-muted: #adb5c1;
+  --color-faint: #949ead;
+  --tg-accent: #ecb985;
+  --tg-accent-2: #e4a28d;
+  --tg-fill: #9a6330;
+  --tg-fill-2: #a84d3c;
+  --color-accent: var(--tg-accent);
+  --color-accent-2: var(--tg-accent-2);
+  --accent-fill: var(--tg-fill);
+  --accent-fill-2: var(--tg-fill-2);
+  --color-line: rgb(255 255 255 / 0.065);
+  --color-line-strong: rgb(255 255 255 / 0.13);
+  --surface-input: #11151b;
+  --surface-popup: #22272f;
+  --surface-selected: #303640;
+  --surface-glass: #191e25;
+  --surface-inset: #11151b;
+  --surface-overlay: rgb(0 0 0 / 0.6);
+  --canvas-bg: #080b10;
+  --canvas-dot: transparent;
+  --scroll-thumb: rgb(173 183 197 / 0.25);
+  --syntax-math: var(--tg-accent);
+  --syntax-brace: #969fae;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  font-feature-settings: "cv11", "ss01";
+}
+[data-tauri-drag-region] { -webkit-app-region: drag; }
+button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; }
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/* 细滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 45%, transparent);
+}
+
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+/* 主按钮：渐变 + 悬停流光 */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.12) inset,
+    0 6px 20px -6px color-mix(in srgb, var(--color-accent) 60%, transparent);
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.btn-primary:hover::after {
+  transform: translateX(120%);
+}
+
+/* 背景：极淡的品牌色光晕 */
+.app-bg {
+  background:
+    radial-gradient(900px 500px at 12% -10%, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 70%),
+    radial-gradient(700px 500px at 100% 0%, color-mix(in srgb, var(--color-accent-2) 6%, transparent), transparent 70%),
+    var(--color-bg);
+}
+.canvas-dots {
+  background-color: var(--canvas-bg);
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* 编辑器高亮层 */
+.tex-editor {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+.hl-math {
+  color: var(--syntax-math);
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  border-radius: 4px;
+}
+.hl-cmd {
+  color: var(--color-accent-2);
+}
+.hl-brace {
+  color: var(--syntax-brace);
+}
+.hl-blank {
+  color: var(--color-warn);
+}
+
+/* 题目渲染（应用内） */
+.q-blank {
+  display: inline-block;
+  width: 5em;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-0.2em);
+  margin: 0 0.2em;
+}
+.katex {
+  font-size: 1.08em;
+}
+
+/* ============ 试卷（与 PDF 一致的 HTML/CSS 排版） ============ */
+.preview-page-content {
+  /* Fixed paper geometry lets Chromium skip offscreen layout/paint without deleting pages. */
+  content-visibility: auto;
+  contain: layout paint style;
+}
+.preview-canvas { contain: layout paint style; }
+
+.paper {
+  --fs: 14px;
+  --lh: 1.7;
+  --gap: 1;
+  color: #16171a;
+  background: #fff;
+  font-size: var(--fs);
+  line-height: var(--lh);
+  font-family: var(--font-serif);
+  text-align: justify;
+}
+.paper.structured {
+  font-family: var(--font-sans);
+}
+.paper .katex {
+  font-size: 1.05em;
+}
+.paper .katex-display {
+  margin: 0.35em 0;
+}
+.math-block { display: block; min-width: 0; max-width: 100%; }
+.math-table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  color: inherit;
+  font-size: 0.95em;
+  line-height: 1.45;
+  text-align: center;
+}
+.math-table th, .math-table td {
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  padding: 0.25em 0.55em;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.math-table th { font-weight: 600; background: color-mix(in srgb, currentColor 5%, transparent); }
+.math-table tr { break-inside: avoid; }
+.math-table .katex-display { margin: 0.15em 0; }
+.paper .math-table :is(th, td) { border-color: #555; }
+.paper .math-table th { background: #f7f7f7; color: #16171a; }
+.paper .math-table td { background: #fff; color: #16171a; }
+.p-block {
+  padding-bottom: calc(10px * var(--gap));
+}
+.p-question-block { padding-bottom: var(--question-gap); }
+.p-quick-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-left: 1px solid #555;
+}
+.p-quick-cell {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 32px;
+  border-bottom: 1px solid #555;
+  border-right: 1px solid #555;
+  text-align: center;
+}
+.p-quick-number { border-right: 1px solid #555; padding: 4px 2px; }
+.p-quick-value {
+  min-width: 0;
+  padding: 4px 3px;
+  overflow-wrap: anywhere;
+}
+.p-figures-right .p-plot { width: 100%; height: auto; }
+.p-figures-right figure { width: 100%; }
+.p-q-content .p-opts { row-gap: var(--option-gap); }
+.p-title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: calc(var(--fs) * 1.55);
+  text-align: center;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+.p-sub {
+  text-align: center;
+  font-family: var(--font-sans);
+  letter-spacing: 0.4em;
+  font-size: calc(var(--fs) * 1.05);
+  margin-top: 2px;
+}
+.p-info {
+  text-align: center;
+  font-size: calc(var(--fs) * 0.8);
+  color: #444;
+  margin-top: 10px;
+  line-height: 1.9;
+  font-family: var(--font-sans);
+}
+.p-info u {
+  display: inline-block;
+  width: 5.5em;
+  border-bottom: 1px solid #555;
+  text-decoration: none;
+  margin: 0 0.6em 0 0.2em;
+}
+.p-notice {
+  font-size: calc(var(--fs) * 0.82);
+  line-height: 1.65;
+  color: #222;
+}
+.p-notice b {
+  font-family: var(--font-sans);
+}
+.p-sec {
+  font-family: var(--font-sans);
+  padding-top: calc(6px * var(--gap));
+}
+.p-sec b {
+  font-weight: 700;
+}
+.p-sec span {
+  font-family: var(--font-serif);
+  font-size: 0.95em;
+}
+.paper.structured .p-sec-inner {
+  border-left: 3px solid #4458c4;
+  background: #f1f3fc;
+  padding: 4px 10px;
+  border-radius: 0 6px 6px 0;
+}
+.paper.structured .p-sec span {
+  font-family: var(--font-sans);
+  color: #555;
+}
+.p-q {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2em 1fr;
+  border-radius: 6px;
+  transition:
+    background 0.25s,
+    box-shadow 0.25s;
+}
+.paper.structured .p-q-num {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  color: #3346b3;
+}
+.p-score {
+  float: right;
+  color: #888;
+  font-size: 0.85em;
+  font-family: var(--font-sans);
+  margin-left: 1em;
+}
+.p-opts {
+  display: grid;
+  column-gap: 1em;
+  row-gap: calc(2px * var(--gap));
+  margin-top: calc(4px * var(--gap));
+}
+.p-opt b {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  margin-right: 0.3em;
+}
+.p-space {
+  border: none;
+}
+.interactive .p-q {
+  cursor: pointer;
+  margin-inline: -7px;
+  padding-inline: 7px;
+}
+.interactive .p-q:hover {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+.interactive .p-q[data-active="true"] {
+  background: color-mix(in srgb, var(--color-accent) 11%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-accent) 85%, #3b4fd0);
+}
+.p-plot {
+  display: block;
+  margin: 6px auto 0;
+}
+
+/* 答题卡 */
+.card-box {
+  border: 1px solid #222;
+  border-radius: 4px;
+  position: relative;
+}
+.card-label {
+  position: absolute;
+  top: -0.75em;
+  left: 10px;
+  background: #fff;
+  padding: 0 6px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.85em;
+}
+.bubble {
+  display: inline-grid;
+  place-items: center;
+  width: 2.3em;
+  height: 1.35em;
+  border: 1px solid #d0464a;
+  border-radius: 3px;
+  color: #d0464a;
+  font-family: var(--font-sans);
+  font-size: 0.78em;
+  font-weight: 500;
+  line-height: 1;
+  margin-right: 0.5em;
+}
+
+/* Telegram-style dark surfaces remain opaque; paper is always a separate white surface. */
+:root[data-theme="telegram"],
+:root[data-theme="telegram"] body,
+:root[data-theme="telegram"] #root,
+:root[data-theme="telegram"] .app-bg { background: var(--color-bg); }
+:root[data-theme="telegram"] .app-bg > header,
+:root[data-theme="telegram"] .app-bg > div > [class~="shrink-0"] {
+  background: #11151b;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-theme="telegram"] .app-bg > header {
+  background: #15191f;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.035);
+}
+:root[data-theme="telegram"] .workspace-stage {
+  position: relative;
+  isolation: isolate;
+  background: #080b10;
+}
+/* A fixed-size clipping layer keeps the moving tile out of the pane's scroll geometry. */
+.workspace-wallpaper { display: none; }
+:root[data-theme="telegram"] .workspace-wallpaper {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+:root[data-theme="telegram"] .workspace-wallpaper::before {
+  content: "";
+  position: absolute;
+  inset: -64px;
+  pointer-events: none;
+  background-image: var(--tg-workspace-wallpaper, var(--tg-wallpaper, none));
+  background-size: 440px 440px;
+  background-repeat: repeat;
+  transform: translate3d(0, 0, 0);
+}
+:root[data-theme="telegram"] .app-bg > .workspace-stage > :is(.workspace-editor-stage, .workspace-preview-stage),
+:root[data-theme="telegram"] .workspace-preview-stage .canvas-dots {
+  background: transparent;
+}
+:root[data-theme="telegram"] [data-interface-motion="full"] .workspace-wallpaper::before {
+  animation: workspace-wallpaper-drift 80s linear infinite alternate;
+  will-change: transform;
+}
+:root[data-theme="telegram"] [data-interface-motion="reduced"] .workspace-wallpaper::before {
+  animation: none;
+  transform: none;
+}
+@keyframes workspace-wallpaper-drift {
+  from { transform: translate3d(-20px, -14px, 0); }
+  to { transform: translate3d(20px, 14px, 0); }
+}
+:root[data-theme="telegram"] .paper {
+  background: #fff;
+  color: #16171a;
+  text-shadow: none;
+}
+:root[data-theme="telegram"] .app-bg select,
+:root[data-theme="telegram"] .app-bg textarea:not(.tex-editor),
+:root[data-theme="telegram"] .app-bg input:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
+  background-color: var(--surface-input);
+}
+:root[data-theme="telegram"] :is([class~="bg-[#0a0c11]"], [class~="bg-[#0d0f14]"]) { background-color: var(--surface-input); }
+:root[data-theme="telegram"] [class~="bg-[#1c1f29]"] { background-color: var(--surface-popup); }
+:root[data-theme="telegram"] [class~="bg-[#262a37]"] { background-color: var(--surface-selected); }
+:root[data-theme="telegram"] [class~="bg-[#0a0b0f]"] { background-color: var(--canvas-bg); }
+
+/* Compatibility aliases for the original dark UI's translucent white utilities.
+   Pure-white paper and illustration colors are deliberately not remapped. */
+:root[data-theme="light"] :is(
+  [class~="bg-white/[0.015]"], [class~="bg-white/[0.018]"], [class~="bg-white/[0.02]"]
+) { background-color: rgb(62 80 123 / 0.025); }
+:root[data-theme="light"] :is(
+  [class~="bg-white/[0.025]"], [class~="bg-white/[0.03]"], [class~="bg-white/[0.04]"],
+  [class~="bg-white/[0.045]"], [class~="bg-white/[0.05]"]
+) { background-color: rgb(62 80 123 / 0.045); }
+:root[data-theme="light"] :is(
+  [class~="bg-white/[0.06]"], [class~="bg-white/[0.07]"], [class~="bg-white/[0.08]"],
+  [class~="bg-white/[0.1]"]
+) { background-color: rgb(62 80 123 / 0.07); }
+:root[data-theme="light"] :is(
+  [class~="bg-white/[0.12]"], [class~="bg-white/20"]
+) { background-color: rgb(62 80 123 / 0.18); }
+:root[data-theme="light"] :is(
+  [class~="hover:bg-white/[0.02]"], [class~="hover:bg-white/[0.025]"],
+  [class~="hover:bg-white/[0.03]"], [class~="hover:bg-white/[0.035]"],
+  [class~="hover:bg-white/[0.04]"], [class~="hover:bg-white/[0.05]"],
+  [class~="hover:bg-white/[0.06]"], [class~="hover:bg-white/[0.07]"],
+  [class~="hover:bg-white/[0.1]"], [class~="hover:bg-white/[0.12]"]
+):hover { background-color: rgb(62 80 123 / 0.09); }
+:root[data-theme="light"] [class~="group"]:hover [class~="group-hover:bg-white/[0.04]"] {
+  background-color: rgb(62 80 123 / 0.07);
+}
+:root[data-theme="light"] [class~="focus:bg-white/[0.05]"]:focus {
+  background-color: var(--surface-input);
+}
+:root[data-theme="light"] :is(
+  [class~="bg-[#0a0c11]"], [class~="bg-[#0d0f14]"]
+) { background-color: var(--surface-input); }
+:root[data-theme="light"] [class~="bg-[#1c1f29]"] {
+  background-color: var(--surface-popup);
+}
+:root[data-theme="light"] [class~="bg-[#262a37]"] {
+  background-color: var(--surface-selected);
+  box-shadow: 0 1px 4px rgb(43 55 91 / 0.1), 0 0 0 1px rgb(43 55 91 / 0.04);
+}
+:root[data-theme="light"] [class~="bg-[#0a0b0f]"] { background-color: var(--canvas-bg); }
+:root[data-theme="light"] :is(
+  [class~="bg-black/20"], [class~="bg-black/25"], [class~="bg-black/30"]
+) { background-color: var(--surface-inset); }
+:root[data-theme="light"] :is(
+  [class~="bg-[#05060a]/60"], [class~="bg-[#05060a]/35"]
+) { background-color: var(--surface-overlay); }
+:root[data-theme="light"] :is(
+  [class~="border-white/[0.07]"], [class~="border-white/[0.08]"], [class~="border-white/10"],
+  [class~="border-white/20"], [class~="border-white/25"]
+) { border-color: var(--color-line-strong); }
+:root[data-theme="light"] :is(
+  [class~="hover:border-white/[0.14]"], [class~="hover:border-white/[0.16]"], [class~="hover:border-white/20"]
+):hover { border-color: color-mix(in srgb, var(--color-muted) 45%, transparent); }
+:root[data-theme="light"] :is(
+  [class~="ring-white/[0.04]"], [class~="ring-white/[0.05]"], [class~="ring-white/[0.06]"],
+  [class~="ring-white/[0.08]"], [class~="ring-white/80"], [class~="ring-[#0d0f14]"]
+) { --tw-ring-color: var(--color-line-strong); }
+:root[data-theme="light"] [class~="text-white/15"] { color: var(--color-line-strong); }
+:root[data-theme="light"] [class~="text-[#f8cf9c]"] { color: var(--color-warn); }
+:root[data-theme="light"] :is(
+  [class~="bg-accent"][class~="text-[#0b0d18]"], [class~="bg-ok"][class~="text-[#06160e]"],
+  [class~="bg-[#0d1020]"], [class~="text-[#0c1020]"]
+) { color: #fff; }
+:root[data-theme="light"] [class~="bg-[#0d1020]"] { background-color: #fff; }
+:root[data-theme="light"] [class~="from-[#1b1f2b]"] {
+  background-image: linear-gradient(to bottom, #f5f6fb, #e8ecf5);
+}
+
+/* Telegram-inspired charcoal panels and the selected theme's two-stop gradient. */
+:root[data-theme="telegram"] .glass {
+  background: var(--surface-glass);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 14px 60px rgb(0 0 0 / 0.42), 0 1px 0 rgb(255 255 255 / 0.035) inset;
+}
+:root[data-theme="telegram"] .btn-primary {
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.22), 0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
+:root[data-theme="telegram"] .btn-primary:hover { filter: brightness(1.08); }
+:root[data-theme="telegram"] .btn-primary::after { display: none; }
+:root[data-theme="telegram"] .app-bg :is([class~="bg-panel/80"], [class~="bg-panel/70"], [class~="bg-panel/90"]) { background: var(--color-panel); }
+:root[data-theme="telegram"] .app-bg [class~="bg-white/[0.018]"] {
+  background: #191e25;
+  border-color: var(--color-line);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+:root[data-theme="telegram"] .question-sidebar,
+:root[data-theme="telegram"] .sidebar-drawer { background: #15191f; color: var(--color-fg); }
+:root[data-theme="telegram"] .sidebar-rail { background: #101419; border-color: var(--color-line); }
+:root[data-theme="telegram"] .question-type-button {
+  border-radius: 999px;
+  color: #a6afbd !important;
+  background: #1e242c;
+}
+:root[data-theme="telegram"] .question-type-button:hover { background: #282f39; }
+:root[data-theme="telegram"] .question-type-button:is([aria-pressed="true"], [data-active="true"]) {
+  background: linear-gradient(140deg, var(--accent-fill), var(--accent-fill-2));
+  color: #fff !important;
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+:root[data-theme="telegram"] .question-type-icon { color: var(--color-accent); }
+:root[data-theme="telegram"] .question-type-button:is([aria-pressed="true"], [data-active="true"]) .question-type-icon { color: #fff; }
+:root[data-theme="telegram"] .sidebar-summary { background: #20252c; border-color: var(--color-line); box-shadow: none; }
+:root[data-theme="telegram"] .sidebar-summary > .pointer-events-none { display: none; }
+:root[data-theme="telegram"] .sidebar-section-heading { color: var(--color-muted); }
+:root[data-theme="telegram"] .sidebar-actions { background: #15191f; border-color: var(--color-line); }
+:root[data-theme="telegram"] .sidebar-actions button { border-radius: 12px; }
+:root[data-theme="telegram"] .appearance-choice input:checked + .appearance-choice-content {
+  background: color-mix(in srgb, var(--color-accent) 7%, #1b2028);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+.telegram-gallery { background: #171b21; }
+.telegram-theme-card {
+  position: relative;
+  display: block;
+  height: 122px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 12px;
+  background: #080a0e var(--theme-wallpaper) center / 210px 210px;
+  transition: border-color .16s, box-shadow .16s, transform .16s;
+}
+.telegram-theme-choice:hover .telegram-theme-card { transform: translateY(-2px); border-color: var(--theme-accent); }
+.telegram-theme-choice input:focus-visible + .telegram-theme-card { outline: 2px solid var(--theme-accent); outline-offset: 4px; }
+.telegram-theme-choice input:checked + .telegram-theme-card {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 2px var(--theme-accent), 0 4px 20px rgb(0 0 0 / 0.25);
+}
+.telegram-theme-bubble {
+  position: absolute;
+  width: 55%;
+  height: 28px;
+  border-radius: 17px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+.telegram-theme-bubble-out {
+  top: 15px;
+  right: 12px;
+  border-bottom-right-radius: 5px;
+  background: linear-gradient(160deg, var(--theme-fill), var(--theme-fill-2));
+}
+.telegram-theme-bubble-in {
+  top: 48px;
+  left: 12px;
+  border-bottom-left-radius: 5px;
+  background: #252a30;
+}
+.telegram-theme-bubble::after {
+  position: absolute;
+  bottom: 0;
+  width: 9px;
+  height: 8px;
+  content: "";
+  background: inherit;
+}
+.telegram-theme-bubble-out::after { right: -4px; clip-path: polygon(0 0,100% 100%,0 100%); }
+.telegram-theme-bubble-in::after { left: -4px; clip-path: polygon(100% 0,100% 100%,0 100%); }
+.telegram-theme-emoji { position: absolute; left: 0; right: 0; bottom: 28px; text-align: center; font-size: 22px; line-height: 1.2; }
+.telegram-theme-name {
+  position: absolute;
+  inset: auto 0 0;
+  height: 23px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: rgb(9 12 17 / 0.9);
+  color: #c9ced7;
+  font-size: 11px;
+}
+.telegram-theme-choice input:checked + .telegram-theme-card .telegram-theme-name { color: var(--theme-accent); }
+.telegram-live-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 17px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 13px;
+  background: #0a0d12 var(--theme-wallpaper) 10px 0 / 310px 310px;
+  font-size: 12px;
+}
+.telegram-preview-in, .telegram-preview-out { padding: 9px 13px; color: #fff; box-shadow: 0 2px 4px rgb(0 0 0 / 0.12); }
+.telegram-preview-in { border-radius: 13px 13px 13px 4px; background: #272c32; }
+.telegram-preview-out { display: flex; align-items: center; gap: 12px; align-self: flex-end; border-radius: 13px 13px 4px 13px; background: linear-gradient(135deg, var(--theme-fill), var(--theme-fill-2)); }
+
+.appearance-choice-content {
+  background: color-mix(in srgb, var(--color-panel) 60%, transparent);
+}
+.appearance-choice:hover .appearance-choice-content {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+.appearance-choice input:checked + .appearance-choice-content {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
+}
+.appearance-swatch {
+  position: relative;
+  display: block;
+  height: 66px;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgb(100 115 145 / 0.18);
+  border-radius: 7px;
+}
+.appearance-swatch-dark { background: #0b0d13; }
+.appearance-swatch-light { background: #edf0f6; }
+.appearance-swatch-telegram { background: #080b10 var(--tg-wallpaper, none) center / 180px; }
+.appearance-swatch-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 27%;
+  border-right: 1px solid rgb(100 115 145 / 0.2);
+  background: rgb(255 255 255 / 0.64);
+}
+.appearance-swatch-dark .appearance-swatch-sidebar { background: #171a25; }
+.appearance-swatch-telegram .appearance-swatch-sidebar { background: #1b2028; border-left: 4px solid var(--tg-accent, #ecb985); }
+.appearance-swatch-page {
+  position: absolute;
+  top: 11px;
+  right: 13%;
+  display: flex;
+  width: 38%;
+  height: 51px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 6px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(24 38 68 / 0.14);
+}
+.appearance-swatch-page > span { height: 2px; background: #aeb6c8; }
+.appearance-swatch-page > span:first-child { margin-inline: 20%; background: #68748e; }
+.appearance-swatch-page > span:last-child { width: 65%; }
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-theme="telegram"] {
+    --color-raised: #242a33;
+    --surface-glass: #191e25;
+    --surface-input: #11151b;
+    --surface-selected: #303640;
+  }
+  .glass, :root[data-theme="telegram"] .app-bg > header,
+  :root[data-theme="telegram"] .app-bg > div > [class~="shrink-0"] {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root { --color-line: rgb(255 255 255 / 0.25); --color-line-strong: rgb(255 255 255 / 0.4); }
+  :root[data-theme="light"] {
+    --color-line: rgb(39 52 82 / 0.28);
+    --color-line-strong: rgb(39 52 82 / 0.45);
+    --color-muted: #3b465b;
+    --color-faint: #4b576d;
+  }
+}
+
+/* 打印 = 导出 PDF（Electron 的 printToPDF / Tauri 打印走同一套样式） */
+@media print {
+  :root { color-scheme: light !important; }
+  *, *::before, *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  body {
+    overflow: visible;
+    background: #fff !important;
+    color: #16171a !important;
+  }
+  #root {
+    display: none;
+  }
+  [data-screen-only] { display: none !important; }
+  #print-root {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    color: #16171a !important;
+    background: #fff !important;
+  }
+  .print-page {
+    break-after: page;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  html, body { height: auto !important; }
+  .print-page:last-child { break-after: auto; }
+  .paper {
+    background: #fff !important;
+    color: #16171a !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .btn-primary::after {
+    display: none;
+  }
+  :root[data-theme="telegram"] .workspace-wallpaper::before {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+}
+
+/* OCR 拖放区“蚂蚁线” */
+.ants {
+  animation: ants 1.2s linear infinite;
+}
+@keyframes ants {
+  to {
+    stroke-dashoffset: -30;
+  }
+}

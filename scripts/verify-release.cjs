@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const asar = require('@electron/asar');
+const root = path.resolve(__dirname, '..');
+const archive = path.join(root, 'release/win-unpacked/resources/app.asar');
+const version = require(path.join(root, 'package.json')).version;
+assert.equal(JSON.parse(asar.extractFile(archive, 'package.json').toString()).version, version);
+const html = fs.readFileSync(path.join(root, 'dist/index.html'));
+assert.ok(asar.extractFile(archive, path.join('dist', 'index.html')).equals(html));
+const assets = [...html.toString().matchAll(/(?:src|href)="([^"?#]+\.(?:js|css))"/g)].map(match => match[1].replace(/^\.\//, ''));
+for (const asset of assets) assert.ok(asar.extractFile(archive, path.join('dist', ...asset.split('/'))).equals(fs.readFileSync(path.join(root, 'dist', asset))), `Stale release asset: ${asset}`);
+console.log(JSON.stringify({ version, latestBuildInRelease: true, assetsMatch: true, checkedAssets: assets.length }));

@@ -1,0 +1,15 @@
+name: 功能建议
+description: 说明一个具体使用场景
+title: "[Feature] "
+body:
+  - type: textarea
+    attributes:
+      label: 使用场景与当前困难
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 建议的操作流程
+      description: 请说明如何与现有编辑、导入或排版流程结合。
+    validations:
+      required: true

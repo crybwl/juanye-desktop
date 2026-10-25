@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="560" viewBox="0 0 560 560" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <defs>
+    <g id="flower"><path d="M0-9C-18-32-27-11-11-3c-28-5-26 20-7 17-15 21 10 31 15 11 9 26 28 9 15-5 26 8 29-17 8-17 21-15 0-32-10-14C10-35-12-31 0-9Z"/><circle r="6"/></g>
+    <g id="leaf"><path d="M-20 22C-35-8-9-34 23-25c4 29-11 46-43 47Zm0 0L14-17M-9 8l-13-2M-3 1l1-15M7-8l11 1"/></g>
+    <g id="pencil"><path d="m-26 22 8-19L14-29l15 15L-3 18Zm8-19 15 15M8-23l15 15M-26 22l11-4-7-7M-14 7l30-30"/></g>
+    <g id="star"><path d="m0-18 5 12 13 1-10 8 3 14L0 10l-12 7 4-14-10-8 13-1Z"/></g>
+    <g id="cube"><path d="m-23-12 29-9 23 14v31L0 34l-23-15Zm0 0L0 2l29-9M0 2v32M6-21V9L-23 19M6 9l23 15"/></g>
+    <g id="clip"><path d="M-13 18V-18c0-18 25-18 25 0v42c0 24-36 24-36 0v-45M-2 21V-18"/></g>
+    <g id="bulb"><path d="M-19-9c0-25 38-25 38 0 0 11-9 14-10 25H-9c-1-11-10-14-10-25ZM-9 22H9M-7 28H7M-7 3l7 6 7-6M0 9v7M-28-8h-8M28-8h8M0-36v-9M-23-31l-6-6M23-31l6-6"/></g>
+    <g id="triangle"><path d="m-24 23 17-47 39 35Z"/><path d="m-14 12 9-25 21 18ZM-20 13l4 1M-15 1l4 1M-10-10l4 1M-10 20l-1-4M3 15l-1-4M16 10l-1-4"/></g>
+    <g id="sprig"><path d="M0 29V-23M0 3c-25 2-28-17-12-22 10 2 13 10 12 22ZM0 15c25 2 28-17 12-22C2-5-1 3 0 15Z"/></g>
+    <g id="book"><path d="M-29-17c12-5 21-4 29 1 8-5 17-6 29-1v40C17 18 8 19 0 24c-8-5-17-6-29-1ZM0-16v40M-22-6l14 2M-22 3l14 2M8-4l14-2M8 5l14-2"/></g>
+  </defs>
+  <g stroke="#8da4b4" stroke-width="1.65" opacity=".48">
+    <use href="#flower" transform="translate(33 32) rotate(9) scale(.8)"/>
+    <use href="#pencil" transform="translate(125 46) rotate(-8) scale(.8)"/>
+    <use href="#triangle" transform="translate(235 39) rotate(18) scale(.8)"/>
+    <use href="#leaf" transform="translate(336 36) rotate(-16) scale(.8)"/>
+    <use href="#clip" transform="translate(448 39) rotate(30) scale(.7)"/>
+    <use href="#star" transform="translate(525 32) rotate(5) scale(.7)"/>
+    <use href="#bulb" transform="translate(50 146) rotate(-14) scale(.68)"/>
+    <use href="#leaf" transform="translate(177 145) rotate(25) scale(.9)"/>
+    <use href="#cube" transform="translate(298 148) rotate(-11) scale(.7)"/>
+    <use href="#flower" transform="translate(425 146) rotate(-10) scale(.9)"/>
+    <use href="#pencil" transform="translate(528 148) rotate(12) scale(.7)"/>
+    <use href="#triangle" transform="translate(95 255) rotate(-23) scale(.8)"/>
+    <use href="#sprig" transform="translate(223 255) rotate(27) scale(.8)"/>
+    <use href="#pencil" transform="translate(355 252) rotate(8) scale(.9)"/>
+    <use href="#leaf" transform="translate(480 253) rotate(-35) scale(.75)"/>
+    <use href="#book" transform="translate(31 358) rotate(-17) scale(.75)"/>
+    <use href="#flower" transform="translate(151 355) rotate(-24) scale(.8)"/>
+    <use href="#bulb" transform="translate(273 368) rotate(10) scale(.75)"/>
+    <use href="#triangle" transform="translate(397 365) rotate(22) scale(.9)"/>
+    <use href="#cube" transform="translate(524 368) rotate(7) scale(.72)"/>
+    <use href="#leaf" transform="translate(85 472) rotate(-17) scale(.9)"/>
+    <use href="#clip" transform="translate(209 478) rotate(-30) scale(.75)"/>
+    <use href="#book" transform="translate(336 476) rotate(12) scale(.8)"/>
+    <use href="#flower" transform="translate(464 477) rotate(17) scale(.95)"/>
+  </g>
+  <g stroke="#c7b092" stroke-width="1.45" opacity=".47">
+    <use href="#star" transform="translate(75 86) scale(.45)"/><use href="#star" transform="translate(377 95) scale(.5)"/>
+    <use href="#star" transform="translate(18 260) scale(.5)"/><use href="#star" transform="translate(437 310) scale(.45)"/>
+    <use href="#star" transform="translate(265 438) scale(.5)"/><use href="#star" transform="translate(533 519) scale(.45)"/>
+    <path d="m191 75 5-9 5 9-5 9ZM514 206l5-9 5 9-5 9ZM123 405l5-9 5 9-5 9ZM373 526l5-9 5 9-5 9Z"/>
+    <path d="M321 207h12m-6-6v12M152 309h12m-6-6v12M485 421h12m-6-6v12M22 518h12m-6-6v12"/>
+    <circle cx="18" cy="202" r="3"/><circle cx="262" cy="90" r="3"/><circle cx="376" cy="196" r="3"/><circle cx="59" cy="305" r="3"/><circle cx="201" cy="410" r="3"/><circle cx="424" cy="527" r="3"/>
+  </g>
+  <g fill="#b6bd80" opacity=".44" font-family="Georgia,serif" font-style="italic" font-size="21">
+    <text transform="translate(158 98) rotate(-11)">π</text><text transform="translate(456 103) rotate(12)">a²+b²</text>
+    <text transform="translate(77 201) rotate(15)">x+y</text><text transform="translate(222 204) rotate(-13)">√x</text>
+    <text transform="translate(370 310) rotate(-10)">∑</text><text transform="translate(290 311) rotate(10)">θ</text>
+    <text transform="translate(24 426) rotate(-8)">f(x)</text><text transform="translate(389 428) rotate(12)">∫</text>
+    <text transform="translate(127 537) rotate(8)">a²+b²</text><text transform="translate(511 92) rotate(-15)">π</text>
+  </g>
+</svg>

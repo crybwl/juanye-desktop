@@ -1,0 +1,12 @@
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const packageRoot = path.dirname(require.resolve('electron/package.json'));
+const executable = path.join(packageRoot, 'dist', process.platform === 'win32' ? 'electron.exe' : process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron');
+if (!fs.existsSync(executable)) throw new Error('Electron 未安装完成，请运行 node node_modules/electron/install.js 后重试');
+if (!fs.existsSync(path.join(__dirname, '../dist/index.html'))) throw new Error('请先运行 npm run build');
+const env = { ...process.env };
+delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(executable, [path.resolve(__dirname, '..')], { stdio: 'inherit', env });
+child.on('error', error => { console.error(error); process.exitCode = 1; });
+child.on('exit', code => { process.exitCode = code ?? 0; });

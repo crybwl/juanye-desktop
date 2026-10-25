@@ -1,0 +1,30 @@
+name: 问题报告
+description: 提交可复现的错误
+title: "[Bug] "
+body:
+  - type: checkboxes
+    attributes:
+      label: 隐私检查
+      options:
+        - label: 我已删除 API Key、个人信息和无权公开的题目/图片。
+          required: true
+  - type: input
+    attributes:
+      label: 软件版本与 Windows 版本
+      placeholder: "例如：0.3.2 / Windows 11 x64"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 复现步骤
+      description: 提供最小自造样例；如涉及导入，请说明选择的入口与文件格式。
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 脱敏截图或错误信息

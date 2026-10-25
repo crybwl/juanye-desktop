@@ -1,0 +1,48 @@
+# Installed dependencies and generated application bundles
+/node_modules/
+/dist/
+/release/
+/build/
+/public/pdfjs/
+/public/juanye-icon.png
+*.tsbuildinfo
+
+# Local QA, generated documents, downloaded tools and screenshots
+/artifacts/
+/output/
+/tmp/
+/coverage/
+/test-results/
+/playwright-report/
+*.log
+
+# User data, credentials and signing material
+.env
+.env.*
+!.env.example
+*.juanye
+*.paperflow
+draft.json
+model.json
+model-config.json
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+
+# Personal documents do not belong in the source repository
+*.pdf
+*.docx
+*.xlsx
+*.zip
+*.exe
+*.msi
+*.asar
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
