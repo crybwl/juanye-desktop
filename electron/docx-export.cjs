@@ -15,7 +15,10 @@ const xml = value => String(value ?? '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g
 const el = (tag, inner = '', attrs = '') => `<${tag}${attrs ? ` ${attrs}` : ''}>${inner}</${tag}>`;
 const children = node => Array.from(node.childNodes || []).filter(child => child.nodeType === 1);
 const local = node => node.localName || node.nodeName;
-const mathRun = (text, props = '') => text ? `<m:r>${props ? `<m:rPr>${props}</m:rPr>` : ''}<m:t xml:space="preserve">${xml(text)}</m:t></m:r>` : '';
+// OMML's m:sty alone is not enough for some Word-compatible importers: they
+// reinterpret U+2223/U+2225 as slanted StarMath symbols. Explicit normal text
+// runs retain the original Unicode glyph and remain editable inside OfficeMath.
+const mathRun = (text, props = '', normal = false) => text ? `<m:r>${props || normal ? `<m:rPr>${normal ? '<m:nor/>' : ''}${props}</m:rPr>` : ''}${normal ? '<w:rPr><w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:eastAsia="SimSun"/><w:i w:val="0"/><w:iCs w:val="0"/></w:rPr>' : ''}<m:t xml:space="preserve">${xml(text)}</m:t></m:r>` : '';
 const upright = '<m:sty m:val="p"/>';
 const naryChars = new Set(['∑', '∏', '∐', '∫', '∬', '∭', '∮', '⋂', '⋃', '⋀', '⋁', '⨁', '⨂', '⨀']);
 const relChars = new Set(['=', '≠', '<', '>', '≤', '≥', '≈', '∼', '≡', '⇒', '⇔', ',', ';']);
@@ -59,7 +62,7 @@ function convertMathNode(node) {
     if (scripts[variant]) props += `<m:scr m:val="${scripts[variant]}"/>`;
     if (variant === 'bold') props += '<m:sty m:val="b"/>';
     if (variant === 'bold-italic') props += '<m:sty m:val="bi"/>';
-    return mathRun(node.textContent, props);
+    return mathRun(node.textContent, props, /^[∣∥|‖]+$/u.test(node.textContent));
   }
   if (tag === 'mspace') return mathRun('\u2009', upright);
   if (tag === 'mfrac') return `<m:f>${node.getAttribute('linethickness') === '0px' || node.getAttribute('linethickness') === '0' ? '<m:fPr><m:type m:val="noBar"/></m:fPr>' : ''}<m:num>${c(0)}</m:num><m:den>${c(1)}</m:den></m:f>`;
@@ -102,7 +105,7 @@ function latexToOmml(source, display = false) {
   const document = new DOMParser().parseFromString(mathml, 'text/xml');
   const root = document.getElementsByTagName('math')[0];
   if (!root) throw Error(`Word 公式无法转换：${source.slice(0, 100)}`);
-  try { return `<m:oMath xmlns:m="${MATH_NS}">${convertMathNode(root)}</m:oMath>`; }
+  try { return `<m:oMath xmlns:m="${MATH_NS}" xmlns:w="${W_NS}">${convertMathNode(root)}</m:oMath>`; }
   catch (error) { throw Error(`${error.message}：${source.slice(0, 100)}`); }
 }
 
@@ -257,7 +260,7 @@ async function buildDocx(exam, layout, options = {}) {
   let body = p(textRun(exam.title, { bold: true }), { style: 'Title', center: true, after: 100, keep: true });
   if (exam.subtitle) body += p(textRun(exam.subtitle), { center: true, after: 100, keep: true });
   body += p(textRun(`考试时间 ${exam.duration || 0} 分钟　满分 ${score} 分　共 ${allQuestions.length} 题`), { center: true, after: 120, keep: true });
-  body += p(textRun('学校：____________　班级：________　姓名：________　考号：____________'), { center: true, after: 140 });
+  if (!seal) body += p(textRun('学校：____________　班级：________　姓名：________　考号：____________'), { center: true, after: 140 });
   for (const notice of exam.notice || []) body += await blocks(notice, { after: 70 });
   let number = 0;
   for (const [index, section] of exam.sections.entries()) {
@@ -298,7 +301,7 @@ async function buildDocx(exam, layout, options = {}) {
     }
   }
   if (layout.answerMode && layout.answerMode !== 'none') {
-    body += p(textRun('参考答案与解析', { bold: true }), { style: 'Heading1', pageBreak: true, after: 160, keep: true });
+    body += p(textRun(layout.answerMode === 'brief' ? '参考答案' : '参考答案与解析', { bold: true }), { style: 'Heading1', pageBreak: true, after: 160, keep: true });
     if (layout.quickAnswers !== false) {
       const short = allQuestions.map((q, index) => ({ q, number: index + 1 })).filter(({ q }) => (hasOptions(q) || q.type === 'blank') && q.answer.join('；').length <= 90 && !q.answer.some(value => value.includes('\n')));
       if (short.length) {
@@ -317,9 +320,28 @@ async function buildDocx(exam, layout, options = {}) {
   const headerId = seal ? 'rHeader' : undefined, footerId = layout.pageNumber ? 'rFooter' : undefined;
   if (headerId) {
     relationships.push({ id: headerId, type: `${REL_NS}/header`, target: 'header1.xml' });
-    const sealText = '学校：________________　班级：____________　姓名：____________　考号：________________';
-    const rail = `<w:r><w:pict><v:shape id="JuanyeSeal" type="#_x0000_t202" style="position:absolute;margin-left:${mm(margin) / 20}pt;margin-top:${mm(margin) / 20}pt;width:${mm(seal - 2) / 20}pt;height:${mm(height - 2 * margin) / 20}pt;mso-position-horizontal-relative:page;mso-position-vertical-relative:page" stroked="f" filled="f"><v:textbox inset="0,0,0,0"><w:txbxContent><w:p><w:pPr><w:jc w:val="center"/><w:textDirection w:val="btLr"/></w:pPr>${textRun(sealText)}</w:p></w:txbxContent></v:textbox></v:shape><v:line style="position:absolute;mso-position-horizontal-relative:page;mso-position-vertical-relative:page" from="${mm(margin + seal - 1) / 20}pt,${mm(margin) / 20}pt" to="${mm(margin + seal - 1) / 20}pt,${mm(height - margin) / 20}pt" strokecolor="#666666"><v:stroke dashstyle="dash"/></v:line></w:pict></w:r>`;
-    zip.file('word/header1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="${W_NS}" xmlns:v="urn:schemas-microsoft-com:vml">${p(rail, { after: 0 })}</w:hdr>`);
+    // A static identity template is deliberately rasterised, NOT any maths or
+    // question content. It avoids VML/text-direction differences across Word
+    // and LibreOffice and is anchored in the default repeating page header.
+    const dpi = 300, px = value => Math.round(value * dpi / 25.4);
+    const railWidth = seal - 1, railHeight = height - 2 * margin;
+    const railCanvas = createCanvas(px(railWidth), px(railHeight));
+    const context = railCanvas.getContext('2d');
+    const dashX = railCanvas.width - px(.8);
+    context.strokeStyle = '#555555'; context.lineWidth = px(.18); context.setLineDash([px(2), px(1.6)]);
+    context.beginPath(); context.moveTo(dashX, 0); context.lineTo(dashX, railCanvas.height); context.stroke();
+    context.setLineDash([]); context.fillStyle = '#222222'; context.textAlign = 'center'; context.textBaseline = 'middle';
+    const sealText = '学校：____________　班级：__________　姓名：__________　考号：____________';
+    let fontPx = px(3.3);
+    do { context.font = `${fontPx}px "SimSun", "Noto Serif SC", serif`; if (context.measureText(sealText).width <= railCanvas.height - px(18)) break; fontPx--; } while (fontPx > px(2.5));
+    context.translate((dashX - px(2)) / 2, railCanvas.height / 2); context.rotate(-Math.PI / 2); context.fillText(sealText, 0, 0);
+    zip.file('word/media/seal.png', railCanvas.toBuffer('image/png'));
+    zip.file('word/_rels/header1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rSeal" Type="${IMAGE_REL}" Target="media/seal.png"/></Relationships>`);
+    const cx = emu(railWidth), cy = emu(railHeight);
+    // Keep the strip attached to the repeating header paragraph. Its negative
+    // horizontal offset occupies only the separately reserved left seal rail.
+    const rail = `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="1" locked="1" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>${emu(-seal)}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>${emu(margin - 3)}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${++pictureCount}" name="密封线" descr="学校 班级 姓名 考号 密封线"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="seal.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rSeal"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`;
+    zip.file('word/header1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="${W_NS}" xmlns:r="${REL_NS}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">${p(rail, { after: 0 })}</w:hdr>`);
   }
   if (footerId) {
     relationships.push({ id: footerId, type: `${REL_NS}/footer`, target: 'footer1.xml' });

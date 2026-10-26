@@ -33,7 +33,7 @@ async function main() {
   const layout = { style: 'real', density: 'compact', paper: 'A4', orientation: 'portrait', margin: 11, fontSize: 9.5, lineHeight: 1.42, optionCols: 'auto', pageNumber: true, showScore: true, keepTogether: false, answerSpace: false, paperMode: 'questions', answerMode: 'full', quickAnswers: true };
   const initialDraft = { version: 1, exam, layout, history: [] };
   fs.writeFileSync(path.join(profile, 'draft.json'), JSON.stringify(initialDraft));
-  const checks = [], errors = [], screenshots = [];
+  const checks = [], errors = [], screenshots = [], pasteEvents = [];
   let app, page, stage = 'launch';
   const progress = value => { stage = value; console.log(JSON.stringify({ progress: value })); };
   const watchdog = setTimeout(() => { app?.process().kill(); console.error(`Teacher workflow QA timeout at ${stage}`); process.exit(1); }, 110000);
@@ -49,12 +49,15 @@ async function main() {
     await until(async () => (await page.getByPlaceholder('输入题干…', { exact: true }).inputValue()) === stem, 'First original question not selected');
   }
   async function pasteAt(selector, text = '', includeImage = true) {
-    await page.locator(selector).first().evaluate((el, { text, includeImage }) => {
+    const result = await page.locator(selector).first().evaluate((el, { text, includeImage }) => {
       const raw = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6UGkAAAAASUVORK5CYII=');
       const file = new File([Uint8Array.from(raw, char => char.charCodeAt(0))], 'screenshot.png', { type: 'image/png' });
       const data = new DataTransfer(); if (includeImage) data.items.add(file); if (text) data.setData('text/plain', text);
-      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      const event = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      return { tag: el.tagName, group: el.closest('[data-workbench-group]')?.getAttribute('data-workbench-group'), textLength: text.length, includeImage, prevented: event.defaultPrevented, dialogs: document.querySelectorAll('[role="dialog"]').length };
     }, { text, includeImage });
+    pasteEvents.push({ selector, ...result });
   }
   try {
     const flags = ['--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'];
@@ -136,7 +139,12 @@ async function main() {
     assert.equal(count(await load()), 3);
     await ocr.getByRole('button', { name: '关闭', exact: true }).click();
     await pasteAt('[data-workbench-group="figures"] .space-y-3');
-    await until(async () => (await load()).exam.sections[0].questions[0].figures?.length === 1, 'Image-area paste did not attach a figure');
+    try {
+      await until(async () => (await load()).exam.sections[0].questions[0].figures?.length === 1, 'Image-area paste did not attach a figure');
+    } catch (error) {
+      const state = { pasteEvents, draft: await load(), editor: await page.locator('[data-editor-workbench]').innerText(), alerts: await page.getByRole('alert').allTextContents(), counters: await app.evaluate(() => ({ ocr: globalThis.__teacherOcr, generations: globalThis.__teacherGenerations.length })) };
+      const target = path.join(out, `image-paste-failure-${suffix}.json`); fs.writeFileSync(target, JSON.stringify(state, null, 2)); console.error(JSON.stringify({ failureDiagnostic: target, pasteEvents, alerts: state.alerts, counters: state.counters })); throw error;
+    }
     assert.equal(await page.getByRole('dialog').count(), 0); assert.equal(await app.evaluate(() => globalThis.__teacherOcr), 2);
     checks.push('Screenshot paste in the workspace or stem starts OCR once and requires confirmation; plain/mixed text paste stays text, while dedicated image-area paste only attaches an image');
 
@@ -217,7 +225,7 @@ async function main() {
     assert.deepEqual(errors, []);
     const requests = await app.evaluate(() => ({ cloudRequests: globalThis.__teacherRequests, mockedOcrCalls: globalThis.__teacherOcr, mockedGenerationCalls: globalThis.__teacherGenerations.length, cancelIpcCalls: globalThis.__teacherCancels }));
     assert.equal(requests.cloudRequests, 0);
-    const report = { passed: true, packaged, docxExported: withDocx, checks, screenshots, ...requests, realModelCalls: 0, errors };
+    const report = { passed: true, packaged, docxExported: withDocx, checks, screenshots, pasteEvents, ...requests, realModelCalls: 0, errors };
     fs.writeFileSync(path.join(out, `results-${suffix}.json`), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
   } finally {
     clearTimeout(watchdog); if (app) await app.close().catch(() => app.process().kill());

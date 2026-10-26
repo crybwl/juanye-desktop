@@ -10,4 +10,6 @@ const html = fs.readFileSync(path.join(root, 'dist/index.html'));
 assert.ok(asar.extractFile(archive, path.join('dist', 'index.html')).equals(html));
 const assets = [...html.toString().matchAll(/(?:src|href)="([^"?#]+\.(?:js|css))"/g)].map(match => match[1].replace(/^\.\//, ''));
 for (const asset of assets) assert.ok(asar.extractFile(archive, path.join('dist', ...asset.split('/'))).equals(fs.readFileSync(path.join(root, 'dist', asset))), `Stale release asset: ${asset}`);
-console.log(JSON.stringify({ version, latestBuildInRelease: true, assetsMatch: true, checkedAssets: assets.length }));
+const backend = fs.readdirSync(path.join(root, 'electron')).filter(name => name.endsWith('.cjs') && !name.endsWith('.test.cjs'));
+for (const name of backend) assert.ok(asar.extractFile(archive, path.join('electron', name)).equals(fs.readFileSync(path.join(root, 'electron', name))), `Stale release backend: ${name}`);
+console.log(JSON.stringify({ version, latestBuildInRelease: true, assetsMatch: true, checkedAssets: assets.length, checkedBackendModules: backend.length }));

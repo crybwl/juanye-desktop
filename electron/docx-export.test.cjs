@@ -51,7 +51,19 @@ test('A3/8K Word uses two native columns and independent left seal rail', async 
     const document = await zip.file('word/document.xml').async('string');
     assert.ok(document.includes(`w:w="${Math.round(width * 1440 / 25.4)}" w:h="${Math.round(height * 1440 / 25.4)}"`));
     assert.ok(document.includes('<w:cols w:num="2"')); assert.ok(document.includes(`w:left="${Math.round(29 * 1440 / 25.4)}"`));
-    const header = await zip.file('word/header1.xml').async('string'); for (const text of ['学校', '班级', '姓名', '考号', 'dash']) assert.ok(header.includes(text));
+    const header = await zip.file('word/header1.xml').async('string'); for (const text of ['学校', '班级', '姓名', '考号', '<wp:anchor', 'relativeFrom="paragraph"', 'relativeFrom="column"']) assert.ok(header.includes(text));
+    assert.ok(!header.includes('w:textDirection')); assert.ok(!header.includes('<w:pict'));
+    assert.ok(zip.file('word/media/seal.png')); assert.ok(zip.file('word/_rels/header1.xml.rels'));
+    assert.ok(!document.includes('学校：____________'), 'The seal already contains identity fields; do not duplicate them in the body');
+  }
+});
+
+test('vertical operators remain literal upright OMML glyphs in Word-compatible importers', () => {
+  for (const formula of [String.raw`|z|`, String.raw`P(A\mid B)`, String.raw`AB\parallel CD`, String.raw`\left.\frac{x^3}{3}\right|_0^1`]) {
+    const output = latexToOmml(formula);
+    assert.ok(output.includes('<m:nor/>')); assert.ok(output.includes('<w:i w:val="0"/>'));
+    assert.ok(output.includes('Segoe UI Symbol')); assert.ok(output.includes('<m:oMath'));
+    assert.ok(!output.includes('<w:drawing'));
   }
 });
 
