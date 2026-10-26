@@ -36,6 +36,8 @@ UI 测试使用项目的 Playwright；如有需要，可通过 JUANYE_PLAYWRIGHT
 
 ## 工作流
 
-CI 在 Windows 上安装锁定依赖、运行单测并构建前端。Windows 打包工作流为手动触发，只上传构建产物；它不会自动发布 GitHub Release，也不包含签名证书或模型密钥。
+CI 在 Windows 上安装锁定依赖、运行单测并构建前端。Windows 打包工作流为手动触发，默认仅上传构建产物，不包含签名证书或模型密钥。
+
+发布时先将版本提交打为 `v版本号` 标签，再在 Windows packages 工作流填写该标签并勾选 `publish_release`。工作流从标签构建，核对版本及打包资源，生成 SHA-256 校验文件；在草稿 Release 上传安装包和 ZIP，全部成功后才转为公开。已公开的同名 Release 不会被覆盖。发布说明放在 `docs/releases/v版本号.md`。
 
 修改 package.json 的版本时同步 package-lock.json、关于页与相关 UI 版本断言。发布前检查更新记录、导入兼容性、三类打印布局和安装包资源。

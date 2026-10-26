@@ -1,6 +1,16 @@
 name: Windows packages
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to build, e.g. v0.3.2 (blank for an artifact-only main build)"
+        required: false
+        type: string
+      publish_release:
+        description: "Publish a release after all assets upload successfully"
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -10,12 +20,26 @@ jobs:
   package:
     runs-on: windows-latest
     timeout-minutes: 35
+    permissions:
+      contents: write
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      PUBLISH_RELEASE: ${{ inputs.publish_release }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_tag || github.ref }}
+      - name: Validate release target
+        shell: pwsh
+        run: |
+          if ($env:PUBLISH_RELEASE -eq 'true') {
+            if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'A version tag is required for publishing' }
+            $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            if ($env:RELEASE_TAG -ne "v$version") { throw 'Tag and package version differ' }
+            if (-not (Test-Path "docs/releases/$($env:RELEASE_TAG).md")) { throw 'Release notes are missing' }
+          }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -23,11 +47,43 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run dist -- --publish never
+      - run: node scripts/verify-release.cjs
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $files = @("release/Juanye-$version-Setup.exe", "release/Juanye-$version-x64.zip")
+          $lines = foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "Missing asset: $file" }
+            $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([IO.Path]::GetFileName($file))"
+          }
+          [IO.File]::WriteAllLines((Join-Path $PWD 'release/SHA256SUMS.txt'), $lines, [Text.UTF8Encoding]::new($false))
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: juanye-windows-x64
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
           path: |
             release/Juanye-*-Setup.exe
             release/Juanye-*-x64.zip
+            release/SHA256SUMS.txt
+      - name: Upload and publish Release
+        if: ${{ inputs.publish_release }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $existing = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'This release is already public; refusing to overwrite it' }
+          } else {
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title "卷页 $($env:RELEASE_TAG)" --notes-file "docs/releases/$($env:RELEASE_TAG).md"
+            if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed' }
+          }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release upload $env:RELEASE_TAG "release/Juanye-$version-Setup.exe" "release/Juanye-$version-x64.zip" release/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Asset upload failed; release remains a draft' }
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

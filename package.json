@@ -67,6 +67,8 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
     "asar": true,
