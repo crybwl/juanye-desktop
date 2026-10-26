@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { applyTelegramThemeTokens } from "./telegram-themes";
+import { getTelegramScheme, readSavedTelegramScheme, TELEGRAM_SCHEME_EVENT, TELEGRAM_SCHEME_STORAGE_KEY } from "./telegram-scheme";
 
 export type Appearance = "dark" | "light" | "telegram";
 export const APPEARANCE_STORAGE_KEY = "juanye.appearance.v1";
 const CHANGE_EVENT = "juanye:appearance";
 let brand: [string, string] = ["#9db1ff", "#c4b2ff"];
+let listenersInitialized = false;
 
 const isAppearance = (value: unknown): value is Appearance => value === "dark" || value === "light" || value === "telegram";
 
@@ -30,7 +32,8 @@ function readSavedAppearance(): Appearance {
 
 function syncDesktopAppearance(): void {
   // All three themes use an opaque native window; only their UI palette changes.
-  const update = window.juanye?.setAppearance?.({ mode: getAppearance() });
+  const mode = getAppearance();
+  const update = window.juanye?.setAppearance?.({ mode, ...(mode === "telegram" ? { telegramScheme: getTelegramScheme() } : {}) });
   update?.then((result) => {
     document.documentElement.dataset.nativeTransparency = String(result.nativeTransparency);
   }).catch(() => {
@@ -72,7 +75,7 @@ export function applyAccentPalette(first: string, second: string): void {
 
 function applyAppearance(value: Appearance): void {
   document.documentElement.dataset.theme = value;
-  document.documentElement.style.colorScheme = value === "light" ? "light" : "dark";
+  document.documentElement.style.colorScheme = value === "light" || value === "telegram" && getTelegramScheme() === "light" ? "light" : "dark";
   document.documentElement.style.removeProperty("--glass-opacity");
   applyAccentPalette(...brand);
   syncDesktopAppearance();
@@ -80,7 +83,19 @@ function applyAppearance(value: Appearance): void {
 
 /** Call before React renders and synchronize the opaque desktop host. */
 export function initializeAppearance(): void {
+  document.documentElement.dataset.telegramScheme = readSavedTelegramScheme();
   applyAppearance(readSavedAppearance());
+  if (!listenersInitialized) {
+    listenersInitialized = true;
+    window.addEventListener(TELEGRAM_SCHEME_EVENT, () => applyAppearance(getAppearance()));
+    window.addEventListener("storage", (event: StorageEvent) => {
+      if (event.key === TELEGRAM_SCHEME_STORAGE_KEY || event.key === null) {
+        document.documentElement.dataset.telegramScheme = readSavedTelegramScheme();
+        window.dispatchEvent(new Event(TELEGRAM_SCHEME_EVENT));
+      }
+      if (event.key === APPEARANCE_STORAGE_KEY || event.key === null) applyAppearance(readSavedAppearance());
+    });
+  }
 }
 
 export function setAppearance(value: Appearance): void {

@@ -3,6 +3,7 @@ import studyPattern from "./assets/telegram-doodles-study.svg?raw";
 import naturePattern from "./assets/telegram-doodles-nature.svg?raw";
 import orbitPattern from "./assets/telegram-doodles-orbit.svg?raw";
 import workspacePattern from "./assets/telegram-doodles-workspace.svg?raw";
+import { getTelegramScheme } from "./telegram-scheme";
 
 export const TELEGRAM_THEME_STORAGE_KEY = "juanye.telegram-theme.v1";
 const CHANGE_EVENT = "juanye:telegram-theme";
@@ -23,6 +24,7 @@ export const TELEGRAM_THEMES = definitions.map(theme => ({
   ...theme,
   wallpaper: `url("data:image/svg+xml,${encodeURIComponent(theme.pattern.replaceAll("#8da4b4", theme.ink[0]).replaceAll("#c7b092", theme.ink[1]))}")`,
   workspaceWallpaper: `url("data:image/svg+xml,${encodeURIComponent(workspacePattern.replaceAll("#8da4b4", theme.accent).replaceAll("#c7b092", theme.accent2))}")`,
+  lightWorkspaceWallpaper: `url("data:image/svg+xml,${encodeURIComponent(workspacePattern.replaceAll("#8da4b4", theme.fill[0]).replaceAll("#c7b092", theme.fill[1]))}")`,
 }));
 const isTheme = (value: unknown): value is TelegramThemeId => TELEGRAM_THEMES.some(theme => theme.id === value);
 const readSaved = (): TelegramThemeId => {
@@ -38,13 +40,14 @@ export function applyTelegramThemeTokens(id: TelegramThemeId = getTelegramTheme(
   if (typeof document === "undefined") return;
   const theme = TELEGRAM_THEMES.find(theme => theme.id === id) ?? TELEGRAM_THEMES[7];
   const root = document.documentElement;
+  const light = getTelegramScheme() === "light";
   root.dataset.telegramTheme = theme.id;
-  root.style.setProperty("--tg-accent", theme.accent);
-  root.style.setProperty("--tg-accent-2", theme.accent2);
+  root.style.setProperty("--tg-accent", light ? theme.fill[0] : theme.accent);
+  root.style.setProperty("--tg-accent-2", light ? theme.fill[1] : theme.accent2);
   root.style.setProperty("--tg-fill", theme.fill[0]);
   root.style.setProperty("--tg-fill-2", theme.fill[1]);
   root.style.setProperty("--tg-wallpaper", theme.wallpaper);
-  root.style.setProperty("--tg-workspace-wallpaper", theme.workspaceWallpaper);
+  root.style.setProperty("--tg-workspace-wallpaper", light ? theme.lightWorkspaceWallpaper : theme.workspaceWallpaper);
 }
 export function setTelegramTheme(value: TelegramThemeId): void {
   if (!isTheme(value)) return;

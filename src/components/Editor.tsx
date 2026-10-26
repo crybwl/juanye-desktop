@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { createContext, forwardRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -19,6 +19,10 @@ import {
   MousePointerClick,
   Copy,
   Table2,
+  FileText,
+  Image,
+  SlidersHorizontal,
+  ListChecks,
 } from "lucide-react";
 import type { Question, Section, QType, Layout } from "../types";
 import { CN_NUM, LETTERS, TYPE_META } from "../data";
@@ -34,6 +38,9 @@ import { changeQuestionType } from "../structure";
 import { hasOptions, isLongAnswer } from "../figures";
 import { Switch } from "../ui";
 import { fillQuestionOptions } from "../question-options";
+import { useExperimentalWorkbench } from "../experimental-workbench";
+import { questionFigures } from "../figures";
+import "./editor-workbench.css";
 
 /* ---------- 带语法高亮的 LaTeX 编辑器（透明 textarea 叠在高亮层上） ---------- */
 export type TexHandle = { insert: (snippet: string, caretBack?: number) => void };
@@ -102,13 +109,23 @@ const item = {
   exit: { opacity: 0 },
 };
 
-function Card({ title, right, children, className }: { title: string; right?: ReactNode; children: ReactNode; className?: string }) {
+type WorkbenchGroup = "question" | "answers" | "figures" | "properties";
+const WorkbenchContext = createContext<{ enabled: boolean; group: WorkbenchGroup }>({ enabled: false, group: "question" });
+const WORKBENCH_GROUPS = [
+  { id: "question", label: "题目", icon: FileText },
+  { id: "answers", label: "答案解析", icon: ListChecks },
+  { id: "figures", label: "题图与绘图", icon: Image },
+  { id: "properties", label: "属性", icon: SlidersHorizontal },
+] as const;
+
+function Card({ title, right, children, className, group = "question" }: { title?: string; right?: ReactNode; children: ReactNode; className?: string; group?: WorkbenchGroup }) {
+  const workbench = useContext(WorkbenchContext);
   return (
-    <motion.section variants={item} className={cx("rounded-2xl border border-line bg-white/[0.018] p-5", className)}>
-      <div className="mb-3.5 flex min-h-8 items-center gap-3">
+    <motion.section variants={item} data-workbench-group={group} hidden={workbench.enabled && workbench.group !== group} className={cx(workbench.enabled ? "workbench-section" : "rounded-2xl border border-line bg-white/[0.018] p-5", className)}>
+      {title && <div className="workbench-section-header mb-3.5 flex min-h-8 items-center gap-3">
         <h3 className="text-[13px] font-semibold text-fg">{title}</h3>
-        <div className="ml-auto flex items-center gap-1">{right}</div>
-      </div>
+        <div className="workbench-section-tools ml-auto flex items-center gap-1">{right}</div>
+      </div>}
       {children}
     </motion.section>
   );
@@ -116,7 +133,7 @@ function Card({ title, right, children, className }: { title: string; right?: Re
 
 function LivePreview({ text, image }: { text: string; image?: boolean }) {
   return (
-    <div className="mt-3 rounded-xl bg-white/[0.025] px-4 py-3.5 ring-1 ring-inset ring-white/[0.04]">
+    <div className="workbench-live-preview mt-3 rounded-xl bg-white/[0.025] px-4 py-3.5 ring-1 ring-inset ring-white/[0.04]">
       <div className="mb-2 flex items-center gap-2 text-[11.5px] text-faint">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok/60" />
@@ -174,7 +191,7 @@ function OptionCard({
       layout
       transition={spring}
       className={cx(
-        "group relative flex min-h-[58px] items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200",
+        "workbench-option group relative flex min-h-[58px] items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200",
         correct ? "border-ok/40 bg-ok/[0.07]" : "border-line-strong bg-white/[0.015] hover:border-white/[0.16] hover:bg-white/[0.03]",
       )}
     >
@@ -183,7 +200,7 @@ function OptionCard({
         onClick={onToggle}
         aria-label={`将 ${letter} 设为正确答案`}
         className={cx(
-          "relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[13px] font-semibold transition-colors duration-200",
+          "workbench-option-letter relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[13px] font-semibold transition-colors duration-200",
           correct ? "bg-ok text-[#06160e]" : "bg-white/[0.07] text-muted hover:bg-white/[0.12] hover:text-fg",
         )}
       >
@@ -213,6 +230,7 @@ function OptionCard({
               transition={{ duration: 0.12 }}
               autoFocus
               value={text}
+              aria-label={`选项 ${letter}`}
               spellCheck={false}
               onChange={(e) => onChange(e.target.value)}
               onBlur={() => setEditing(false)}
@@ -226,7 +244,7 @@ function OptionCard({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
               transition={{ duration: 0.12 }}
-              className="truncate font-serif text-[15px] text-fg/95"
+              className="workbench-option-text truncate font-serif text-[15px] text-fg/95"
             >
               <MathText text={text} placeholder="（空）点击输入" />
             </motion.div>
@@ -328,6 +346,10 @@ export function Editor({
   sections?: Section[];
 }) {
   const stemRef = useRef<TexHandle>(null);
+  const [workbench] = useExperimentalWorkbench();
+  const [group, setGroup] = useState<WorkbenchGroup>("question");
+  const workbenchId = useId();
+  const groupNav = useRef<HTMLDivElement>(null);
   const [showAnalysis, setShowAnalysis] = useState(true);
   const inspectedQuestion = useRef<string | null>(null);
   useEffect(() => {
@@ -343,7 +365,8 @@ export function Editor({
   };
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden">
+    <WorkbenchContext.Provider value={{ enabled: workbench, group }}>
+    <div className={cx("h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
       <AnimatePresence mode="wait" custom={dir} initial={false}>
         {!q || !sec ? (
           <Empty key="empty" onStart={onStart} onOcr={onOcr} />
@@ -359,7 +382,7 @@ export function Editor({
             initial="enter"
             animate="center"
             exit="exit"
-            className="mx-auto flex max-w-[780px] flex-col gap-4 px-10 pb-16 pt-7"
+            className="workbench-body mx-auto flex max-w-[780px] flex-col gap-4 px-10 pb-16 pt-7"
           >
             {/* 头部 */}
             <motion.div variants={item}>
@@ -377,8 +400,8 @@ export function Editor({
                   {num} / {total}
                 </span>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="text-[26px] font-semibold tracking-tight">第 {num} 题</h1>
+              <div className="workbench-heading-row mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="workbench-heading text-[26px] font-semibold tracking-tight">第 {num} 题</h1>
                 <Select aria-label="题型" className="max-w-[140px]" value={q.type} onValueChange={type => onChange(changeQuestionType(q, type as QType))} options={Object.entries(TYPE_META).map(([value, meta]) => ({ value, label: meta.label }))} />
                 <div className="ml-auto flex flex-wrap items-center gap-1.5">
                   <ScoreStepper value={q.score} onChange={(score) => onChange({ score })} />
@@ -426,6 +449,28 @@ export function Editor({
               )}
             </AnimatePresence>
 
+            {workbench && <div ref={groupNav} className="workbench-nav" role="tablist" aria-label="题目编辑分组" onKeyDown={event => {
+              const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+              if (!keys.includes(event.key)) return;
+              event.preventDefault();
+              const index = WORKBENCH_GROUPS.findIndex(entry => entry.id === group);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? WORKBENCH_GROUPS.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + WORKBENCH_GROUPS.length) % WORKBENCH_GROUPS.length;
+              setGroup(WORKBENCH_GROUPS[next].id);
+              groupNav.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
+            }}>
+              {WORKBENCH_GROUPS.map(entry => {
+                const selected = group === entry.id;
+                const hasContent = entry.id === "answers" ? Boolean(q.analysis || q.answer.some(Boolean)) : entry.id === "figures" ? Boolean(q.sourceImage || q.image || q.drawing || questionFigures(q).length) : false;
+                const Icon = entry.icon;
+                return <button key={entry.id} id={`${workbenchId}-${entry.id}`} type="button" role="tab" aria-selected={selected} aria-controls={`${workbenchId}-panel`} tabIndex={selected ? 0 : -1} className="workbench-tab" onClick={() => setGroup(entry.id)}>
+                  {selected && <motion.span layoutId={`${workbenchId}-pill`} transition={spring} className="workbench-tab-pill" />}
+                  <Icon size={14} className="workbench-tab-icon shrink-0" />
+                  <span>{entry.label}</span>
+                  {hasContent && <span className="workbench-tab-dot" aria-hidden="true" />}
+                </button>;
+              })}
+            </div>}
+            <motion.div id={`${workbenchId}-panel`} role={workbench ? "tabpanel" : undefined} aria-labelledby={workbench ? `${workbenchId}-${group}` : undefined} tabIndex={workbench ? 0 : undefined} className={workbench ? "workbench-panel--experimental" : "workbench-panel--classic"}>
             {/* 题干 */}
             <Card
               title="题干"
@@ -457,10 +502,10 @@ export function Editor({
               <LivePreview text={q.stem} image={q.image === "plot"} />
             </Card>
 
-            {q.sourceImage && <Card title="原图对照"><SourceOcr key={q.id} question={q} onChange={onChange} /></Card>}
-            <motion.section variants={item} className="rounded-2xl border border-line bg-white/[0.018] p-5"><FigureEditor key={q.id} question={q} onChange={onChange} /></motion.section>
-            <motion.section variants={item} className="rounded-2xl border border-line bg-white/[0.018] p-5"><DrawingEditor key={q.id} value={q.drawing || ""} onChange={drawing => onChange({ drawing })} /></motion.section>
-            <Card title="属性">
+            {q.sourceImage && <Card group="figures" title="原图对照"><SourceOcr key={q.id} question={q} onChange={onChange} /></Card>}
+            <Card group="figures"><FigureEditor key={q.id} question={q} onChange={onChange} /></Card>
+            <Card group="figures"><DrawingEditor key={q.id} value={q.drawing || ""} onChange={drawing => onChange({ drawing })} /></Card>
+            <Card group="properties" title="属性">
               <div className="space-y-3 text-[12px]">
                 {onMove && sections && <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">所属大题</span><Select aria-label="移动到大题" value={sec.id} onValueChange={onMove} options={sections.map(section => ({ value: section.id, label: section.title }))} /></label>}
                 <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">来源</span><input aria-label="题目来源" className={inputCls} value={q.source || ""} onChange={event => onChange({ source: event.target.value })} /></label>
@@ -475,6 +520,7 @@ export function Editor({
             {/* 题图 */}
             {q.image === "plot" && (
               <Card
+                group="figures"
                 title="题图"
                 right={
                   <>
@@ -502,7 +548,7 @@ export function Editor({
                   </Button>
                 }
               >
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="workbench-options grid grid-cols-2 gap-2.5">
                   {q.options.map((o, i) => {
                     const L = LETTERS[i];
                     const on = q.answer.includes(L);
@@ -528,7 +574,7 @@ export function Editor({
 
             {/* 答案 */}
             {!hasOptions(q.type) && (
-              <Card title={q.type === "blank" ? "答案" : "参考答案"}>
+              <Card group="answers" title={q.type === "blank" ? "答案" : "参考答案"}>
                 <div className="space-y-3">{(q.answer.length ? q.answer : [""]).map((answer, index) => <div key={index}>
                   {q.answer.length > 1 && <div className="mb-1.5 text-[12px] text-muted">答案 {index + 1}</div>}
                   <TexEditor minH={q.type === "blank" ? 48 : 92} value={answer} onChange={value => { const answers = q.answer.length ? [...q.answer] : [""]; answers[index] = value; onChange({ answer: answers }); }} placeholder={index ? `输入第 ${index + 1} 项答案…` : "输入答案…"} />
@@ -538,7 +584,17 @@ export function Editor({
             )}
 
             {/* 解析 */}
+            {workbench && hasOptions(q.type) && <Card group="answers" title="答案">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="本题正确选项">
+                {q.options.map((_, index) => {
+                  const letter = LETTERS[index];
+                  const selected = q.answer.includes(letter);
+                  return <motion.button key={letter} type="button" whileTap={{ scale: .92 }} aria-label={`正确选项 ${letter}`} aria-pressed={selected} className={cx("grid h-9 w-9 place-items-center rounded-full border text-[13px] font-semibold transition-colors", selected ? "border-ok/40 bg-ok/10 text-ok" : "border-line-strong text-muted hover:text-fg")} onClick={() => onChange({ answer: q.type !== "multi" ? (selected ? [] : [letter]) : selected ? q.answer.filter(value => value !== letter) : [...q.answer, letter].sort() })}>{letter}</motion.button>;
+                })}
+              </div>
+            </Card>}
             <Card
+              group="answers"
               title="解析"
               right={
                 <motion.button
@@ -561,9 +617,10 @@ export function Editor({
                 )}
               </AnimatePresence>
             </Card>
+            </motion.div>
 
             {/* 上下题 */}
-            <motion.div variants={item} className="grid grid-cols-2 gap-3 pt-2">
+            <motion.div variants={item} className="workbench-footer grid grid-cols-2 gap-3 pt-2">
               {[neighbors.prev, neighbors.next].map((n, i) => (
                 <motion.button
                   key={i}
@@ -586,5 +643,6 @@ export function Editor({
         )}
       </AnimatePresence>
     </div>
+    </WorkbenchContext.Provider>
   );
 }

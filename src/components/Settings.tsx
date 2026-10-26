@@ -8,6 +8,7 @@ import { AppearancePicker } from "./AppearancePicker";
 import { errorMessage } from "../errors";
 import { useAppearance } from "../appearance";
 import { TelegramThemePicker } from "./TelegramThemePicker";
+import { useExperimentalWorkbench } from "../experimental-workbench";
 
 export const ACCENTS: { name: string; c: [string, string] }[] = [
   { name: "长春花", c: ["#9db1ff", "#c4b2ff"] },
@@ -209,10 +210,14 @@ function OcrTab() {
 
 function LookTab({ accent, setAccent, motionPref, setMotionPref }: { accent: number; setAccent: (i: number) => void; motionPref: "full" | "reduced"; setMotionPref: (v: "full" | "reduced") => void }) {
   const [appearance] = useAppearance();
+  const [workbench, setWorkbench] = useExperimentalWorkbench();
   return (
     <div className="h-full overflow-y-auto px-8 pb-6 pt-7">
       <div className="mb-5 text-[17px] font-semibold">外观</div>
       <AppearancePicker />
+      <Line title="实验性题目编辑台">
+        <Switch label="实验性题目编辑台" checked={workbench} onChange={setWorkbench} />
+      </Line>
       {appearance === "telegram" && <div className="mt-6"><TelegramThemePicker /></div>}
       {appearance !== "telegram" && <><div className="mb-2.5 mt-6 text-[12.5px] font-medium text-muted">强调色</div><div className="flex gap-3">
         {ACCENTS.map((a, i) => (
@@ -329,7 +334,7 @@ export function SettingsDialog({
                   <Logo size={64} />
                 </motion.div>
                 <div className="mt-5 text-[20px] font-semibold">卷页</div>
-                <div className="mt-1 text-[13px] text-muted">版本 0.3.2</div>
+                <div className="mt-1 text-[13px] text-muted">版本 0.3.4</div>
               </div>
             )}
           </motion.div>

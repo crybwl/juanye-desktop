@@ -17,6 +17,7 @@ import { OcrDialog } from "./components/Ocr";
 import { HistorySheet } from "./components/History";
 import { AnswerCard, PaperPages } from "./components/Paper";
 import { applyAccentPalette, setAppearance } from "./appearance";
+import { setTelegramScheme } from "./telegram-scheme";
 import { exportProject, exportTex, parseProject } from "./documents";
 import { exportMarkdown } from "./markdown-export";
 import type { ImportKind } from "./paper-import";
@@ -379,7 +380,8 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       } },
       { id: "theme-dark", group: "外观", title: "深色模式", icon: <Eye size={15} />, run: () => setAppearance("dark") },
       { id: "theme-light", group: "外观", title: "淡色模式", icon: <Eye size={15} />, run: () => setAppearance("light") },
-      { id: "theme-telegram", group: "外观", title: "Telegram 风格", icon: <Sparkles size={15} />, run: () => setAppearance("telegram") },
+      { id: "theme-telegram", group: "外观", title: "Telegram 深色", icon: <Sparkles size={15} />, run: () => { setTelegramScheme("dark"); setAppearance("telegram"); } },
+      { id: "theme-telegram-light", group: "外观", title: "Telegram 浅色", icon: <Sparkles size={15} />, run: () => { setTelegramScheme("light"); setAppearance("telegram"); } },
       { id: "edit", group: "视图", title: "切换到编辑", icon: <PenLine size={15} />, kbd: "Ctrl 1", run: () => setMode("edit") },
       { id: "prev", group: "视图", title: "切换到排版预览", icon: <Eye size={15} />, run: () => setMode("preview") },
       { id: "model", group: "设置", title: "Qwen 模型设置", icon: <Sparkles size={15} />, kbd: "Ctrl ,", run: () => setSettings(true) },

@@ -52,8 +52,8 @@ async function main() {
     for (const tab of ['识别', '外观', '快捷键', '关于']) {
       await dialog.getByRole('button', { name: tab, exact: true }).click();
       if (tab === '关于') {
-        await dialog.getByText('版本 0.3.2', { exact: true }).waitFor();
-        assert.equal((await dialog.locator('main').innerText()).trim(), '卷页\n版本 0.3.2');
+        await dialog.getByText('版本 0.3.4', { exact: true }).waitFor();
+        assert.equal((await dialog.locator('main').innerText()).trim(), '卷页\n版本 0.3.4');
       } else {
         await dialog.getByText(tab === '外观' ? '界面模式' : tab === '快捷键' ? '命令面板' : '默认多题识别', { exact: true }).waitFor();
       }

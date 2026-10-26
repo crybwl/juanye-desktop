@@ -1,0 +1,133 @@
+/* Opt-in, central editor only: never style the outline, paper or preview. */
+.workbench-panel--classic { display: contents; }
+
+.experimental-workbench {
+  container-type: inline-size;
+}
+.experimental-workbench .workbench-body {
+  max-width: 820px;
+  gap: 16px;
+  padding: 22px clamp(14px, 4cqw, 28px) 32px;
+}
+.experimental-workbench .workbench-heading {
+  font-size: 21px;
+  line-height: 1.35;
+}
+.experimental-workbench .workbench-heading-row {
+  gap: 8px;
+  margin-top: 12px;
+}
+.workbench-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex-shrink: 0;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-panel);
+  box-shadow: 0 6px 16px -14px rgb(0 0 0 / .5);
+}
+.workbench-tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  padding: 7px 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .18s, background-color .18s;
+}
+.workbench-tab:hover { color: var(--color-fg); background: var(--surface-inset); }
+.workbench-tab[aria-selected="true"] { color: var(--color-accent); font-weight: 600; }
+.workbench-tab:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.workbench-tab-pill {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, transparent);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-panel));
+}
+.workbench-tab > :not(.workbench-tab-pill) { position: relative; }
+.workbench-tab-dot {
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+.workbench-panel--experimental {
+  min-width: 0;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 16px;
+  background: var(--color-panel);
+  box-shadow: 0 8px 28px -24px rgb(0 0 0 / .45);
+}
+.experimental-workbench .workbench-section {
+  min-width: 0;
+  padding: 18px;
+}
+.experimental-workbench .workbench-section:not([hidden]) {
+  animation: workbench-content-arrive 180ms ease-out;
+}
+@keyframes workbench-content-arrive {
+  from { opacity: .35; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+[data-interface-motion="reduced"] .experimental-workbench .workbench-section { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .experimental-workbench .workbench-section { animation: none; }
+}
+.experimental-workbench .workbench-section:not([hidden]) ~ .workbench-section:not([hidden]) {
+  border-top: 1px solid var(--color-line);
+}
+.experimental-workbench [data-workbench-group][hidden] { display: none !important; }
+.experimental-workbench .workbench-section-header {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.experimental-workbench .workbench-section-tools { flex-wrap: wrap; }
+.experimental-workbench .workbench-live-preview {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--color-accent) 32%, transparent);
+  border-radius: 0 8px 8px 0;
+  background: var(--surface-inset);
+  --tw-ring-color: transparent;
+}
+.experimental-workbench .workbench-live-preview > .font-serif { font-size: 14px; line-height: 1.75; }
+.experimental-workbench .workbench-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.experimental-workbench .workbench-option { min-width: 0; }
+.experimental-workbench .workbench-option-text { white-space: normal; overflow-wrap: anywhere; }
+.experimental-workbench .workbench-option-letter { border-radius: 50%; }
+.experimental-workbench .workbench-footer {
+  gap: 12px;
+  padding-top: 0;
+}
+.experimental-workbench .workbench-footer > button {
+  min-width: 0;
+  padding: 12px 10px;
+  border-color: transparent;
+}
+@container (max-width: 480px) {
+  .workbench-tab-icon { display: none; }
+  .experimental-workbench .workbench-section { padding: 14px; }
+  .experimental-workbench .workbench-heading-row { align-items: flex-start; }
+}
+@container (max-width: 370px) {
+  .experimental-workbench .workbench-options { grid-template-columns: minmax(0, 1fr); }
+  .workbench-tab { font-size: 11px; }
+}

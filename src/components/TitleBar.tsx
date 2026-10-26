@@ -1,14 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
-import logoUrl from "../assets/juanye-icon.svg";
+import { BrandLogo } from "./BrandLogo";
 import type { Mode } from "../types";
 import { Button, IconButton, Kbd, Segmented } from "../ui";
 
-export function Logo({ size = 28 }: { size?: number }) {
-  return (
-    <img src={logoUrl} alt="" aria-hidden="true" width={size} height={size} className="shrink-0" />
-  );
-}
+export const Logo = BrandLogo;
 
 function SaveBadge({ saving, error }: { saving: boolean; error?: string }) {
   if (error) return <span role="alert" title={error} className="max-w-[160px] truncate text-[12px] text-danger">未保存 · {error}</span>;
@@ -68,7 +64,7 @@ export function TitleBar({
   return (
     <header data-tauri-drag-region className="relative z-30 flex h-[52px] shrink-0 items-center border-b border-line pl-4">
       <div data-tauri-drag-region className="flex min-w-0 items-center gap-2.5">
-        <Logo />
+        <Logo animated />
         <span className="text-[14px] font-semibold tracking-wide">卷页</span>
         <span className="text-[13px] text-white/15">/</span>
         <button onClick={onPalette} aria-label="项目与功能" className="flex min-w-0 max-w-[260px] items-center gap-1 rounded-md px-1.5 py-1 text-[13px] text-muted transition-colors hover:bg-white/[0.05] hover:text-fg">

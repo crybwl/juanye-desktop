@@ -5,6 +5,8 @@ const { checkedAppearance, applyWindowAppearance } = require('./appearance.cjs')
 test('旧透明配置迁移到Telegram，拒绝未知模式', () => {
   assert.deepEqual(checkedAppearance({ mode: 'glass', opacity: 0.4 }), { mode: 'telegram' });
   assert.deepEqual(checkedAppearance({ mode: 'telegram' }), { mode: 'telegram' });
+  assert.deepEqual(checkedAppearance({ mode: 'telegram', telegramScheme: 'light' }), { mode: 'telegram', telegramScheme: 'light' });
+  assert.throws(() => checkedAppearance({ mode: 'telegram', telegramScheme: 'sepia' }));
   assert.throws(() => checkedAppearance({ mode: 'remote' }));
   assert.throws(() => checkedAppearance(null));
 });
@@ -14,5 +16,6 @@ test('所有模式背景不透明，不降低纸张和文字的整体透明度',
   assert.deepEqual(applyWindowAppearance(window, { mode: 'telegram' }), { nativeTransparency: false });
   applyWindowAppearance(window, { mode: 'dark' });
   applyWindowAppearance(window, { mode: 'light' });
-  assert.deepEqual(backgrounds, ['#0b0e13', '#08090c', '#f4f5f9']);
+  applyWindowAppearance(window, { mode: 'telegram', telegramScheme: 'light' });
+  assert.deepEqual(backgrounds, ['#0b0e13', '#08090c', '#f4f5f9', '#e8eff0']);
 });

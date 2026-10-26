@@ -5,7 +5,7 @@ declare global {
     juanye?: {
       platform: string;
       renderDrawing(code: string): Promise<{ svg: string; width: number; height: number }>;
-      setAppearance(appearance: { mode: "dark" | "light" | "telegram"; opacity?: number }): Promise<{ nativeTransparency: boolean }>;
+      setAppearance(appearance: { mode: "dark" | "light" | "telegram"; telegramScheme?: "dark" | "light"; opacity?: number }): Promise<{ nativeTransparency: boolean }>;
       windowControl(action: "min" | "max" | "close"): void;
       exportPdf(options: { name: string; widthMm: number; heightMm: number }): Promise<{ canceled: boolean; path?: string }>;
       saveText(options: { name: string; content: string; extension: string }): Promise<{ canceled: boolean; path?: string }>;

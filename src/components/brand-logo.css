@@ -1,0 +1,88 @@
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.brand-logo > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.brand-logo[data-animate="true"] > svg {
+  transition: transform 220ms cubic-bezier(.2, .7, .3, 1);
+}
+
+.brand-logo[data-animate="true"]:hover > svg {
+  transform: translateY(-1px) rotate(-5deg);
+}
+
+.brand-logo[data-animate="true"] :is(.brand-page, .brand-fold, .brand-question) {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-fill-mode: backwards;
+  animation-timing-function: cubic-bezier(.2, .75, .25, 1);
+}
+
+.brand-logo[data-animate="true"] .brand-page {
+  animation-name: brand-page-arrive;
+  animation-duration: 840ms;
+}
+
+.brand-logo[data-animate="true"] .brand-question--one {
+  animation-name: brand-question-compose;
+  animation-duration: 660ms;
+  animation-delay: 140ms;
+}
+
+.brand-logo[data-animate="true"] .brand-question--two {
+  animation-name: brand-question-compose;
+  animation-duration: 660ms;
+  animation-delay: 230ms;
+}
+
+.brand-logo[data-animate="true"] .brand-fold {
+  transform-origin: left bottom;
+  animation-name: brand-fold-open;
+  animation-duration: 700ms;
+  animation-delay: 280ms;
+}
+
+@keyframes brand-page-arrive {
+  0% { opacity: 0; transform: translateY(24px) scale(.8) rotate(-10deg); }
+  68% { opacity: 1; transform: translateY(-3px) scale(1.025) rotate(2deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes brand-question-compose {
+  0% { opacity: 0; transform: translateX(-62px); }
+  75% { opacity: 1; transform: translateX(5px); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes brand-fold-open {
+  0% { opacity: 0; transform: translate(-12px, 12px) scale(.4) rotate(-25deg); }
+  70% { opacity: 1; transform: scale(1.04) rotate(3deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+.app-bg[data-interface-motion="reduced"] .brand-logo[data-animate="true"] > svg,
+.app-bg[data-interface-motion="reduced"] .brand-logo[data-animate="true"]:hover > svg,
+.app-bg[data-interface-motion="reduced"] .brand-logo[data-animate="true"] :is(.brand-page, .brand-fold, .brand-question) {
+  animation: none;
+  transition: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo[data-animate="true"] > svg,
+  .brand-logo[data-animate="true"]:hover > svg,
+  .brand-logo[data-animate="true"] :is(.brand-page, .brand-fold, .brand-question) {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

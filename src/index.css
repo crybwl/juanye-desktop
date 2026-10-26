@@ -38,7 +38,7 @@
   --syntax-brace: #7f86a0;
 }
 
-:root[data-theme="light"] {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) {
   color-scheme: light;
   --color-bg: #f4f5f9;
   --color-panel: #fff;
@@ -440,18 +440,18 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 :root[data-theme="telegram"] .app-bg { background: var(--color-bg); }
 :root[data-theme="telegram"] .app-bg > header,
 :root[data-theme="telegram"] .app-bg > div > [class~="shrink-0"] {
-  background: #11151b;
+  background: var(--surface-input);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 :root[data-theme="telegram"] .app-bg > header {
-  background: #15191f;
+  background: var(--tg-header, #15191f);
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.035);
 }
 :root[data-theme="telegram"] .workspace-stage {
   position: relative;
   isolation: isolate;
-  background: #080b10;
+  background: var(--canvas-bg);
 }
 /* A fixed-size clipping layer keeps the moving tile out of the pane's scroll geometry. */
 .workspace-wallpaper { display: none; }
@@ -506,69 +506,69 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 
 /* Compatibility aliases for the original dark UI's translucent white utilities.
    Pure-white paper and illustration colors are deliberately not remapped. */
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-white/[0.015]"], [class~="bg-white/[0.018]"], [class~="bg-white/[0.02]"]
 ) { background-color: rgb(62 80 123 / 0.025); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-white/[0.025]"], [class~="bg-white/[0.03]"], [class~="bg-white/[0.04]"],
   [class~="bg-white/[0.045]"], [class~="bg-white/[0.05]"]
 ) { background-color: rgb(62 80 123 / 0.045); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-white/[0.06]"], [class~="bg-white/[0.07]"], [class~="bg-white/[0.08]"],
   [class~="bg-white/[0.1]"]
 ) { background-color: rgb(62 80 123 / 0.07); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-white/[0.12]"], [class~="bg-white/20"]
 ) { background-color: rgb(62 80 123 / 0.18); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="hover:bg-white/[0.02]"], [class~="hover:bg-white/[0.025]"],
   [class~="hover:bg-white/[0.03]"], [class~="hover:bg-white/[0.035]"],
   [class~="hover:bg-white/[0.04]"], [class~="hover:bg-white/[0.05]"],
   [class~="hover:bg-white/[0.06]"], [class~="hover:bg-white/[0.07]"],
   [class~="hover:bg-white/[0.1]"], [class~="hover:bg-white/[0.12]"]
 ):hover { background-color: rgb(62 80 123 / 0.09); }
-:root[data-theme="light"] [class~="group"]:hover [class~="group-hover:bg-white/[0.04]"] {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="group"]:hover [class~="group-hover:bg-white/[0.04]"] {
   background-color: rgb(62 80 123 / 0.07);
 }
-:root[data-theme="light"] [class~="focus:bg-white/[0.05]"]:focus {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="focus:bg-white/[0.05]"]:focus {
   background-color: var(--surface-input);
 }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-[#0a0c11]"], [class~="bg-[#0d0f14]"]
 ) { background-color: var(--surface-input); }
-:root[data-theme="light"] [class~="bg-[#1c1f29]"] {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="bg-[#1c1f29]"] {
   background-color: var(--surface-popup);
 }
-:root[data-theme="light"] [class~="bg-[#262a37]"] {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="bg-[#262a37]"] {
   background-color: var(--surface-selected);
   box-shadow: 0 1px 4px rgb(43 55 91 / 0.1), 0 0 0 1px rgb(43 55 91 / 0.04);
 }
-:root[data-theme="light"] [class~="bg-[#0a0b0f]"] { background-color: var(--canvas-bg); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="bg-[#0a0b0f]"] { background-color: var(--canvas-bg); }
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-black/20"], [class~="bg-black/25"], [class~="bg-black/30"]
 ) { background-color: var(--surface-inset); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-[#05060a]/60"], [class~="bg-[#05060a]/35"]
 ) { background-color: var(--surface-overlay); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="border-white/[0.07]"], [class~="border-white/[0.08]"], [class~="border-white/10"],
   [class~="border-white/20"], [class~="border-white/25"]
 ) { border-color: var(--color-line-strong); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="hover:border-white/[0.14]"], [class~="hover:border-white/[0.16]"], [class~="hover:border-white/20"]
 ):hover { border-color: color-mix(in srgb, var(--color-muted) 45%, transparent); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="ring-white/[0.04]"], [class~="ring-white/[0.05]"], [class~="ring-white/[0.06]"],
   [class~="ring-white/[0.08]"], [class~="ring-white/80"], [class~="ring-[#0d0f14]"]
 ) { --tw-ring-color: var(--color-line-strong); }
-:root[data-theme="light"] [class~="text-white/15"] { color: var(--color-line-strong); }
-:root[data-theme="light"] [class~="text-[#f8cf9c]"] { color: var(--color-warn); }
-:root[data-theme="light"] :is(
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="text-white/15"] { color: var(--color-line-strong); }
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="text-[#f8cf9c]"] { color: var(--color-warn); }
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) :is(
   [class~="bg-accent"][class~="text-[#0b0d18]"], [class~="bg-ok"][class~="text-[#06160e]"],
   [class~="bg-[#0d1020]"], [class~="text-[#0c1020]"]
 ) { color: #fff; }
-:root[data-theme="light"] [class~="bg-[#0d1020]"] { background-color: #fff; }
-:root[data-theme="light"] [class~="from-[#1b1f2b]"] {
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="bg-[#0d1020]"] { background-color: #fff; }
+:root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) [class~="from-[#1b1f2b]"] {
   background-image: linear-gradient(to bottom, #f5f6fb, #e8ecf5);
 }
 
@@ -589,20 +589,20 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 :root[data-theme="telegram"] .btn-primary::after { display: none; }
 :root[data-theme="telegram"] .app-bg :is([class~="bg-panel/80"], [class~="bg-panel/70"], [class~="bg-panel/90"]) { background: var(--color-panel); }
 :root[data-theme="telegram"] .app-bg [class~="bg-white/[0.018]"] {
-  background: #191e25;
+  background: var(--tg-card, #191e25);
   border-color: var(--color-line);
   border-radius: 16px;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
 }
 :root[data-theme="telegram"] .question-sidebar,
-:root[data-theme="telegram"] .sidebar-drawer { background: #15191f; color: var(--color-fg); }
-:root[data-theme="telegram"] .sidebar-rail { background: #101419; border-color: var(--color-line); }
+:root[data-theme="telegram"] .sidebar-drawer { background: var(--tg-sidebar, #15191f); color: var(--color-fg); }
+:root[data-theme="telegram"] .sidebar-rail { background: var(--tg-rail, #101419); border-color: var(--color-line); }
 :root[data-theme="telegram"] .question-type-button {
   border-radius: 999px;
-  color: #a6afbd !important;
-  background: #1e242c;
+  color: var(--color-muted) !important;
+  background: var(--tg-type-button, #1e242c);
 }
-:root[data-theme="telegram"] .question-type-button:hover { background: #282f39; }
+:root[data-theme="telegram"] .question-type-button:hover { background: var(--tg-type-hover, #282f39); }
 :root[data-theme="telegram"] .question-type-button:is([aria-pressed="true"], [data-active="true"]) {
   background: linear-gradient(140deg, var(--accent-fill), var(--accent-fill-2));
   color: #fff !important;
@@ -611,16 +611,16 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 }
 :root[data-theme="telegram"] .question-type-icon { color: var(--color-accent); }
 :root[data-theme="telegram"] .question-type-button:is([aria-pressed="true"], [data-active="true"]) .question-type-icon { color: #fff; }
-:root[data-theme="telegram"] .sidebar-summary { background: #20252c; border-color: var(--color-line); box-shadow: none; }
+:root[data-theme="telegram"] .sidebar-summary { background: var(--color-raised); border-color: var(--color-line); box-shadow: none; }
 :root[data-theme="telegram"] .sidebar-summary > .pointer-events-none { display: none; }
 :root[data-theme="telegram"] .sidebar-section-heading { color: var(--color-muted); }
-:root[data-theme="telegram"] .sidebar-actions { background: #15191f; border-color: var(--color-line); }
+:root[data-theme="telegram"] .sidebar-actions { background: var(--tg-sidebar, #15191f); border-color: var(--color-line); }
 :root[data-theme="telegram"] .sidebar-actions button { border-radius: 12px; }
 :root[data-theme="telegram"] .appearance-choice input:checked + .appearance-choice-content {
-  background: color-mix(in srgb, var(--color-accent) 7%, #1b2028);
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--tg-choice-bg, #1b2028));
   box-shadow: 0 0 0 1px var(--color-accent);
 }
-.telegram-gallery { background: #171b21; }
+.telegram-gallery { background: var(--tg-gallery, #171b21); }
 .telegram-theme-card {
   position: relative;
   display: block;
@@ -628,7 +628,7 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 12px;
-  background: #080a0e var(--theme-wallpaper) center / 210px 210px;
+  background: var(--tg-theme-card-bg, #080a0e) var(--theme-wallpaper) center / 210px 210px;
   transition: border-color .16s, box-shadow .16s, transform .16s;
 }
 .telegram-theme-choice:hover .telegram-theme-card { transform: translateY(-2px); border-color: var(--theme-accent); }
@@ -654,7 +654,7 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   top: 48px;
   left: 12px;
   border-bottom-left-radius: 5px;
-  background: #252a30;
+  background: var(--tg-preview-in, #252a30);
 }
 .telegram-theme-bubble::after {
   position: absolute;
@@ -675,8 +675,8 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   align-items: center;
   justify-content: center;
   gap: 5px;
-  background: rgb(9 12 17 / 0.9);
-  color: #c9ced7;
+  background: var(--tg-theme-name-bg, rgb(9 12 17 / 0.9));
+  color: var(--tg-theme-name-fg, #c9ced7);
   font-size: 11px;
 }
 .telegram-theme-choice input:checked + .telegram-theme-card .telegram-theme-name { color: var(--theme-accent); }
@@ -689,11 +689,11 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   padding: 17px;
   border: 1px solid rgb(255 255 255 / 0.06);
   border-radius: 13px;
-  background: #0a0d12 var(--theme-wallpaper) 10px 0 / 310px 310px;
+  background: var(--tg-preview-bg, #0a0d12) var(--theme-wallpaper) 10px 0 / 310px 310px;
   font-size: 12px;
 }
 .telegram-preview-in, .telegram-preview-out { padding: 9px 13px; color: #fff; box-shadow: 0 2px 4px rgb(0 0 0 / 0.12); }
-.telegram-preview-in { border-radius: 13px 13px 13px 4px; background: #272c32; }
+.telegram-preview-in { border-radius: 13px 13px 13px 4px; background: var(--tg-preview-in, #272c32); }
 .telegram-preview-out { display: flex; align-items: center; gap: 12px; align-self: flex-end; border-radius: 13px 13px 4px 13px; background: linear-gradient(135deg, var(--theme-fill), var(--theme-fill-2)); }
 
 .appearance-choice-content {
@@ -718,7 +718,7 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 }
 .appearance-swatch-dark { background: #0b0d13; }
 .appearance-swatch-light { background: #edf0f6; }
-.appearance-swatch-telegram { background: #080b10 var(--tg-wallpaper, none) center / 180px; }
+.appearance-swatch-telegram { background: var(--canvas-bg) var(--tg-wallpaper, none) center / 180px; }
 .appearance-swatch-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
@@ -727,7 +727,7 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   background: rgb(255 255 255 / 0.64);
 }
 .appearance-swatch-dark .appearance-swatch-sidebar { background: #171a25; }
-.appearance-swatch-telegram .appearance-swatch-sidebar { background: #1b2028; border-left: 4px solid var(--tg-accent, #ecb985); }
+.appearance-swatch-telegram .appearance-swatch-sidebar { background: var(--tg-sidebar, #1b2028); border-left: 4px solid var(--tg-accent, #ecb985); }
 .appearance-swatch-page {
   position: absolute;
   top: 11px;
@@ -746,6 +746,58 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 .appearance-swatch-page > span:first-child { margin-inline: 20%; background: #68748e; }
 .appearance-swatch-page > span:last-child { width: 65%; }
 
+/* Telegram daylight shares the normal light theme's contrast-safe utility aliases,
+   while retaining its own tinted canvas, floating doodles and opaque paper. */
+:root[data-theme="telegram"][data-telegram-scheme="light"] {
+  color-scheme: light;
+  --color-bg: #e8eff0;
+  --color-panel: #f8fbfc;
+  --color-raised: #eef4f5;
+  --color-fg: #243540;
+  --color-muted: #526672;
+  --color-faint: #627783;
+  --color-line: rgb(40 69 82 / 0.12);
+  --color-line-strong: rgb(40 69 82 / 0.2);
+  --color-ok: #187247;
+  --color-warn: #8a5a15;
+  --color-danger: #b23b4d;
+  --surface-input: #ffffff;
+  --surface-popup: #ffffff;
+  --surface-selected: #eaf2f5;
+  --surface-glass: #f8fbfc;
+  --surface-inset: rgb(47 76 90 / 0.045);
+  --surface-overlay: rgb(43 62 76 / 0.24);
+  --canvas-bg: #e5eeec;
+  --canvas-dot: transparent;
+  --scroll-thumb: rgb(73 102 117 / 0.28);
+  --syntax-math: var(--tg-accent);
+  --syntax-brace: #637c8c;
+  --tg-header: #f8fbfc;
+  --tg-sidebar: #f7fbfc;
+  --tg-rail: #eaf2f4;
+  --tg-card: #ffffff;
+  --tg-type-button: #ffffff;
+  --tg-type-hover: #e5eef2;
+  --tg-choice-bg: #ffffff;
+  --tg-gallery: #f0f6f7;
+  --tg-theme-card-bg: #e5eeec;
+  --tg-theme-name-bg: rgb(248 251 252 / 0.95);
+  --tg-theme-name-fg: #435d6c;
+  --tg-preview-bg: #e5eeec;
+  --tg-preview-in: #ffffff;
+}
+:root[data-theme="telegram"][data-telegram-scheme="light"] .workspace-wallpaper::before { opacity: 0.52; }
+:root[data-theme="telegram"][data-telegram-scheme="light"] .glass {
+  box-shadow: 0 14px 50px rgb(38 67 83 / 0.17), 0 1px 0 rgb(255 255 255 / 0.8) inset;
+}
+:root[data-theme="telegram"][data-telegram-scheme="light"] .app-bg > header { box-shadow: 0 1px 0 var(--color-line); }
+:root[data-theme="telegram"][data-telegram-scheme="light"] .telegram-theme-card,
+:root[data-theme="telegram"][data-telegram-scheme="light"] .telegram-live-preview { border-color: var(--color-line); }
+:root[data-theme="telegram"][data-telegram-scheme="light"] .telegram-preview-in { color: var(--color-fg); }
+:root[data-theme="telegram"][data-telegram-scheme="light"] .telegram-theme-choice input:checked + .telegram-theme-card {
+  box-shadow: 0 0 0 2px var(--theme-accent), 0 4px 14px rgb(43 75 91 / 0.13);
+}
+
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root[data-theme="telegram"] {
     --color-raised: #242a33;
@@ -761,7 +813,7 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
 }
 @media (prefers-contrast: more) {
   :root { --color-line: rgb(255 255 255 / 0.25); --color-line-strong: rgb(255 255 255 / 0.4); }
-  :root[data-theme="light"] {
+  :root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) {
     --color-line: rgb(39 52 82 / 0.28);
     --color-line-strong: rgb(39 52 82 / 0.45);
     --color-muted: #3b465b;
