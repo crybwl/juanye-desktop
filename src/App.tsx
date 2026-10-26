@@ -1,11 +1,11 @@
-import { MotionConfig, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
-import { Button, ToastProvider, cx, softSpring, useToast } from "./ui";
+import { Button, RollingNumber, SharedPill, ToastProvider, cx, softSpring, spring, useToast } from "./ui";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
@@ -38,6 +38,7 @@ import { isOcrPasteTarget } from "./ocr-queue";
 import { ExportCenter, type ExportFormat } from "./components/ExportCenter";
 import { examSnapshotFingerprint, type ExamMetadataPatch } from "./exam-ai";
 import { BankSourceNotice } from "./components/BankSourceNotice";
+import "./workspace-motion.css";
 
 const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
 
@@ -54,6 +55,8 @@ export default function App() {
 
 function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduced"; setMotionPref: (v: "full" | "reduced") => void }) {
   const toast = useToast();
+  const systemReducedMotion = useReducedMotion();
+  const reducedMotion = motionPref === "reduced" || !!systemReducedMotion;
   const [initialExam] = useState(() => ({ ...sampleExam, id: uid() }));
   const { exam, layout, setExam, setLayout, reset: resetWorkspace, undo, redo, canUndo, canRedo } = useWorkspaceUndo(initialExam, defaultLayout);
   const [workArea, setWorkArea] = useState<"exam" | "bank">("exam");
@@ -547,18 +550,22 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       />
 
       <nav aria-label="工作区" className="workspace-nav relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line px-4">
-        <Button size="sm" variant="ghost" aria-current={workArea === "exam" ? "page" : undefined} icon={<PenLine size={15} />} onClick={() => setWorkArea("exam")}>组卷</Button>
-        <Button size="sm" variant="ghost" aria-current={workArea === "bank" ? "page" : undefined} icon={<BookOpen size={15} />} onClick={() => setWorkArea("bank")}>本地题库</Button>
+        {([{ id: "exam", label: "组卷", icon: PenLine }, { id: "bank", label: "本地题库", icon: BookOpen }] as const).map(item => <Button key={item.id} size="sm" variant="ghost" className="workspace-tab" aria-current={workArea === item.id ? "page" : undefined} onClick={() => setWorkArea(item.id)}>
+          {workArea === item.id && <SharedPill layoutId="workspace-main-tab" transition={spring} className="workspace-tab-indicator" />}
+          <item.icon size={15} /><span>{item.label}</span>
+        </Button>)}
         <div className="ml-auto flex items-center gap-1">{workArea === "exam" ? <>
           <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
           <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={() => setExamAnalysis(true)}>试卷分析</Button>
           <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
-        </> : <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span>}</div>
+        </> : <motion.span key="bank-exam-summary" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={softSpring} className="workspace-paper-summary"><span>{exam.title}</span><span className="workspace-paper-summary-count"><RollingNumber value={count} /> 题 · <RollingNumber value={score} /> 分</span></motion.span>}</div>
       </nav>
 
-      <div ref={main} className="workspace-stage flex min-h-0 flex-1 overflow-hidden">
+      <div ref={main} className="workspace-stage relative flex min-h-0 flex-1 overflow-hidden">
         <div className="workspace-wallpaper" aria-hidden="true" />
-        <div style={{ display: workArea === "exam" ? "contents" : "none" }}>
+        <motion.div className="workspace-view workspace-view-exam" data-workspace-view="exam" aria-hidden={workArea !== "exam"} {...(workArea !== "exam" ? { inert: "" } : {})} initial={false}
+          animate={workArea === "exam" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : -14, transitionEnd: { visibility: "hidden" } }}
+          transition={{ opacity: { duration: workArea === "exam" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "exam" ? "auto" : "none", zIndex: workArea === "exam" ? 2 : 1 }}>
         {/* 左：试卷结构 */}
         <motion.div
           initial={{ opacity: 0, x: -12 }}
@@ -685,17 +692,21 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
             count={count}
           />
         </motion.div>
-        </div>
-        {bankVisited && <div className="relative min-h-0 min-w-0 flex-1" style={{ display: workArea === "bank" ? "flex" : "none" }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} onBack={() => setWorkArea("exam")} /></Suspense></div>}
+        </motion.div>
+        {bankVisited && <motion.div className="workspace-view workspace-view-bank" data-workspace-view="bank" aria-hidden={workArea !== "bank"} {...(workArea !== "bank" ? { inert: "" } : {})}
+          initial={{ opacity: 0, x: reducedMotion ? 0 : 16 }} animate={workArea === "bank" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : 16, transitionEnd: { visibility: "hidden" } }}
+          transition={{ opacity: { duration: workArea === "bank" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "bank" ? "auto" : "none", zIndex: workArea === "bank" ? 2 : 1 }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} onBack={() => setWorkArea("exam")} /></Suspense></motion.div>}
       </div>
 
-      {batch && <BatchPanel paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
-      {structure && <StructurePanel exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
-      {bank && <QuestionBankDialog open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
-      {examAnalysis && <ExamAnalysisDialog open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} onLocate={id => { setExamAnalysis(false); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
-      {abPaper && <AbPaperDialog open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
-      {aiTask && <GenerateQuestionDialog open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
-      {exportCenter && <ExportCenter exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
+      <AnimatePresence initial={false}>
+      {batch && <BatchPanel key="batch-panel" paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
+      {structure && <StructurePanel key="structure-panel" exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
+      {bank && <QuestionBankDialog key="bank-picker" open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
+      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} onLocate={id => { setExamAnalysis(false); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
+      {abPaper && <AbPaperDialog key="ab-paper" open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
+      {aiTask && <GenerateQuestionDialog key="generate-question" open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
+      {exportCenter && <ExportCenter key="export-center" exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
+      </AnimatePresence>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       {importKind && <ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} />}

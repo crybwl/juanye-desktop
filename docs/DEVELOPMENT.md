@@ -29,6 +29,7 @@ npm start
 - `node scripts/verify-release.cjs`：打包后比较 asar 中的版本和入口资源与本地 dist 是否一致。
 - `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
 - `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
+- `node scripts/ui-polish-regression.cjs [--packaged]`：逐帧采样真实工作区/侧栏/选题篮/页签/导出过渡，20套实际主题的对比度和溢出，宽编辑区、筛选、减弱动效及任务保持；保存画面与原始帧数据，不调用外部模型。
 
 UI 测试使用项目的 Playwright；如有需要，可通过 JUANYE_PLAYWRIGHT 指向其他 Playwright 模块。Electron 使用自带浏览器，不需要额外下载 Playwright 浏览器。测试窗口使用临时用户目录，必要时在屏幕外显示以避免后台节流，不接管用户的其他窗口。
 

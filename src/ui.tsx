@@ -5,6 +5,7 @@ import {
   useSpring,
   useTransform,
   PresenceContext,
+  useIsPresent,
   type HTMLMotionProps,
 } from "motion/react";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -356,12 +357,14 @@ export function Modal({
   label?: string;
   align?: "center" | "top";
 }) {
+  const present = useIsPresent();
+  const visible = open && present;
   useEffect(() => {
-    if (!open) return;
+    if (!visible) return;
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [open, onClose]);
+  }, [visible, onClose]);
   // 自己管理挂载/卸载，而不是依赖 AnimatePresence：
   // 更可控：关闭动画结束后再卸载，遮罩在关闭瞬间即不再拦截点击。
   const [mounted, setMounted] = useState(open);
@@ -376,23 +379,27 @@ export function Modal({
       className={cx(
         "fixed inset-0 z-[60] flex justify-center px-6",
         align === "center" ? "items-center" : "items-start pt-[14vh]",
-        !open && "pointer-events-none",
+        !visible && "pointer-events-none",
       )}
+      data-modal-motion={visible ? "open" : "closing"}
       initial={{ opacity: 0 }}
-      animate={{ opacity: open ? 1 : 0 }}
-      transition={{ duration: open ? 0.2 : 0.18 }}
+      animate={{ opacity: visible ? 1 : 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.18 } }}
+      transition={{ duration: visible ? 0.2 : 0.18 }}
     >
       <div className="absolute inset-0 bg-[#05060a]/60 backdrop-blur-[6px]" onClick={onClose} />
       <motion.div
         role="dialog"
         aria-label={label}
-        aria-modal
-        initial={{ opacity: 0, scale: 0.95, y: align === "top" ? -10 : 14, filter: "blur(6px)" }}
+        aria-modal={visible || undefined}
+        aria-hidden={!visible || undefined}
+        initial={{ opacity: 0, scale: 0.976, y: align === "top" ? -10 : 14 }}
         animate={
-          open
-            ? { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }
-            : { opacity: 0, scale: 0.97, y: 6, filter: "blur(4px)", transition: { duration: 0.16 } }
+          visible
+            ? { opacity: 1, scale: 1, y: 0 }
+            : { opacity: 0, scale: 0.984, y: 6, transition: { duration: 0.16 } }
         }
+        exit={{ opacity: 0, scale: 0.984, y: 6, transition: { duration: 0.16 } }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
         className={cx(
           "glass relative overflow-hidden rounded-2xl border border-line-strong shadow-[0_30px_80px_-20px_rgba(0,0,0,.8)]",

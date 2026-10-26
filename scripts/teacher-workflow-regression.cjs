@@ -98,8 +98,10 @@ async function main() {
     await analysis.getByText('2 题 · 12 分', { exact: true }).waitFor();
     assert.equal(await analysis.locator('table').count(), 3);
     await analysis.getByRole('tab', { name: '双向细目表', exact: true }).click();
+    await until(async () => await analysis.locator('table').count() === 1, 'Matrix enter transition did not finish');
     assert.equal(await analysis.locator('table').count(), 1);
     await analysis.getByRole('tab', { name: '逐题细目', exact: true }).click();
+    await until(async () => (await analysis.getByRole('tabpanel').textContent()).includes('逐题细目'), 'Details enter transition did not finish');
     assert.equal(await analysis.locator('table').count(), 1);
     await analysis.getByRole('button', { name: '导出 CSV', exact: true }).click();
     const csvPath = path.join(out, 'analysis.csv'); await until(async () => fs.existsSync(csvPath), 'CSV export missing');

@@ -1,39 +1,99 @@
-.exam-ai-panel { display: grid; gap: 16px; font-size: 12.5px; line-height: 1.65; }
-.exam-ai-card { border: 1px solid var(--color-line-strong); border-radius: 14px; padding: 18px; background: var(--surface-inset); min-width: 0; }
-.exam-ai-card h3 { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
-.exam-ai-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 9px; }
-.exam-ai-heading h3 { margin: 0; }
+.exam-ai-panel { display: flex; flex-direction: column; gap: 24px; font-size: 12.5px; line-height: 1.7; }
+.exam-ai-card { min-width: 0; }
+.exam-ai-card h3 { font-size: 13px; font-weight: 650; letter-spacing: -.015em; }
+.exam-ai-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.exam-ai-heading h3,.exam-ai-heading p { margin: 0; }
 .exam-ai-heading > .exam-ai-muted { margin-left: auto; }
-.exam-ai-muted { color: var(--color-muted); font-size: 11.5px; }
-.exam-ai-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; border: 0; padding: 0; margin: 16px 0; }
-.exam-ai-fields label, .exam-ai-report-picker label { display: grid; gap: 5px; min-width: 0; }
-.exam-ai-fields input:not([type=checkbox]) { background: var(--surface-input,var(--color-panel)); color: var(--color-fg); border: 1px solid var(--color-line-strong); border-radius: 11px; padding: 7px 11px; min-width: 0; width: 100%; height: 40px; }
-.exam-ai-fields input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.exam-ai-check { grid-column: span 2; display: flex !important; flex-direction: row; align-items: center; gap: 8px !important; }
-.exam-ai-limitations { color: var(--color-muted); font-size: 11.5px; }
-.exam-ai-limitations summary { cursor: pointer; width: fit-content; }
+.exam-ai-heading-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; color: var(--color-accent); background: color-mix(in srgb,var(--color-accent) 10%,var(--color-panel)); }
+.exam-ai-muted { color: var(--color-muted); font-size: 11.5px; line-height: 1.7; }
+.exam-ai-model { max-width: 50%; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-size: 11.5px; padding: 3px 8px; border-radius: 6px; background: var(--color-panel); border: 1px solid var(--color-line); }
+.exam-ai-setup { padding: 20px; border-radius: 14px; background: var(--surface-inset); }
+.exam-ai-fields { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; border: 0; padding: 0; margin: 17px 0 14px; }
+.exam-ai-fields label,.exam-ai-report-picker label { display: grid; gap: 7px; min-width: 0; color: var(--color-muted); font-size: 12px; font-weight: 500; }
+.exam-ai-fields input:not([type=checkbox]) { background: var(--surface-input,var(--color-panel)); color: var(--color-fg); border: 1px solid var(--color-line-strong); border-radius: 10px; padding: 7px 11px; min-width: 0; width: 100%; height: 38px; font-size: 12.5px; font-weight: 400; outline: 0; transition: border-color .18s,box-shadow .18s,background .18s; }
+.exam-ai-fields input::placeholder { color: var(--color-faint,var(--color-muted)); }
+.exam-ai-fields input:hover { border-color: color-mix(in srgb,var(--color-muted) 40%,var(--color-line)); }
+.exam-ai-fields input:focus-visible { border-color: color-mix(in srgb,var(--color-accent) 65%,transparent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--color-accent) 12%,transparent); }
+.exam-ai-fields:disabled { opacity: .65; }
+.exam-ai-advanced { margin: 2px 0 15px; color: var(--color-muted); font-size: 11.5px; }
+.exam-ai-advanced > summary { display: flex; align-items: center; gap: 7px; width: fit-content; cursor: pointer; list-style: none; border-radius: 5px; padding: 4px 0; transition: color .15s; }
+.exam-ai-advanced > summary::-webkit-details-marker { display: none; }
+.exam-ai-advanced > summary:hover { color: var(--color-fg); }
+.exam-ai-advanced > summary > svg:last-child { transition: transform .2s; margin-left: 4px; }
+.exam-ai-advanced[open] > summary > svg:last-child { transform: rotate(180deg); }
+.exam-ai-advanced { interpolate-size: allow-keywords; }
+.exam-ai-advanced::details-content { block-size: 0; opacity: 0; overflow: clip; transition: block-size .24s ease,opacity .2s ease,content-visibility .24s allow-discrete; }
+.exam-ai-advanced[open]::details-content { block-size: auto; opacity: 1; }
+.exam-ai-advanced-fields { grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 14px; }
+.exam-ai-check { display: flex; align-items: center; gap: 8px; font-weight: 400; align-self: end; min-height: 38px; color: var(--color-fg); font-size: 12px; }
+.exam-ai-limitations { color: var(--color-muted); font-size: 11.5px; padding-top: 4px; max-width: 84ch; }
+.exam-ai-limitations h4 { color: var(--color-fg); font-weight: 500; margin-top: 8px; }
 .exam-ai-limitations p { margin-top: 7px; }
-.exam-ai-budget { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0; }
-.exam-ai-budget span, .exam-ai-tag { border: 1px solid var(--color-line-strong); background: var(--color-panel); border-radius: 6px; padding: 3px 8px; font-size: 11px; }
-.exam-ai-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
-.exam-ai-confirm, .exam-ai-stale { padding: 14px; border: 1px solid var(--color-warn); background: color-mix(in srgb,var(--color-warn) 7%,transparent); border-radius: 10px; margin-top: 12px; }
-.exam-ai-confirm p { margin: 8px 0; }
-.exam-ai-stale { display: flex; align-items: start; gap: 10px; margin: 0; }
-.exam-ai-warning { display: flex; align-items: start; gap: 8px; color: var(--color-warn); overflow-wrap: anywhere; }
-.exam-ai-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
-.exam-ai-card ul { margin: 12px 0; padding-left: 20px; list-style: disc; }
-.exam-ai-report-picker { display: flex; align-items: end; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
-.exam-ai-finding { padding: 13px 0; border-top: 1px solid var(--color-line-strong); }
-.exam-ai-critical .exam-ai-tag { color: var(--color-danger); }
-.exam-ai-warning .exam-ai-tag { color: var(--color-warn); }
-.exam-ai-table-scroll { overflow-x: auto; }
-.exam-ai-table-scroll table { min-width: 660px; }
-.exam-ai-link { color: var(--color-accent); white-space: nowrap; }
+.exam-ai-budget { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 12px 0 17px; color: var(--color-muted); font-size: 11.5px; }
+.exam-ai-budget span { padding: 0 10px; border-left: 1px solid var(--color-line-strong); }
+.exam-ai-budget span:first-child { padding-left: 0; border-left: 0; color: var(--color-fg); }
+.exam-ai-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.exam-ai-setup > .exam-ai-actions { padding-top: 3px; }
+.exam-ai-confirm-wrap { overflow: hidden; }
+.exam-ai-confirm,.exam-ai-stale { padding: 15px 17px; border: 1px solid color-mix(in srgb,var(--color-warn) 28%,var(--color-line)); background: color-mix(in srgb,var(--color-warn) 5%,var(--color-panel)); border-radius: 11px; margin-top: 15px; }
+.exam-ai-confirm-title { display: flex; align-items: center; gap: 8px; color: var(--color-warn); }
+.exam-ai-confirm-title strong { font-weight: 600; }
+.exam-ai-confirm p { margin: 9px 0 0; color: var(--color-muted); font-size: 12px; }
+.exam-ai-stale { display: flex; align-items: start; gap: 10px; margin: 0; order: -4; }
+.exam-ai-stale > svg { color: var(--color-warn); flex-shrink: 0; margin-top: 3px; }
+.exam-ai-stale strong { color: var(--color-fg); font-weight: 600; }
+.exam-ai-stale p { color: var(--color-muted); font-size: 12px; margin: 2px 0 8px; }
+.exam-ai-warning { display: flex; align-items: start; gap: 8px; color: var(--color-warn); overflow-wrap: anywhere; font-size: 12px; }
+.exam-ai-warning > svg { flex-shrink: 0; margin-top: 3px; }
+.exam-ai-running { display: inline-flex; align-items: center; gap: 9px; color: var(--color-muted); font-size: 12px; margin-right: auto; }
+.exam-ai-running-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 4px color-mix(in srgb,var(--color-accent) 10%,transparent); animation: exam-ai-pulse 1.5s ease-in-out infinite; }
+.exam-ai-report-picker { order: -5; display: flex; align-items: end; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.exam-ai-report-picker label { flex: 1 1 320px; max-width: 470px; }
+.exam-ai-report-picker > span { padding-bottom: 9px; }
+.exam-ai-summary { order: -3; padding: 20px; border: 1px solid var(--color-line); border-radius: 14px; background: linear-gradient(145deg,color-mix(in srgb,var(--color-accent) 4%,var(--color-panel)),var(--color-panel)); box-shadow: 0 3px 12px rgb(0 0 0 / .025); }
+.exam-ai-prose { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.85; }
+.exam-ai-card ul { margin: 14px 0; padding-left: 19px; list-style: disc; color: var(--color-muted); }
+.exam-ai-card li + li { margin-top: 5px; }
+.exam-ai-report-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--color-line); }
+.exam-ai-report-metrics > span { color: var(--color-muted); font-size: 11.5px; }
+.exam-ai-report-metrics strong { color: var(--color-fg); font-size: 20px; font-weight: 600; letter-spacing: -.03em; margin-right: 5px; font-variant-numeric: tabular-nums; }
+.exam-ai-findings { order: 1; }
+.exam-ai-finding { padding: 15px 0; border-top: 1px solid var(--color-line); }
+.exam-ai-finding:last-child { padding-bottom: 0; }
+.exam-ai-finding-title { display: flex; align-items: baseline; gap: 9px; }
+.exam-ai-finding-title strong { font-size: 12.5px; font-weight: 500; flex: 1; overflow-wrap: anywhere; }
+.exam-ai-tag { flex-shrink: 0; color: var(--color-muted); font-size: 11.5px; font-weight: 450; }
+.exam-ai-severity { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: var(--color-accent); align-self: center; }
+.exam-ai-finding--critical .exam-ai-severity { background: var(--color-danger); }
+.exam-ai-finding--warning .exam-ai-severity { background: var(--color-warn); }
+.exam-ai-finding-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-left: 8px; margin-top: 7px; }
+.exam-ai-finding-toolbar > button { font-size: 11.5px; height: 28px; padding-inline: 8px; }
+.exam-ai-question-links { display: flex; flex-wrap: wrap; margin-left: auto; gap: 4px; }
+.exam-ai-question-links button { font-size: 11.5px; height: 28px; padding-inline: 8px; }
+.exam-ai-finding-context { overflow: hidden; }
+.exam-ai-finding-context > div { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 10px; padding: 12px 14px; color: var(--color-muted); font-size: 12px; background: var(--surface-inset); overflow-wrap: anywhere; }
+.exam-ai-finding-context > div:first-child { border-radius: 9px 9px 0 0; margin-top: 8px; padding-bottom: 6px; }
+.exam-ai-finding-context > div:last-child { border-radius: 0 0 9px 9px; padding-top: 6px; }
+.exam-ai-finding-context > div > span:first-child { font-size: 11.5px; font-weight: 500; color: var(--color-fg); }
+.exam-ai-reviews { order: 3; }
+.exam-ai-table-scroll { overflow: auto; max-height: 400px; border-radius: 11px; }
+.exam-ai-table-scroll table { min-width: 680px; }
+.exam-ai-table-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--color-panel); box-shadow: 0 1px 0 var(--color-line); }
+.exam-ai-table-scroll td:last-child { min-width: 190px; }
+.exam-ai-table-scroll .exam-ai-link { color: var(--color-accent); height: 25px; padding: 0; font-size: 12px; white-space: nowrap; }
 .exam-ai-link:disabled { color: var(--color-muted); }
-.exam-ai-proposal { display: flex; align-items: baseline; flex-wrap: wrap; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--color-line-strong); }
-.exam-analysis-tabs { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 24px; border-bottom: 1px solid var(--color-line-strong); }
-.exam-analysis-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 22px; }
-.exam-analysis-stat { border: 1px solid var(--color-line-strong); border-radius: 12px; padding: 12px 15px; background: var(--surface-inset); }
-.exam-analysis-stat span { display: block; font-size: 11px; color: var(--color-muted); }
-.exam-analysis-stat strong { display: block; margin-top: 4px; font-size: 24px; font-weight: 650; }
-@media(max-width:760px) { .exam-ai-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } .exam-analysis-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.exam-ai-proposals { order: 2; padding: 20px; border-radius: 14px; background: var(--surface-inset); }
+.exam-ai-proposals .exam-ai-heading { margin-bottom: 5px; }
+.exam-ai-selection-count { color: var(--color-muted); font-size: 11.5px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.exam-ai-proposal-list { margin-top: 14px; }
+.exam-ai-proposal { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--color-line); }
+.exam-ai-proposal:last-child { border-bottom: 0; }
+.exam-ai-proposal-number { color: var(--color-fg); font-weight: 500; white-space: nowrap; font-size: 12px; }
+.exam-ai-proposal > div:last-child { display: flex; flex-wrap: wrap; gap: 5px 20px; margin-left: 8px; font-size: 12px; }
+.exam-ai-proposal > div:last-child > span { display: flex; gap: 3px; align-items: baseline; }
+.exam-ai-empty { color: var(--color-muted); font-size: 12px; padding: 16px 0 3px; }
+.exam-ai-apply { margin-left: auto; }
+@keyframes exam-ai-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@media(max-width:850px) { .exam-ai-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } .exam-ai-advanced-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .exam-ai-setup,.exam-ai-summary,.exam-ai-proposals { padding: 16px; } .exam-ai-model { max-width: 100%; margin-left: 0; } .exam-ai-heading > .exam-ai-muted { margin-left: 0; width: 100%; } .exam-ai-finding-title { flex-wrap: wrap; } .exam-ai-finding-title strong { flex-basis: 100%; margin-left: 14px; } .exam-ai-report-metrics { gap: 8px; } .exam-ai-report-metrics strong { display: block; } .exam-ai-proposal { flex-wrap: wrap; } .exam-ai-proposal > div:last-child { flex-basis: 100%; margin-left: 28px; } }
+@media(prefers-reduced-motion:reduce) { .exam-ai-panel * { transition: none !important; } .exam-ai-running-dot { animation: none; } }

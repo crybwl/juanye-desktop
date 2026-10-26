@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import type { Mode } from "../types";
-import { Button, IconButton, Kbd, Segmented } from "../ui";
+import { Button, IconButton, Kbd, Segmented, softSpring } from "../ui";
 
 export const Logo = BrandLogo;
 
@@ -79,14 +79,16 @@ export function TitleBar({
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2">
-        {workspace === "bank" ? <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-muted"><BookOpen size={15} />本地题库</span> : <Segmented
+        <AnimatePresence mode="wait" initial={false}>
+        {workspace === "bank" ? <motion.span key="library-label" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5, transition: { duration: 0.1 } }} transition={softSpring} className="inline-flex items-center gap-2 text-[13px] font-semibold text-muted"><BookOpen size={15} />本地题库</motion.span> : <motion.div key="paper-mode" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5, transition: { duration: 0.1 } }} transition={softSpring}><Segmented
           value={mode}
           onChange={setMode}
           options={[
             { value: "edit", label: "编辑", icon: <PenLine size={14} /> },
             { value: "preview", label: "排版预览", icon: <Eye size={14} /> },
           ]}
-        />}
+        /></motion.div>}
+        </AnimatePresence>
       </div>
 
       <div data-tauri-drag-region className="ml-auto flex h-full items-center gap-1 pl-4">
