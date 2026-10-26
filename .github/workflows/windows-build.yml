@@ -45,6 +45,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Install Electron runtime explicitly
+        run: node node_modules/electron/install.js
       - run: npm test
       - run: npm run dist -- --publish never
       - run: node scripts/verify-release.cjs
