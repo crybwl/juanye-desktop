@@ -7,12 +7,16 @@ const { createModelStore } = require('./model-store.cjs');
 const { DEFAULT_APPEARANCE, checkedAppearance, applyWindowAppearance } = require('./appearance.cjs');
 const { createDiagramService } = require('./diagram.cjs');
 const diagrams = createDiagramService();
+const { requestGeneration } = require('./generation.cjs');
+const { createQuestionBankStore } = require('./question-bank.cjs');
+const { buildDocx } = require('./docx-export.cjs');
 
 app.setName('Juanye');
 if (process.env.JUANYE_TEST_USER_DATA && path.isAbsolute(process.env.JUANYE_TEST_USER_DATA)) app.setPath('userData', process.env.JUANYE_TEST_USER_DATA);
 let mainWindow;
 let recognition;
 let writeQueue = Promise.resolve();
+let baselineDraftPreserved = false;
 const indexPath = path.join(__dirname, '../dist/index.html');
 const filePath = name => path.join(app.getPath('userData'), name);
 
@@ -30,6 +34,11 @@ function writeJson(name, value) {
     await fs.mkdir(app.getPath('userData'), { recursive: true });
     const target = filePath(name);
     const temporary = filePath(`${name}.tmp`);
+    if (name === 'draft.json' && !baselineDraftPreserved) {
+      try { await fs.copyFile(target, filePath('draft.pre-0.4.0.json'), require('node:fs').constants.COPYFILE_EXCL); }
+      catch (error) { if (!['ENOENT', 'EEXIST'].includes(error.code)) throw new Error('升级前草稿备份失败，未覆盖原文件'); }
+      baselineDraftPreserved = true;
+    }
     await fs.writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 });
     if (name === 'draft.json') {
       try { await fs.copyFile(target, filePath('draft.backup.json')); }
@@ -56,6 +65,19 @@ function cleanName(value, suffix) {
   return String(value || '未命名试卷').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100).replace(/[. ]+$/, '') + suffix;
 }
 function installHandlers() {
+  const bank = createQuestionBankStore({ directory: app.getPath('userData') });
+  handle('bank:load', () => bank.load());
+  handle('bank:save', input => bank.save(input));
+  handle('bank:delete', ids => bank.remove(ids));
+  handle('bank:restore', () => bank.restore());
+  handle('document:docx', async options => {
+    if (!options?.exam || !options?.layout || JSON.stringify(options).length > 100 * 1024 * 1024) throw new Error('Word导出内容无效或过大');
+    const target = await dialog.showSaveDialog(mainWindow, { defaultPath: cleanName(options.name, '.docx'), filters: [{ name: 'Word 可编辑试卷', extensions: ['docx'] }] });
+    if (target.canceled || !target.filePath) return { canceled: true };
+    const bytes = await buildDocx(options.exam, options.layout, { renderDrawing: code => diagrams.render(code) });
+    await fs.writeFile(target.filePath, bytes);
+    return { canceled: false, path: target.filePath };
+  });
   handle('diagram:render', code => diagrams.render(code));
   handle('appearance:set', async value => {
     const appearance = checkedAppearance(value);
@@ -89,9 +111,15 @@ function installHandlers() {
     finally { if (recognition === controller) recognition = undefined; }
   });
   handle('model:cancel', () => { recognition?.abort(); recognition = undefined; });
+  handle('model:generate', async options => {
+    if (recognition) throw new Error('模型任务仍在进行，请稍候或取消');
+    const controller = new AbortController(); recognition = controller;
+    try { return await requestGeneration(await modelWithKey(), { ...options, signal: controller.signal }); }
+    finally { if (recognition === controller) recognition = undefined; }
+  });
   handle('document:text', async options => {
     if (!options || typeof options.content !== 'string' || options.content.length > 100 * 1024 * 1024) throw new Error('导出内容无效或过大');
-    const ext = ['tex', 'juanye', 'json', 'md'].includes(options.extension) ? options.extension : 'txt';
+    const ext = ['tex', 'juanye', 'json', 'md', 'csv'].includes(options.extension) ? options.extension : 'txt';
     const target = await dialog.showSaveDialog(mainWindow, { defaultPath: cleanName(options.name, `.${ext}`), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (target.canceled || !target.filePath) return { canceled: true };
     await fs.writeFile(target.filePath, options.content, 'utf8');

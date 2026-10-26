@@ -1,0 +1,6 @@
+/* Interactive hit-area padding must not alter measured column typography or
+   leak across the gutter/sealing strip. Single-column papers retain it. */
+.paper.interactive [data-paper-column] .p-q {
+  margin-inline: 0;
+  padding-inline: 0;
+}

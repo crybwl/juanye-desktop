@@ -16,6 +16,8 @@ export const LETTERS = ["A", "B", "C", "D", "E", "F"];
 /** 纸张尺寸（mm） */
 export const PAPER_MM: Record<PaperSize, [number, number]> = {
   A4: [210, 297],
+  A3: [297, 420],
+  "8K": [270, 390],
   A5: [148, 210],
   B5: [176, 250],
   Letter: [215.9, 279.4],

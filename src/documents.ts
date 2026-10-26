@@ -115,7 +115,7 @@ export function parseProject(text: string): { exam: Exam; layout: Layout } {
   };
   const layout: Layout = {
     style: oneOf(l.style, ["real", "structured"], "试卷样式"), density: oneOf(l.density, ["compact", "standard", "loose"], "排版密度"),
-    paper: oneOf(l.paper, ["A4", "A5", "B5", "Letter"], "纸张"), orientation: oneOf(l.orientation, ["portrait", "landscape"], "纸张方向"),
+    paper: oneOf(l.paper, ["A4", "A3", "8K", "A5", "B5", "Letter"], "纸张"), orientation: oneOf(l.orientation, ["portrait", "landscape"], "纸张方向"),
     margin: number(l.margin, "页边距", 4, 50), fontSize: number(l.fontSize, "字号", 6, 36), lineHeight: number(l.lineHeight, "行距", 1, 3),
     optionCols: oneOf(l.optionCols, ["auto", 4, 2, 1], "选项栏数"), pageNumber: bool("pageNumber"), showScore: bool("showScore"), keepTogether: bool("keepTogether"), answerSpace: bool("answerSpace"),
   };
@@ -125,6 +125,10 @@ export function parseProject(text: string): { exam: Exam; layout: Layout } {
   if (l.figureGap !== undefined) layout.figureGap = number(l.figureGap, "图文间距", 0, 10);
   if (l.answerMode !== undefined) layout.answerMode = oneOf(l.answerMode, ["none", "brief", "full"] as const, "答案模式");
   if (l.quickAnswers !== undefined) layout.quickAnswers = bool("quickAnswers");
+  if (l.columns !== undefined) layout.columns = oneOf(l.columns, [1, 2] as const, "正文栏数");
+  if (l.columnGap !== undefined) layout.columnGap = number(l.columnGap, "栏间距", 3, 25);
+  if (l.sealLine !== undefined) layout.sealLine = bool("sealLine");
+  if (l.sealWidth !== undefined) layout.sealWidth = number(l.sealWidth, "密封区宽度", 12, 30);
   layout.paperMode = l.paperMode === undefined ? "questions" : oneOf(l.paperMode, ["questions", "integrated"] as const, "试卷类型");
   return { exam, layout };
 }

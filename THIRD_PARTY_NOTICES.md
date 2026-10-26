@@ -20,8 +20,8 @@
 | TypeScript | Apache-2.0 | 构建工具 |
 | Vite / Tailwind CSS | MIT | 构建及样式 |
 | Playwright | Apache-2.0 | 本地 UI 回归测试 |
-| @napi-rs/canvas | MIT | 构建图标及图像测试 |
-| JSZip | MIT 或 GPL-3.0-or-later 双重许可，按 MIT 使用 | 合成文档测试夹具 |
+| @napi-rs/canvas | MIT | 构建图标、Word 内嵌图片转换及图像测试 |
+| JSZip | MIT 或 GPL-3.0-or-later 双重许可，按 MIT 使用 | 离线 Word OOXML 打包及文档测试夹具 |
 
 具体版本见 package-lock.json。此表是主要组件导航，不替代传递依赖的完整许可文本。
 

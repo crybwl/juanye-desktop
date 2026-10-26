@@ -139,11 +139,15 @@ export function LayoutPanel({
                 />
               </Group>
               <Group title="页面">
+                <div className="grid grid-cols-2 gap-2">
+                  {(["A3", "8K"] as const).map(paper => <Button key={paper} size="sm" variant="outline" onClick={() => setLayout({ ...layout, paper, orientation: "landscape", columns: 2, columnGap: layout.columnGap ?? 8, sealLine: true, sealWidth: layout.sealWidth ?? 18 })}>{paper} 横版印卷</Button>)}
+                </div>
                 <Segmented
                   full
                   value={layout.paper}
                   onChange={(v) => set("paper", v)}
-                  options={(["A4", "A5", "B5", "Letter"] as const).map((p) => ({ value: p, label: p }))}
+                  size="sm"
+                  options={(["A4", "A3", "8K", "A5", "B5", "Letter"] as const).map((p) => ({ value: p, label: p }))}
                 />
                 <Segmented
                   full
@@ -158,6 +162,17 @@ export function LayoutPanel({
                   <div className="mb-1 text-[13px] text-fg/90">页边距</div>
                   <Slider value={layout.margin} min={6} max={30} onChange={(v) => set("margin", v)} format={(v) => `${v} mm`} />
                 </div>
+              </Group>
+              <Group title="分栏与装订">
+                <Row label="正文双栏">
+                  <Switch label="正文双栏" checked={layout.columns === 2} onChange={value => set("columns", value ? 2 : 1)} />
+                </Row>
+                {layout.columns === 2 && <div><div className="mb-1 text-[13px] text-fg/90">栏间距</div><Slider value={layout.columnGap ?? 8} min={3} max={25} step={1} onChange={value => set("columnGap", value)} format={value => `${value} mm`} /></div>}
+                <Row label="左侧密封线">
+                  <Switch label="左侧密封线" checked={Boolean(layout.sealLine)} onChange={value => set("sealLine", value)} />
+                </Row>
+                {layout.sealLine && <div><div className="mb-1 text-[13px] text-fg/90">密封区宽度</div><Slider value={layout.sealWidth ?? 18} min={12} max={30} step={1} onChange={value => set("sealWidth", value)} format={value => `${value} mm`} /></div>}
+                {layout.paper === "8K" && <div className="text-[11.5px] text-muted">8K：270 × 390 mm</div>}
               </Group>
               <Group title="文字">
                 <div>

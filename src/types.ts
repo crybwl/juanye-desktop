@@ -55,7 +55,7 @@ export interface Exam {
   sections: Section[];
 }
 
-export type PaperSize = "A4" | "A5" | "B5" | "Letter";
+export type PaperSize = "A4" | "A3" | "8K" | "A5" | "B5" | "Letter";
 
 export interface Layout {
   style: "real" | "structured";
@@ -78,6 +78,11 @@ export interface Layout {
   figureGap?: number;
   answerMode?: "none" | "brief" | "full";
   quickAnswers?: boolean;
+  /** 试题正文按列顺序分页；旧项目保持单栏。 */
+  columns?: 1 | 2;
+  columnGap?: number; // mm
+  sealLine?: boolean;
+  sealWidth?: number; // mm, reserved separately from body margins
 }
 
 export type Mode = "edit" | "preview";

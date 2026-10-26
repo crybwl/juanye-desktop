@@ -5,6 +5,7 @@ import type { Exam, Layout, Mode, PreviewView } from "../types";
 import { AnswerCard, PaperPages, pageDims } from "./Paper";
 import { IconButton, Segmented, softSpring } from "../ui";
 import { previewPageAt, previewScale } from "../preview-geometry";
+import "./paper-columns.css";
 
 const ScaledPage = memo(function ScaledPage({ s, pw, ph, i, total, onPages, children }: { s: MotionValue<number>; pw: number; ph: number; i: number; total: number; onPages: (total: number) => void; children: ReactNode }) {
   const w = useTransform(s, (v) => v * pw);
@@ -120,7 +121,7 @@ export function PreviewPane({
     return () => clearTimeout(t);
   }, [activeId, view]);
 
-  const paperLabel = `${layout.paper} ${layout.orientation === "portrait" ? "纵向" : "横向"}`;
+  const paperLabel = `${layout.paper} ${layout.orientation === "portrait" ? "纵向" : "横向"}${view === "paper" && layout.columns === 2 ? " · 双栏" : ""}${layout.sealLine ? " · 密封线" : ""}`;
 
   return (
     <div className="relative flex h-full min-w-0 flex-col">

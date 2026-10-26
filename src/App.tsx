@@ -1,8 +1,8 @@
 import { MotionConfig, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree } from "lucide-react";
-import type { Mode, PreviewView, Question, QType } from "./types";
+import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
+import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
 import { ToastProvider, cx, softSpring, useToast } from "./ui";
@@ -29,6 +29,12 @@ import { copyQuestions, defaultOptions, defaultScore, transferQuestions } from "
 import { StructurePanel } from "./components/StructurePanel";
 import { BatchPanel } from "./components/BatchPanel";
 import { prepareDrawings, waitForDrawings } from "./drawing";
+import { QuestionBankDialog } from "./components/QuestionBank";
+import { BANK_DRAG_MIME, parseBankDrag, resolveBankDrag } from "./question-bank";
+import { AbPaperDialog, ExamAnalysisDialog } from "./components/ExamTools";
+import { GenerateQuestionDialog } from "./components/GenerateQuestion";
+import type { GenerationAction } from "./generated-question";
+import { isOcrPasteTarget } from "./ocr-queue";
 
 export default function App() {
   const [motionPref, setMotionPref] = useState<"full" | "reduced">("full");
@@ -56,6 +62,11 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const [importKind, setImportKind] = useState<ImportKind>();
   const [history, setHistory] = useState(false);
   const [structure, setStructure] = useState(false);
+  const [bank, setBank] = useState(false);
+  const [examAnalysis, setExamAnalysis] = useState(false);
+  const [abPaper, setAbPaper] = useState(false);
+  const [aiTask, setAiTask] = useState<{ action: GenerationAction; question: Question }>();
+  const [incomingPaste, setIncomingPaste] = useState<{ id: string; files: File[] }>();
   const [requestedSectionId, setRequestedSectionId] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -134,6 +145,51 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       return { ...e, sections };
     });
   };
+
+  const insertBankQuestions = (questions: Question[], targetSectionId: string) => {
+    const target = exam.sections.find(section => section.id === targetSectionId);
+    if (!questions.length || !target) throw Error("请选择有效的目标大题");
+    if (target.questions.length + questions.length > 1000 || count + questions.length > 2000) throw Error("单个大题最多1000道题，整卷最多2000道题，请分卷导入");
+    setExam(previous => ({ ...previous, sections: previous.sections.map(section => section.id === targetSectionId ? { ...section, questions: [...section.questions, ...questions] } : section) }));
+    setActiveId(questions[0].id); setMode("edit");
+    toast({ title: `已从题库加入 ${questions.length} 道题` });
+  };
+
+  const applyBPaper = async (next: Exam) => {
+    const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · 生成B卷前`, exam: structuredClone(exam), layout: { ...layout } };
+    const nextHistory = [snapshot, ...snapshots].slice(0, 50);
+    try {
+      await saveWorkspace({ version: 1, exam, layout, history: nextHistory });
+      setSnapshots(nextHistory); setExam(next);
+      toast({ title: "B 卷已生成", desc: "原卷保留在历史记录，可撤销" });
+    } catch (error) { toast({ title: "原卷备份失败，未生成 B 卷", desc: String(error), tone: "warn" }); }
+  };
+
+  const applyGenerated = (question: Question) => {
+    if (!aiTask) return;
+    const current = exam.sections.flatMap(section => section.questions).find(value => value.id === aiTask.question.id);
+    if (!current || JSON.stringify(current) !== JSON.stringify(aiTask.question)) { toast({ title: "原题已更改，请重新生成", tone: "warn" }); return; }
+    if (aiTask.action === "analysis") updateQ(current.id, { analysis: question.analysis, flag: question.flag });
+    else {
+      setExam(previous => ({ ...previous, sections: previous.sections.map(section => ({ ...section, questions: section.questions.flatMap(value => value.id === current.id ? [value, question] : [value]) })) }));
+      setActiveId(question.id);
+    }
+    setAiTask(undefined); toast({ title: "草稿已加入 · 待核对" });
+  };
+
+  useEffect(() => {
+    const paste = (event: ClipboardEvent) => {
+      if (!ready || ocr || settings || palette || bank || history || structure || batch || importKind || aiTask || abPaper || examAnalysis) return;
+      const files = Array.from(event.clipboardData?.files ?? []).filter(file => /^image\/(png|jpeg|webp)$/.test(file.type));
+      if (!files.length || event.defaultPrevented) return;
+      // A pure screenshot works even when the stem editor has focus. A mixed
+      // text+image clipboard still belongs to the focused text field.
+      if (!isOcrPasteTarget(event.target) && event.clipboardData?.getData("text/plain")) return;
+      event.preventDefault(); setIncomingPaste({ id: uid(), files }); setOcr(true);
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  }, [ready, ocr, settings, palette, bank, history, structure, batch, importKind, aiTask, abPaper, examAnalysis]);
 
   const newQuestion = (sectionId?: string) => {
     const sec = exam.sections.find(section => section.id === sectionId) ?? cur?.s ?? exam.sections[0];
@@ -277,6 +333,13 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     try { if (await saveText(exam.title, exportMarkdown(exam, layout), "md")) toast({ title: "Markdown 已导出" }); }
     catch (error) { toast({ title: "导出失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
   };
+  const exportWord = async () => {
+    try {
+      if (!window.juanye) throw Error("请使用桌面应用导出 Word");
+      const result = await window.juanye.exportDocx({ name: exam.title, exam, layout });
+      if (!result.canceled) toast({ title: "Word 已导出" });
+    } catch (error) { toast({ title: "Word 导出失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
+  };
   const exportWorkspace = async () => {
     try { if (await saveText(exam.title, exportProject(exam, layout), "juanye")) toast({ title: "项目已另存" }); }
     catch (error) { toast({ title: "另存失败", desc: String(error), tone: "warn" }); }
@@ -364,12 +427,20 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "import-annotated", group: "导入", title: "导入解析版试卷", icon: <FileInput size={15} />, run: () => setImportKind("annotated") },
       { id: "batch", group: "功能", title: "批量编辑", icon: <ListChecks size={15} />, run: () => { setMode("edit"); setSidebarExpanded(true); setBatch(true); } },
       { id: "structure", group: "功能", title: "管理大题", icon: <FolderTree size={15} />, run: () => { setSidebarExpanded(true); setStructure(true); } },
+      { id: "bank", group: "功能", title: "本地题库", icon: <BookOpen size={15} />, run: () => { setSidebarExpanded(true); setBank(true); } },
+      { id: "exam-analysis", group: "功能", title: "试卷分析与双向细目表", icon: <BarChart3 size={15} />, run: () => setExamAnalysis(true) },
+      { id: "ab-paper", group: "功能", title: "生成 B 卷（选项乱序）", icon: <Shuffle size={15} />, run: () => setAbPaper(true) },
+      ...(cur ? [
+        { id: "generate-variant", group: "当前题目", title: "生成变式题", icon: <Sparkles size={15} />, run: () => setAiTask({ action: "variant", question: structuredClone(cur.q) }) },
+        { id: "generate-analysis", group: "当前题目", title: "补写解析草稿", icon: <Sparkles size={15} />, run: () => setAiTask({ action: "analysis", question: structuredClone(cur.q) }) },
+      ] : []),
       { id: "undo", group: "编辑", title: "撤销", icon: <Undo2 size={15} />, kbd: "Ctrl Z", run: undo },
       { id: "redo", group: "编辑", title: "重做", icon: <Redo2 size={15} />, kbd: "Ctrl Shift Z", run: redo },
       { id: "history", group: "功能", title: "历史记录", icon: <HistoryIcon size={15} />, run: () => setHistory(true) },
       { id: "layout", group: "功能", title: "排版设置", icon: <SlidersHorizontal size={15} />, kbd: "Ctrl 2", run: () => setMode("preview") },
       { id: "new", group: "功能", title: "新建题目", icon: <Plus size={15} />, kbd: "Ctrl N", run: newQuestion },
       { id: "pdf", group: "导出", title: "导出 PDF", icon: <FileDown size={15} />, kbd: "Ctrl E", run: exportPdf },
+      { id: "word", group: "导出", title: "导出 Word（可编辑公式）", icon: <FileDown size={15} />, run: () => { void exportWord(); } },
       { id: "tex", group: "导出", title: "导出 .tex", icon: <FileCode2 size={15} />, run: () => { void exportSource(); } },
       { id: "markdown", group: "导出", title: "导出 Markdown", icon: <FileCode2 size={15} />, run: () => { void exportMd(); } },
       { id: "open-project", group: "项目", title: "打开项目", icon: <FileInput size={15} />, run: () => importRef.current?.click() },
@@ -404,7 +475,18 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   };
 
   return (
-    <div className="app-bg flex h-full min-w-[960px] flex-col" data-interface-motion={motionPref}>
+    <div className="app-bg flex h-full min-w-[960px] flex-col" data-interface-motion={motionPref}
+      onDragOverCapture={event => { if (event.dataTransfer.types.includes(BANK_DRAG_MIME) && event.target instanceof Element && event.target.closest("[data-section-id],[data-section-target],.workspace-editor-stage,.workspace-preview-stage")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
+      onDropCapture={event => {
+        if (!event.dataTransfer.types.includes(BANK_DRAG_MIME) || !(event.target instanceof Element)) return;
+        const target = event.target.closest("[data-section-id],[data-section-target],.workspace-editor-stage,.workspace-preview-stage");
+        if (!target) return;
+        event.preventDefault(); event.stopPropagation();
+        const sectionId = target.getAttribute("data-section-id") || target.getAttribute("data-section-target") || cur?.s.id || exam.sections[0]?.id;
+        if (!sectionId) { toast({ title: "请先创建一个大题", tone: "warn" }); return; }
+        try { const ids = parseBankDrag(event.dataTransfer.getData(BANK_DRAG_MIME)); void resolveBankDrag(ids).then(questions => insertBankQuestions(questions, sectionId)).catch(error => toast({ title: "题库拖入失败", desc: String(error), tone: "warn" })); }
+        catch (error) { toast({ title: "题库拖入失败", desc: String(error), tone: "warn" }); }
+      }}>
       <TitleBar
         title={exam.title}
         mode={mode}
@@ -537,13 +619,18 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
 
       {batch && <BatchPanel paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
       {structure && <StructurePanel exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
+      {bank && <QuestionBankDialog open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
+      {examAnalysis && <ExamAnalysisDialog open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} />}
+      {abPaper && <AbPaperDialog open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
+      {aiTask && <GenerateQuestionDialog open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       {importKind && <ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} />}
       <SettingsDialog open={settings} onClose={() => setSettings(false)} accent={accent} setAccent={setAccent} motionPref={motionPref} setMotionPref={setMotionPref} />
       <OcrDialog
         open={ocr}
-        onClose={() => setOcr(false)}
+        incomingPaste={incomingPaste}
+        onClose={() => { setOcr(false); setIncomingPaste(undefined); }}
         onAdd={(qs) => {
           addQuestions(qs);
           toast({ title: `已添加 ${qs.length} 道题` });

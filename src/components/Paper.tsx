@@ -1,19 +1,19 @@
 import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Exam, Layout, Question, QuestionFigure } from "../types";
-import { CN_NUM, LETTERS, MM, PAPER_MM, sectionNote } from "../data";
+import { CN_NUM, LETTERS, sectionNote } from "../data";
 import { MathText, plain } from "../math";
 import { cx } from "../ui";
 import { hasOptions, isLongAnswer, questionFigures } from "../figures";
 import { extractTikzBlocks, stripTikzBlocks } from "../drawing";
 import { TikzDrawing } from "../TikzDrawing";
 import { safePageCut, samePages, type PagePiece, type SplitGuard } from "../pagination-geometry";
+import { paperGeometry, physicalSheets } from "../paper-geometry";
 
 /* ---------- 尺寸与变量 ---------- */
 export function pageDims(layout: Layout) {
-  const [w, h] = PAPER_MM[layout.paper];
-  const [pw, ph] = layout.orientation === "portrait" ? [w, h] : [h, w];
-  return { pw: pw * MM, ph: ph * MM, m: layout.margin * MM };
+  const { pw, ph, m } = paperGeometry(layout);
+  return { pw, ph, m };
 }
 export function paperVars(layout: Layout): CSSProperties {
   const gap = { compact: 0.6, standard: 1, loose: 1.5 }[layout.density];
@@ -73,7 +73,7 @@ export function integratedSpacePlan(q: Question, layout: Layout, number: number)
 function optionCols(q: Question, l: Layout) {
   if (l.optionCols !== "auto") return l.optionCols;
   const max = Math.max(...q.options.map((o) => plain(o).length), 0);
-  const wide = l.orientation === "landscape" ? 1.5 : 1;
+  const wide = l.orientation === "landscape" && l.columns !== 2 ? 1.5 : 1;
   return max <= 9 * wide ? 4 : max <= 20 * wide ? 2 : 1;
 }
 
@@ -135,8 +135,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
         <div className="p-title">{exam.title || "未命名试卷"}</div>
         {exam.subtitle && <div className="p-sub">{exam.subtitle}</div>}
         <div className="p-info">
-          学校：<u />班级：<u />姓名：<u />考号：<u />
-          <br />
+          {!l.sealLine && <>学校：<u />班级：<u />姓名：<u />考号：<u /><br /></>}
           考试时间：{exam.duration} 分钟　　满分：{totalScore} 分　　共 {qCount} 题
         </div>
       </div>
@@ -224,7 +223,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
 }
 
 /* ---------- 分页：先在隐藏容器里量高度，再贪心装页 ---------- */
-export function usePages(blocks: Block[], contentW: number, avail: number, layout: Layout) {
+export function usePages(blocks: Block[], contentW: number, avail: number, layout: Layout, columns: 1 | 2 = 1) {
   const ref = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<PagePiece[][]>([]);
   const [ready, setReady] = useState(false);
@@ -246,10 +245,11 @@ export function usePages(blocks: Block[], contentW: number, avail: number, layou
       let cur: PagePiece[] = [];
       let used = 0;
       const flush = () => { if (cur.length) out.push(cur); cur = []; used = 0; };
+      const physicalBreak = () => { flush(); if (columns === 2 && out.length % 2) out.push([]); };
       for (let i = 0; i < hs.length; i++) {
         const block = blocks[i];
         const height = hs[i];
-        if (block.breakBefore) flush();
+        if (block.breakBefore) physicalBreak();
         const containsQuestion = () => cur.some(piece => blocks[piece.index].kind === "q" || blocks[piece.index].kind === "space");
         if ((block.pageSizedQuestion || (block.kind === "sec" && blocks[i + 1]?.pageSizedQuestion)) && containsQuestion()) flush();
         if (block.fillRemaining) {
@@ -305,7 +305,7 @@ export function usePages(blocks: Block[], contentW: number, avail: number, layou
           offset += part;
           if (offset < height - 0.05) flush();
         }
-        if (block.breakAfter) flush();
+        if (block.breakAfter) physicalBreak();
       }
       flush();
       const nextPages = out.length ? out : [[]];
@@ -326,7 +326,7 @@ export function usePages(blocks: Block[], contentW: number, avail: number, layou
     // Coalesce the initial observer/font/image-ready notifications into one pre-paint measurement.
     schedule();
     return () => { active = false; cancelAnimationFrame(frame); ro.disconnect(); mutations.disconnect(); };
-  }, [blocks, contentW, avail, layout]);
+  }, [blocks, contentW, avail, layout, columns]);
 
   // Portal measurement outside hidden print-root; display:none ancestors would measure zero.
   const measurer = useMemo(() => createPortal(
@@ -353,6 +353,25 @@ const PageContent = memo(function PageContent({ pieces, blocks }: { pieces: Page
   })}</>;
 });
 
+export function SealingStrip({ width, height }: { width: number; height: number }) {
+  const line = width - 11;
+  const message = [..."密封线内不要答题"];
+  // Use only local SVG coordinates: Chromium can clip rotated descendants on
+  // later physical pages even when the PDF still contains their invisible text.
+  return <svg data-seal-line="" aria-label="密封线" width={width - 10} height={height} style={{ display: "block", overflow: "visible", fontFamily: "var(--font-sans)" }}>
+    <line x1={line} y1={0} x2={line} y2={height} stroke="#555" strokeWidth={1} strokeDasharray="4 3" />
+    {["学校", "班级", "姓名", "考号"].map((label, index) => {
+      const top = height * (.04 + index * .24);
+      return <Fragment key={label}>
+        <text x={line * .5} y={top} textAnchor="middle" fontSize={11} fill="#222">{label}：</text>
+        <line x1={line * .5} y1={top + 12} x2={line * .5} y2={top + height * .19} stroke="#555" strokeWidth={1} />
+      </Fragment>;
+    })}
+    <rect x={line - 7} y={height * .5 - message.length * 6 - 4} width={14} height={message.length * 12 + 8} fill="#fff" />
+    {message.map((letter, index) => <text key={index} x={line} y={height * .5 - (message.length - 1) * 6 + index * 12} textAnchor="middle" dominantBaseline="central" fontSize={10} fill="#222">{letter}</text>)}
+  </svg>;
+}
+
 /* ---------- 单页 ---------- */
 export const PageSheet = memo(function PageSheet({
   layout,
@@ -373,7 +392,7 @@ export const PageSheet = memo(function PageSheet({
   onPick?: (id: string) => void;
   print?: boolean;
 }) {
-  const { pw, ph, m } = pageDims(layout);
+  const { pw, ph, m, seal, contentHeight } = paperGeometry(layout);
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const sheet = ref.current;
@@ -397,7 +416,10 @@ export const PageSheet = memo(function PageSheet({
         if (q?.dataset.qid) onPick?.(q.dataset.qid);
       }}
     >
-      {children}
+      {seal > 0 ? <div data-sealed-page="" style={{ display: "grid", gridTemplateColumns: `${seal}px minmax(0,1fr)`, height: contentHeight }}>
+        <SealingStrip width={seal} height={contentHeight} />
+        <div style={{ minWidth: 0 }}>{children}</div>
+      </div> : children}
       {layout.pageNumber && (
         <div
           className="absolute inset-x-0 text-center font-sans text-[11px] text-[#888]"
@@ -422,13 +444,16 @@ export const PaperPages = memo(function PaperPages(props: {
   print?: boolean;
 }) {
   const { exam, layout, totalScore, qCount } = props;
-  const { pw, ph, m } = pageDims(layout);
+  const { columns, columnWidth, contentHeight, gutter } = paperGeometry(layout);
   const blocks = useMemo(() => buildBlocks(exam, layout, totalScore, qCount), [exam, layout, totalScore, qCount]);
-  const { pages, measurer, ready } = usePages(blocks, pw - 2 * m, ph - 2 * m - (layout.pageNumber ? 12 : 0), layout);
-  const sheets = useMemo(() => pages.map((pg, i) => <PageSheet
-    key={i} layout={layout} index={i} total={pages.length} interactive={props.interactive}
+  const { pages, measurer, ready } = usePages(blocks, columnWidth, contentHeight, layout, columns);
+  const grouped = useMemo(() => physicalSheets(pages, columns), [pages, columns]);
+  const sheets = useMemo(() => grouped.map((cols, i) => <PageSheet
+    key={i} layout={layout} index={i} total={grouped.length} interactive={props.interactive}
     activeId={props.activeId} onPick={props.onPick} print={props.print}
-  ><PageContent pieces={pg} blocks={blocks} /></PageSheet>), [pages, blocks, layout, props.interactive, props.activeId, props.onPick, props.print]);
+  >{columns === 1 ? <PageContent pieces={cols[0]} blocks={blocks} /> : <div data-paper-columns="2" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", columnGap: gutter, height: contentHeight }}>
+    {Array.from({ length: 2 }, (_, index) => <div key={index} data-paper-column={index + 1} style={{ minWidth: 0, overflow: "hidden" }}><PageContent pieces={cols[index] || []} blocks={blocks} /></div>)}
+  </div>}</PageSheet>), [grouped, blocks, layout, columns, gutter, contentHeight, props.interactive, props.activeId, props.onPick, props.print]);
   return (
     <>
       {measurer}
@@ -438,7 +463,7 @@ export const PaperPages = memo(function PaperPages(props: {
           {props.render(
             sheet,
             i,
-            pages.length,
+            grouped.length,
           )}
         </Fragment>
       ))}
@@ -449,8 +474,9 @@ export const PaperPages = memo(function PaperPages(props: {
 
 /* ---------- 答题卡 ---------- */
 export const AnswerCard = memo(function AnswerCard({ exam, layout, print, render }: { exam: Exam; layout: Layout; print?: boolean; render?: (page: ReactNode, i: number, total: number) => ReactNode }) {
-  const { pw, ph, m } = pageDims(layout);
-  const avail = ph - 2 * m - (layout.pageNumber ? 12 : 0);
+  // Answer-card "full page" keeps its physical-page meaning, including questions
+  // 17–19. Only the question paper uses independently flowing logical columns.
+  const { contentWidth, contentHeight: avail } = paperGeometry(layout);
   const blocks = useMemo<Block[]>(() => {
     const result: Block[] = [{ key: "card-head", kind: "head", node: <div style={{ paddingBottom: 16 }}><div className="p-title" style={{ fontSize: "calc(var(--fs) * 1.35)" }}>{exam.title} · 答题卡</div><div className="card-box" style={{ display: "flex", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", fontSize: "0.9em" }}><span>姓名：____________　班级：____________</span><span>考号：________________</span></div></div> }];
     const numbered = exam.sections.flatMap((s) => s.questions).map((q, i) => ({ q, n: i + 1 }));
@@ -474,7 +500,7 @@ export const AnswerCard = memo(function AnswerCard({ exam, layout, print, render
     }
     return result;
   }, [exam, avail]);
-  const { pages, measurer, ready } = usePages(blocks, pw - 2 * m, avail, layout);
+  const { pages, measurer, ready } = usePages(blocks, contentWidth, avail, layout);
   const sheets = useMemo(() => pages.map((pieces, i) => <PageSheet key={i} layout={layout} index={i} total={pages.length} print={print}><PageContent pieces={pieces} blocks={blocks} /></PageSheet>), [pages, blocks, layout, print]);
   return <>{measurer}<div data-pagination-ready={ready ? "true" : "false"} data-answer-card="" style={{ display: "contents" }}>{sheets.map((page, i) => {
     return <Fragment key={i}>{render ? render(page, i, pages.length) : page}</Fragment>;

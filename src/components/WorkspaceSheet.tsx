@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cx } from "../ui";
 
-export function WorkspaceSheet({ title, children, onClose, width = 400, modal = true }: { title: string; children: ReactNode; onClose: () => void; width?: number; modal?: boolean }) {
+export function WorkspaceSheet({ title, children, onClose, width = 400, modal = true, className }: { title: string; children: ReactNode; onClose: () => void; width?: number; modal?: boolean; className?: string }) {
   const heading = useId();
   const ref = useRef<HTMLElement>(null);
   const closeRef = useRef(onClose);
@@ -24,7 +24,7 @@ export function WorkspaceSheet({ title, children, onClose, width = 400, modal = 
   }, [modal]);
   return createPortal(<>
     {modal && <div className="fixed inset-0 z-[54] bg-black/30" onClick={onClose} />}
-    <aside ref={ref} tabIndex={-1} role="dialog" aria-modal={modal || undefined} aria-labelledby={heading} className={cx("glass fixed bottom-3 right-3 top-[64px] z-[55] flex max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-line-strong outline-none shadow-2xl")} style={{ width }}>
+    <aside ref={ref} tabIndex={-1} role="dialog" aria-modal={modal || undefined} aria-labelledby={heading} className={cx("glass fixed bottom-3 right-3 top-[64px] z-[55] flex max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-line-strong outline-none shadow-2xl", className)} style={{ width }}>
       <header className="flex h-13 shrink-0 items-center justify-between border-b border-line px-4">
         <h2 id={heading} className="text-[14px] font-semibold">{title}</h2>
         <button aria-label={`关闭${title}`} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/[0.06]" onClick={onClose}><X size={17} /></button>

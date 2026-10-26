@@ -435,14 +435,14 @@ export function Editor({
                   <div className="flex items-center gap-3 rounded-xl border border-warn/25 bg-warn/[0.07] px-4 py-3">
                     <AlertTriangle size={16} className="shrink-0 text-warn" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-medium text-[#f8cf9c]">{q.flag}</div>
-                      <div className="text-[12px] text-warn/70">建议转为解答题，并从题干中提取分值。</div>
+                      <div className="text-[13px] font-medium text-warn">{q.flag}</div>
+                      {!/待核对|B卷|AI/.test(q.flag) && <div className="text-[12px] text-warn/70">建议转为解答题，并从题干中提取分值。</div>}
                     </div>
-                    <Button size="sm" variant="secondary" icon={<ArrowRightLeft size={13} />} onClick={onConvert}>
+                    {!/待核对|B卷|AI/.test(q.flag) && <Button size="sm" variant="secondary" icon={<ArrowRightLeft size={13} />} onClick={onConvert}>
                       转为解答题
-                    </Button>
+                    </Button>}
                     <Button size="sm" variant="ghost" onClick={() => onChange({ flag: undefined })}>
-                      忽略
+                      {/待核对|B卷|AI/.test(q.flag) ? "标记已核对" : "忽略"}
                     </Button>
                   </div>
                 </motion.div>

@@ -1,0 +1,6 @@
+.exam-tools-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.exam-tools-table th, .exam-tools-table td { border: 1px solid var(--color-line-strong); padding: 9px 10px; text-align: left; overflow-wrap: anywhere; }
+.exam-tools-table th { background: var(--surface-inset); font-weight: 600; }
+.exam-tools-table td { color: var(--color-fg); }
+.exam-tools-scroll { scrollbar-gutter: stable; }
+.exam-tools-dialog.glass { background: var(--color-panel); }

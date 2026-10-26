@@ -14,4 +14,10 @@ contextBridge.exposeInMainWorld('juanye', Object.freeze({
   testModel: config => ipcRenderer.invoke('model:test', config),
   recognize: options => ipcRenderer.invoke('model:recognize', options),
   cancelRecognition: () => ipcRenderer.invoke('model:cancel'),
+  generateQuestion: options => ipcRenderer.invoke('model:generate', options),
+  bankLoad: () => ipcRenderer.invoke('bank:load'),
+  bankSave: options => ipcRenderer.invoke('bank:save', options),
+  bankDelete: ids => ipcRenderer.invoke('bank:delete', ids),
+  bankRestore: () => ipcRenderer.invoke('bank:restore'),
+  exportDocx: options => ipcRenderer.invoke('document:docx', options),
 }));

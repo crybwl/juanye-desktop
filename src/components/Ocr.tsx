@@ -57,7 +57,7 @@ async function readPages(files: File[], limit: number): Promise<Page[]> {
   return pages;
 }
 
-export function OcrDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (qs: Question[]) => void }) {
+export function OcrDialog({ open, onClose, onAdd, incomingPaste }: { open: boolean; onClose: () => void; onAdd: (qs: Question[]) => void; incomingPaste?: { id: string; files: File[] } }) {
   const [pages, setPages] = useState<Page[]>([]);
   const [current, setCurrent] = useState<string>();
   const [multiple, setMultiple] = useState(getOcrPreferences().multiple);
@@ -74,6 +74,7 @@ export function OcrDialog({ open, onClose, onAdd }: { open: boolean; onClose: ()
   const isOpen = useRef(open);
   const inFlight = useRef(false);
   const imports = useRef<OrderedOcrImports<Page>>();
+  const consumedPaste = useRef<string>();
   const updatePages = (update: Page[] | ((items: Page[]) => Page[])) => {
     const next = typeof update === "function" ? update(pagesRef.current) : update;
     pagesRef.current = next;
@@ -101,14 +102,24 @@ export function OcrDialog({ open, onClose, onAdd }: { open: boolean; onClose: ()
   }, [open]);
 
   async function load(files: File[]) {
-    if (!files.length || !isOpen.current) return;
+    if (!files.length || !isOpen.current) return [];
     const session = imports.current;
     setError("");
     try {
       const loaded = await session?.enqueue((remaining) => readPages(files, remaining));
       if (loaded?.length && files.some((file) => file.type === "application/pdf" || /\.pdf$/i.test(file.name))) setMultiple(true);
-    } catch (error) { if (isOpen.current) setError(errorText(error)); }
+      return loaded ?? [];
+    } catch (error) { if (isOpen.current) setError(errorText(error)); return []; }
   }
+
+  useEffect(() => {
+    if (!open || !incomingPaste || consumedPaste.current === incomingPaste.id) return;
+    consumedPaste.current = incomingPaste.id;
+    const run = generation.current;
+    void load(incomingPaste.files).then(loaded => {
+      if (loaded.length && isOpen.current && run === generation.current) void recognize(loaded.map(page => page.id));
+    });
+  }, [open, incomingPaste?.id]);
 
   useEffect(() => {
     if (!open) return;
