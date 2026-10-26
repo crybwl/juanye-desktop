@@ -1,11 +1,11 @@
 import { MotionConfig, motion } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
-import { ToastProvider, cx, softSpring, useToast } from "./ui";
+import { Button, ToastProvider, cx, softSpring, useToast } from "./ui";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
@@ -35,6 +35,11 @@ import { AbPaperDialog, ExamAnalysisDialog } from "./components/ExamTools";
 import { GenerateQuestionDialog } from "./components/GenerateQuestion";
 import type { GenerationAction } from "./generated-question";
 import { isOcrPasteTarget } from "./ocr-queue";
+import { ExportCenter, type ExportFormat } from "./components/ExportCenter";
+import { examSnapshotFingerprint, type ExamMetadataPatch } from "./exam-ai";
+import { BankSourceNotice } from "./components/BankSourceNotice";
+
+const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
 
 export default function App() {
   const [motionPref, setMotionPref] = useState<"full" | "reduced">("full");
@@ -49,7 +54,14 @@ export default function App() {
 
 function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduced"; setMotionPref: (v: "full" | "reduced") => void }) {
   const toast = useToast();
-  const { exam, layout, setExam, setLayout, reset: resetWorkspace, undo, redo, canUndo, canRedo } = useWorkspaceUndo(sampleExam, defaultLayout);
+  const [initialExam] = useState(() => ({ ...sampleExam, id: uid() }));
+  const { exam, layout, setExam, setLayout, reset: resetWorkspace, undo, redo, canUndo, canRedo } = useWorkspaceUndo(initialExam, defaultLayout);
+  const [workArea, setWorkArea] = useState<"exam" | "bank">("exam");
+  const [bankVisited, setBankVisited] = useState(false);
+  useEffect(() => { if (workArea === "bank") setBankVisited(true); }, [workArea]);
+  const [exportCenter, setExportCenter] = useState(false);
+  const [printName, setPrintName] = useState("");
+  const wordExporting = useRef(false);
   const [mode, setModeRaw] = useState<Mode>("edit");
   const [view, setView] = useState<PreviewView>("paper");
   const [activeId, setActiveId] = useState<string | null>("q1");
@@ -114,6 +126,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   };
 
   const setMode = (m: Mode) => {
+    setWorkArea("exam");
     if (m === mode) return;
     setAnimating(true);
     setModeRaw(m);
@@ -155,6 +168,31 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     toast({ title: `已从题库加入 ${questions.length} 道题` });
   };
 
+  const createExamFromBank = async (questions: Question[]) => {
+    if (!questions.length || questions.length > 2000) throw Error("请选择 1–2000 道题");
+    if (!window.confirm("用选题篮新建试卷？当前卷会保留在历史记录中。")) throw Error("已取消新建试卷");
+    const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · 从题库新建前`, exam: structuredClone(exam), layout: { ...layout } };
+    const nextHistory = [snapshot, ...snapshots].slice(0, 50);
+    await saveWorkspace({ version: 1, exam, layout, history: nextHistory });
+    const sections: Exam["sections"] = [];
+    for (const question of questions) {
+      let section = sections.find(value => value.type === question.type);
+      if (!section) { section = { id: uid(), type: question.type, title: TYPE_META[question.type].label, note: "", questions: [] }; sections.push(section); }
+      if (section.questions.length >= 1000) throw Error("同题型最多 1000 道题，请分卷创建");
+      section.questions.push(question);
+    }
+    setSnapshots(nextHistory); setExam({ id: uid(), title: "题库选题试卷", subtitle: "", duration: 120, notice: [], sections });
+    setActiveId(questions[0].id); setMode("edit");
+    toast({ title: `已用 ${questions.length} 道题新建试卷` });
+  };
+
+  const applyExamMetadata = (patches: ExamMetadataPatch[], expectedFingerprint: string) => {
+    if (examSnapshotFingerprint(exam) !== expectedFingerprint) { toast({ title: "试卷已变更，请刷新分析后再采用", tone: "warn" }); return false; }
+    const updates = new Map(patches.map(patch => [patch.id, patch]));
+    setExam(previous => ({ ...previous, sections: previous.sections.map(section => ({ ...section, questions: section.questions.map(question => { const patch = updates.get(question.id); return patch ? { ...question, ...("knowledge" in patch ? { knowledge: patch.knowledge } : {}), ...("difficulty" in patch ? { difficulty: patch.difficulty } : {}) } : question; }) })) }));
+    toast({ title: `已更新 ${patches.length} 道题的属性`, desc: "可撤销" }); return true;
+  };
+
   const applyBPaper = async (next: Exam) => {
     const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · 生成B卷前`, exam: structuredClone(exam), layout: { ...layout } };
     const nextHistory = [snapshot, ...snapshots].slice(0, 50);
@@ -179,7 +217,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
 
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
-      if (!ready || ocr || settings || palette || bank || history || structure || batch || importKind || aiTask || abPaper || examAnalysis) return;
+      if (workArea !== "exam" || !ready || ocr || settings || palette || bank || history || structure || batch || importKind || aiTask || abPaper || examAnalysis || exportCenter) return;
       const files = Array.from(event.clipboardData?.files ?? []).filter(file => /^image\/(png|jpeg|webp)$/.test(file.type));
       if (!files.length || event.defaultPrevented) return;
       // A pure screenshot works even when the stem editor has focus. A mixed
@@ -189,7 +227,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     };
     window.addEventListener("paste", paste);
     return () => window.removeEventListener("paste", paste);
-  }, [ready, ocr, settings, palette, bank, history, structure, batch, importKind, aiTask, abPaper, examAnalysis]);
+  }, [workArea, ready, ocr, settings, palette, bank, history, structure, batch, importKind, aiTask, abPaper, examAnalysis, exportCenter]);
 
   const newQuestion = (sectionId?: string) => {
     const sec = exam.sections.find(section => section.id === sectionId) ?? cur?.s ?? exam.sections[0];
@@ -241,7 +279,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       if (raw) {
         const data = raw as WorkspaceData;
         if (data.version !== 1 || !Array.isArray(data.exam?.sections) || !data.layout?.paper || !Array.isArray(data.history)) throw new Error("本地草稿格式无效，未覆盖原文件");
-        resetWorkspace({ exam: data.exam, layout: data.layout }); setSnapshots(data.history);
+        resetWorkspace({ exam: { ...data.exam, id: data.exam.id || uid() }, layout: data.layout }); setSnapshots(data.history);
         setActiveId(data.exam.sections.flatMap(s => s.questions)[0]?.id ?? null);
         lastSaved.current = JSON.stringify({ exam: data.exam, layout: data.layout });
       }
@@ -284,8 +322,9 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   }, [accent]);
 
   /* ---------- 导出 PDF：渲染打印专用 DOM → window.print()（Electron 换成 webContents.printToPDF） ---------- */
-  const exportPdf = () => {
+  const exportPdf = (target: PreviewView = view, name = exam.title) => {
     if (printing) return;
+    setView(target); setPrintName(name);
     setPrinting(true);
   };
   useEffect(() => {
@@ -311,7 +350,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         if (!document.querySelector("#print-root [data-pagination-ready='true']")) throw new Error("分页未完成，请稍后重试");
         await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>("#print-root img")).map(image => image.decode().catch(() => {})));
         if (window.juanye) {
-          const result = await window.juanye.exportPdf({ name: `${exam.title}${view === "card" ? "_答题卡" : ""}`, widthMm: pw, heightMm: ph });
+          const result = await window.juanye.exportPdf({ name: `${printName || exam.title}${view === "card" ? "_答题卡" : ""}`, widthMm: pw, heightMm: ph });
           if (!result.canceled) toast({ title: "PDF 已导出", desc: result.path });
         } else window.print();
       } catch (error) {
@@ -325,23 +364,26 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     return () => { canceled = true; clearTimeout(t); style.remove(); };
   }, [printing]);
 
-  const exportSource = async () => {
-    try { if (await saveText(exam.title, exportTex(exam, layout), "tex")) toast({ title: "已导出 LaTeX 源文件" }); }
+  const exportSource = async (name = exam.title) => {
+    try { if (await saveText(name, exportTex(exam, layout), "tex")) toast({ title: "已导出 LaTeX 源文件" }); }
     catch (error) { toast({ title: "导出失败", desc: String(error), tone: "warn" }); }
   };
-  const exportMd = async () => {
-    try { if (await saveText(exam.title, exportMarkdown(exam, layout), "md")) toast({ title: "Markdown 已导出" }); }
+  const exportMd = async (name = exam.title) => {
+    try { if (await saveText(name, exportMarkdown(exam, layout), "md")) toast({ title: "Markdown 已导出" }); }
     catch (error) { toast({ title: "导出失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
   };
-  const exportWord = async () => {
+  const exportWord = async (name = exam.title) => {
+    if (wordExporting.current) return;
+    wordExporting.current = true;
     try {
       if (!window.juanye) throw Error("请使用桌面应用导出 Word");
-      const result = await window.juanye.exportDocx({ name: exam.title, exam, layout });
+      const result = await window.juanye.exportDocx({ name, exam, layout });
       if (!result.canceled) toast({ title: "Word 已导出" });
     } catch (error) { toast({ title: "Word 导出失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
+    finally { wordExporting.current = false; }
   };
-  const exportWorkspace = async () => {
-    try { if (await saveText(exam.title, exportProject(exam, layout), "juanye")) toast({ title: "项目已另存" }); }
+  const exportWorkspace = async (name = exam.title) => {
+    try { if (await saveText(name, exportProject(exam, layout), "juanye")) toast({ title: "项目已另存" }); }
     catch (error) { toast({ title: "另存失败", desc: String(error), tone: "warn" }); }
   };
   const importFile = async (file: File) => {
@@ -349,7 +391,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       const result = parseProject(await file.text());
       if (!window.confirm("打开该项目将替换当前工作区。当前版本会保留在历史记录中，是否继续？")) return;
       await persistRef.current();
-      setExam(result.exam); setLayout(result.layout);
+      setExam({ ...result.exam, id: result.exam.id || uid() }); setLayout(result.layout); setWorkArea("exam");
       setActiveId(result.exam.sections.flatMap(s => s.questions)[0]?.id ?? null);
       toast({ title: "项目已打开" });
     } catch (error) { toast({ title: "导入失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
@@ -378,6 +420,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       const editing = e.target instanceof HTMLElement && Boolean(e.target.closest("input,textarea,[contenteditable='true']"));
       if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), setPalette((v) => !v));
       else if (mod && e.key === ",") (e.preventDefault(), setSettings(true));
+      else if (workArea === "bank") return;
       else if (mod && e.key === "1") (e.preventDefault(), setMode("edit"));
       else if (mod && e.key === "2") (e.preventDefault(), setMode("preview"));
       else if (mod && e.key.toLowerCase() === "e") (e.preventDefault(), exportPdf());
@@ -395,7 +438,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const main = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(1440);
   useLayoutEffect(() => {
-    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    const ro = new ResizeObserver(([e]) => { if (e.contentRect.width > 0) setW(e.contentRect.width); });
     ro.observe(main.current!);
     return () => ro.disconnect();
   }, []);
@@ -427,7 +470,8 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "import-annotated", group: "导入", title: "导入解析版试卷", icon: <FileInput size={15} />, run: () => setImportKind("annotated") },
       { id: "batch", group: "功能", title: "批量编辑", icon: <ListChecks size={15} />, run: () => { setMode("edit"); setSidebarExpanded(true); setBatch(true); } },
       { id: "structure", group: "功能", title: "管理大题", icon: <FolderTree size={15} />, run: () => { setSidebarExpanded(true); setStructure(true); } },
-      { id: "bank", group: "功能", title: "本地题库", icon: <BookOpen size={15} />, run: () => { setSidebarExpanded(true); setBank(true); } },
+      { id: "bank", group: "功能", title: "本地题库", icon: <BookOpen size={15} />, run: () => setWorkArea("bank") },
+      { id: "bank-picker", group: "功能", title: "从题库选题", icon: <BookOpen size={15} />, run: () => { setWorkArea("exam"); setBank(true); } },
       { id: "exam-analysis", group: "功能", title: "试卷分析与双向细目表", icon: <BarChart3 size={15} />, run: () => setExamAnalysis(true) },
       { id: "ab-paper", group: "功能", title: "生成 B 卷（选项乱序）", icon: <Shuffle size={15} />, run: () => setAbPaper(true) },
       ...(cur ? [
@@ -439,7 +483,8 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "history", group: "功能", title: "历史记录", icon: <HistoryIcon size={15} />, run: () => setHistory(true) },
       { id: "layout", group: "功能", title: "排版设置", icon: <SlidersHorizontal size={15} />, kbd: "Ctrl 2", run: () => setMode("preview") },
       { id: "new", group: "功能", title: "新建题目", icon: <Plus size={15} />, kbd: "Ctrl N", run: newQuestion },
-      { id: "pdf", group: "导出", title: "导出 PDF", icon: <FileDown size={15} />, kbd: "Ctrl E", run: exportPdf },
+      { id: "pdf", group: "导出", title: "导出 PDF", icon: <FileDown size={15} />, kbd: "Ctrl E", run: () => exportPdf() },
+      { id: "export-center", group: "导出", title: "导出中心", icon: <FileDown size={15} />, run: () => setExportCenter(true) },
       { id: "word", group: "导出", title: "导出 Word（可编辑公式）", icon: <FileDown size={15} />, run: () => { void exportWord(); } },
       { id: "tex", group: "导出", title: "导出 .tex", icon: <FileCode2 size={15} />, run: () => { void exportSource(); } },
       { id: "markdown", group: "导出", title: "导出 Markdown", icon: <FileCode2 size={15} />, run: () => { void exportMd(); } },
@@ -447,7 +492,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "save", group: "项目", title: "另存可编辑项目", icon: <FileDown size={15} />, run: () => { void exportWorkspace(); } },
       { id: "blank", group: "项目", title: "新建空白试卷", icon: <Plus size={15} />, run: () => {
         if (!window.confirm("新建空白试卷？当前试卷会保留在历史记录中。")) return;
-        void persistRef.current().then(() => { setExam({ title: "未命名试卷", subtitle: "", duration: 120, notice: [], sections: (["single", "multi", "blank", "essay"] as QType[]).map(type => ({ id: uid(), type, title: TYPE_META[type].label, note: "", questions: [] })) }); setActiveId(null); });
+        void persistRef.current().then(() => { setExam({ id: uid(), title: "未命名试卷", subtitle: "", duration: 120, notice: [], sections: (["single", "multi", "blank", "essay"] as QType[]).map(type => ({ id: uid(), type, title: TYPE_META[type].label, note: "", questions: [] })) }); setActiveId(null); setWorkArea("exam"); });
       } },
       { id: "theme-dark", group: "外观", title: "深色模式", icon: <Eye size={15} />, run: () => setAppearance("dark") },
       { id: "theme-light", group: "外观", title: "淡色模式", icon: <Eye size={15} />, run: () => setAppearance("light") },
@@ -496,11 +541,24 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         onPalette={() => setPalette(true)}
         onHistory={() => setHistory(true)}
         onSettings={() => setSettings(true)}
-        onExport={exportPdf}
+        onExport={() => exportPdf()}
+        onExportMore={() => setExportCenter(true)}
+        workspace={workArea}
       />
+
+      <nav aria-label="工作区" className="workspace-nav relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line px-4">
+        <Button size="sm" variant="ghost" aria-current={workArea === "exam" ? "page" : undefined} icon={<PenLine size={15} />} onClick={() => setWorkArea("exam")}>组卷</Button>
+        <Button size="sm" variant="ghost" aria-current={workArea === "bank" ? "page" : undefined} icon={<BookOpen size={15} />} onClick={() => setWorkArea("bank")}>本地题库</Button>
+        <div className="ml-auto flex items-center gap-1">{workArea === "exam" ? <>
+          <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
+          <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={() => setExamAnalysis(true)}>试卷分析</Button>
+          <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
+        </> : <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span>}</div>
+      </nav>
 
       <div ref={main} className="workspace-stage flex min-h-0 flex-1 overflow-hidden">
         <div className="workspace-wallpaper" aria-hidden="true" />
+        <div style={{ display: workArea === "exam" ? "contents" : "none" }}>
         {/* 左：试卷结构 */}
         <motion.div
           initial={{ opacity: 0, x: -12 }}
@@ -569,7 +627,18 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           transition={{ ...colT, opacity: { duration: 0.2 }, y: { ...softSpring, delay: 0.05 } }}
           className="workspace-editor-stage shrink-0 overflow-hidden"
         >
-          <div style={{ width: mode === "edit" ? cols.editor : editorFull }} className="h-full">
+          <div style={{ width: mode === "edit" ? cols.editor : editorFull }} className="flex h-full flex-col">
+            {cur?.q.bankOrigin && <div className="shrink-0 px-5 pt-3"><BankSourceNotice question={cur.q} active={workArea === "exam" && mode === "edit"} onAdopt={incoming => {
+              const current = cur.q;
+              updateQ(current.id, {
+                bankOrigin: undefined, image: undefined, sourceImage: undefined, figure: undefined, figures: undefined, drawing: undefined,
+                source: undefined, knowledge: undefined, difficulty: undefined, flag: undefined, pageBreakBefore: undefined,
+                answerSpace: undefined, paperAnswerSpace: undefined, importNumber: undefined,
+                ...incoming, id: current.id,
+              });
+              toast({ title: "已采用题库新版本", desc: "可撤销" });
+            }} /></div>}
+            <div className="min-h-0 flex-1">
             <Editor
               q={cur?.q ?? null}
               paperMode={layout.paperMode}
@@ -591,6 +660,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
               onOcr={() => setOcr(true)}
               neighbors={{ prev: neighbor(-1), next: neighbor(1) }}
             />
+            </div>
           </div>
         </motion.div>
 
@@ -615,14 +685,17 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
             count={count}
           />
         </motion.div>
+        </div>
+        {bankVisited && <div className="relative min-h-0 min-w-0 flex-1" style={{ display: workArea === "bank" ? "flex" : "none" }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} onBack={() => setWorkArea("exam")} /></Suspense></div>}
       </div>
 
       {batch && <BatchPanel paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
       {structure && <StructurePanel exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
       {bank && <QuestionBankDialog open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
-      {examAnalysis && <ExamAnalysisDialog open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} />}
+      {examAnalysis && <ExamAnalysisDialog open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} onLocate={id => { setExamAnalysis(false); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
       {abPaper && <AbPaperDialog open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
       {aiTask && <GenerateQuestionDialog open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
+      {exportCenter && <ExportCenter exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       {importKind && <ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} />}
@@ -639,7 +712,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       />
       <HistorySheet open={history} onClose={() => setHistory(false)} items={snapshots} onRestore={snapshot => {
         if (!window.confirm("恢复该版本？当前内容将保留为历史快照。")) return;
-        void persistRef.current().then(() => { setExam(structuredClone(snapshot.exam)); setLayout({ ...snapshot.layout }); setActiveId(snapshot.exam.sections.flatMap(s => s.questions)[0]?.id ?? null); setHistory(false); toast({ title: "已恢复历史版本" }); });
+        void persistRef.current().then(() => { setExam({ ...structuredClone(snapshot.exam), id: snapshot.exam.id || uid() }); setLayout({ ...snapshot.layout }); setActiveId(snapshot.exam.sections.flatMap(s => s.questions)[0]?.id ?? null); setWorkArea("exam"); setHistory(false); toast({ title: "已恢复历史版本" }); });
       }} />
       <input
         ref={importRef}

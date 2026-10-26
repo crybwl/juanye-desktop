@@ -18,9 +18,17 @@ declare global {
       cancelRecognition(): Promise<void>;
       generateQuestion(options: { action: "variant" | "analysis"; question: import("./types").Question }): Promise<string>;
       bankLoad(): Promise<unknown>;
-      bankSave(input: { questions: import("./types").Question[]; origin?: { examTitle: string } }): Promise<{ bank: unknown; added: number; duplicates: number }>;
+      bankSave(input: { questions: import("./types").Question[]; origin?: { examTitle: string; examId?: string } }): Promise<{ bank: unknown; added: number; duplicates: number }>;
       bankDelete(ids: string[]): Promise<unknown>;
       bankRestore(): Promise<unknown>;
+      bankManage(input: import("./question-bank").BankManageInput): Promise<unknown>;
+      bankRevise(input: import("./question-bank").BankReviseInput): Promise<{ bank: unknown; entry: import("./question-bank").BankEntry }>;
+      bankReviseBatch(input: import("./question-bank").BankReviseInput[]): Promise<unknown>;
+      bankImport(input: unknown): Promise<{ bank: unknown; added: number; duplicates: number }>;
+      bankMarkUsed(ids: string[]): Promise<unknown>;
+      analyzeExam(input: import("./exam-ai").ExamAiRequest): Promise<import("./exam-ai").ExamAiReport>;
+      cancelExamAnalysis(taskId: string): Promise<void>;
+      loadExamReports(examKey?: string): Promise<import("./exam-ai").ExamAiReport[]>;
       exportDocx(options: { name: string; exam: import("./types").Exam; layout: import("./types").Layout }): Promise<{ canceled: boolean; path?: string }>;
     };
   }

@@ -32,8 +32,8 @@ async function main() {
   const bankPanel = () => page.getByRole('dialog', { name: '本地题库', exact: true });
   async function openBank() {
     await page.keyboard.press('Control+k');
-    await page.getByPlaceholder('搜索题目、执行命令…', { exact: true }).fill('本地题库');
-    await page.getByRole('button', { name: '本地题库', exact: true }).click();
+    await page.getByPlaceholder('搜索题目、执行命令…', { exact: true }).fill('从题库选题');
+    await page.getByRole('dialog').getByRole('button', { name: '从题库选题', exact: true }).click();
     await bankPanel().getByRole('button', { name: '保存当前题', exact: true }).waitFor();
     await until(async () => !(await bankPanel().getByRole('status').count()), 'Bank load did not finish');
   }
@@ -94,10 +94,11 @@ async function main() {
     assert.equal((await page.evaluate(() => window.juanye.bankLoad())).entries.length, 2);
     checks.push('A different paper can batch-insert and drag-in bank questions, with fresh question/figure IDs and no source-record mutation');
     await bankPanel().getByRole('checkbox', { name: '全选筛选结果', exact: true }).click();
-    await bankPanel().getByRole('button', { name: '移除', exact: true }).click(); await bankCount(0);
+    await bankPanel().getByRole('button', { name: '移入回收站', exact: true }).click(); await bankCount(2);
+    await until(async () => (await page.evaluate(() => window.juanye.bankLoad())).entries.every(entry => entry.trashedAt), 'Batch was not placed in trash');
     assert.equal((await page.evaluate(() => window.juanye.loadDraft())).exam.sections[0].questions.length, 3);
     await bankPanel().getByRole('button', { name: '恢复上次备份', exact: true }).click(); await bankCount(2);
-    checks.push('Confirmed deletion affects only the bank and restoring its last backup recovers the removed batch');
+    checks.push('Trash affects only the bank, retains full revisions, and restoring its last backup recovers the removed batch');
     const out = path.join(root, 'artifacts/qa-question-bank'); fs.mkdirSync(out, { recursive: true });
     if (capture) {
       await page.evaluate(async () => { localStorage.setItem('juanye.appearance.v1', 'light'); window.dispatchEvent(new StorageEvent('storage', { key: 'juanye.appearance.v1', newValue: 'light' })); await document.fonts.ready; });

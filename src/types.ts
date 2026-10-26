@@ -11,6 +11,8 @@ export interface QuestionFigure {
 
 export interface Question {
   id: string;
+  /** 题库来源快照；本地编辑不会回写题库。 */
+  bankOrigin?: { libraryId: string; revisionId: string; version: number };
   type: QType;
   score: number;
   /** 题干，公式使用 $...$、\\(...\\)、\\[...\\] */
@@ -48,6 +50,8 @@ export interface Section {
 }
 
 export interface Exam {
+  /** 稳定身份，改名不影响来源和分析报告。 */
+  id?: string;
   title: string;
   subtitle: string;
   duration: number;

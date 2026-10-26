@@ -1,5 +1,30 @@
 # 教师工作流验证与回退
 
+## 0.4.0-beta.2 独立题库与整卷 AI
+
+本次在已有 `checkpoint/v0.4.0-beta.1-validated`（`caaec24`）基础上实现，未推送远程仓库或创建公开 Release。原 0.3.4 和 beta.1 安装包保留。
+
+- 独立题库：三栏工作区、直接编辑完整题目、收藏夹/收藏、组合筛选、版本、回收站、批量属性、选题篮和新卷。旧取题抽屉仍共用同一题库；删除统一进入回收站。首次写入前保留 byte-for-byte 原文件 `question-bank.pre-workspace.json`。
+- 批量修改先完整校验，再一次原子写入；任一题版本过期则整批拒绝。收藏、题集和使用次数不新增内容版本。库题选入试卷时保留来源修订，库内更新不自动覆盖卷内内容；人工比较采用后可撤销。
+- AI 使用自配模型，经预算确认后发送；按题组顺序处理，失败不自动收费重试。验证真实题目 ID，完整报告与缓存本机保存；已变题目/目标使报告过期。元数据建议显式选择后应用，可恢复原先未设置的字段，题干、答案、单题解析不变。关闭窗口取消，切换页签保留任务。
+- 采用补丁三栏、筛选与页签结构，新增实际接通的导出中心与印卷小示意；不套用补丁中的旧 IndexedDB 或 Word 占位实现。UI 保留原编辑台、图标与动效。
+
+实际验证：
+
+| 检查 | 结果 |
+| --- | --- |
+| `npm test` | TypeScript 177/177；Electron 49 通过、1 项原生 safeStorage 的纯 Node 环境跳过；无失败。 |
+| `library-ai-regression.cjs`，源码及 `--packaged` | 20 种外观在经典/实验编辑偏好下检查题库布局，1000/1280/1500px 无横向溢出；工作区草稿保留；真实 preload→主进程→服务→本机 HTTP 替身，确认前零请求、重复报告零新增请求；取消不调用 OCR 取消；属性采用、过期、撤销、来源对照、采用与撤销；导出中心实际 Word IPC。 |
+| `bank-workspace-regression.cjs`，源码及 `--packaged` | 直接新建包含公式、选项、答案、解析、图片及属性的题；收藏夹创建/分配/改名；修订与批量属性；回收恢复完整版本；选题篮排序、切换保留、指定大题加入、新建试卷及使用记录。 |
+| 旧功能回归 | `teacher-workflow-regression.cjs`、`question-bank-regression.cjs`、`experimental-workbench-regression.cjs`、`paper-columns-regression.cjs` 均通过；OCR/生成使用测试替身，没有付费模型调用。 |
+| 打包一致性 | `verify-release.cjs` 检查版本、8 个入口/动态 JS/CSS 资源和 13 个后端模块，包括共享 `.mjs`，与当前源码产物一致。 |
+
+结果保存在忽略目录 `artifacts/qa-library-ai/`、`artifacts/bank-workspace/`、`artifacts/bank-workspace-packaged/` 及原有回归目录。测试仅使用独立临时用户目录；AI 本机替身结果只验证调用流程，不代表真实模型教研质量。未接入云题库、SQLite 或真实学生成绩分析；题库保持现有 10,000 修订/250 MB 上限，列表限量分页。
+
+已生成 `release/Juanye-0.4.0-beta.2-Setup.exe` 与 `release/Juanye-0.4.0-beta.2-x64.zip`。如需回退，先导出完整题库备份与当前试卷项目，再配合原始备份使用旧版本；新增收藏夹、使用记录和来源关联不能宣称在旧版中无损可编辑。
+
+## 0.4.0-beta.1 已完成验证记录
+
 本批功能位于 `feat/teacher-workflows-v035`，版本为 `0.4.0-beta.1`。旧版基线是 `rollback/v0.3.4-20261026`，提交 `b4f41b5`。本次没有推送远程仓库或发布 GitHub Release。
 
 ## 需求与验证范围

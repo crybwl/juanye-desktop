@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
+import { BookOpen, ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import type { Mode } from "../types";
 import { Button, IconButton, Kbd, Segmented } from "../ui";
@@ -50,6 +50,8 @@ export function TitleBar({
   onHistory,
   onSettings,
   onExport,
+  onExportMore,
+  workspace = "exam",
 }: {
   title: string;
   mode: Mode;
@@ -60,6 +62,8 @@ export function TitleBar({
   onHistory: () => void;
   onSettings: () => void;
   onExport: () => void;
+  onExportMore?: () => void;
+  workspace?: "exam" | "bank";
 }) {
   return (
     <header data-tauri-drag-region className="relative z-30 flex h-[52px] shrink-0 items-center border-b border-line pl-4">
@@ -67,7 +71,7 @@ export function TitleBar({
         <Logo animated />
         <span className="text-[14px] font-semibold tracking-wide">卷页</span>
         <span className="text-[13px] text-white/15">/</span>
-        <button onClick={onPalette} aria-label="项目与功能" className="flex min-w-0 max-w-[260px] items-center gap-1 rounded-md px-1.5 py-1 text-[13px] text-muted transition-colors hover:bg-white/[0.05] hover:text-fg">
+        <button onClick={onPalette} aria-label="项目与功能" className="flex min-w-0 max-w-[200px] max-[1320px]:max-w-[110px] items-center gap-1 rounded-md px-1.5 py-1 text-[13px] text-muted transition-colors hover:bg-white/[0.05] hover:text-fg">
           <span className="truncate">{title}</span>
           <ChevronDown size={13} className="shrink-0 opacity-60" />
         </button>
@@ -75,14 +79,14 @@ export function TitleBar({
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2">
-        <Segmented
+        {workspace === "bank" ? <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-muted"><BookOpen size={15} />本地题库</span> : <Segmented
           value={mode}
           onChange={setMode}
           options={[
             { value: "edit", label: "编辑", icon: <PenLine size={14} /> },
             { value: "preview", label: "排版预览", icon: <Eye size={14} /> },
           ]}
-        />
+        />}
       </div>
 
       <div data-tauri-drag-region className="ml-auto flex h-full items-center gap-1 pl-4">
@@ -103,9 +107,10 @@ export function TitleBar({
         <IconButton label="设置" kbd="Ctrl ," onClick={onSettings}>
           <Settings size={16} />
         </IconButton>
-        <Button variant="primary" size="sm" icon={<FileDown size={14} />} onClick={onExport} className="ml-1.5 mr-2">
+        <Button variant="primary" size="sm" icon={<FileDown size={14} />} onClick={onExport} className="ml-1.5">
           导出 PDF
         </Button>
+        {onExportMore && <IconButton label="导出中心" className="mr-2" onClick={onExportMore}><ChevronDown size={15} /></IconButton>}
         {/* Windows 风格窗口按钮；macOS 可改用原生红绿灯 */}
         <div className="flex h-full border-l border-line">
           {[

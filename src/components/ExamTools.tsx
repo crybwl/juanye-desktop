@@ -1,23 +1,48 @@
 import { useMemo, useState } from "react";
-import { BarChart3, Download, Shuffle, X } from "lucide-react";
+import { BarChart3, Crosshair, Download, Shuffle, X } from "lucide-react";
 import type { Exam } from "../types";
 import { TYPE_META } from "../data";
 import { analyzeExam, analysisCsv, DIFFICULTY_LABELS, formatPoints } from "../exam-analysis";
 import { createBPaper } from "../ab-paper";
 import { Button, Modal, useToast } from "../ui";
 import { saveText } from "../storage";
+import { knowledgeDifficultyMatrix, type ApplyExamMetadata } from "../exam-ai";
+import { ExamAiPanel } from "./ExamAiPanel";
 import "./exam-tools.css";
 
-export function ExamAnalysisDialog({ open, onClose, exam }: { open: boolean; onClose: () => void; exam: Exam }) {
+export function ExamAnalysisDialog({ open, onClose, exam, onLocate, onApplyMetadata }: { open: boolean; onClose: () => void; exam: Exam; onLocate?: (id: string) => void; onApplyMetadata?: ApplyExamMetadata }) {
   const report = useMemo(() => analyzeExam(exam), [exam]);
+  const difficultyMatrix = useMemo(() => knowledgeDifficultyMatrix(exam), [exam]);
+  const [tab, setTab] = useState<"overview" | "ai" | "matrix" | "detail">("overview");
+  const [matrixMode, setMatrixMode] = useState<"type" | "difficulty">("type");
   const toast = useToast();
+  const questions = exam.sections.flatMap(section => section.questions);
+  const missingKnowledge = report.rows.filter(row => !row.knowledge.length);
+  const missingDifficulty = report.rows.filter(row => row.difficulty === "unset");
+  const locate = (id: string) => { onLocate?.(id); };
   return <Modal open={open} onClose={onClose} className="exam-tools-dialog flex max-h-[88vh] w-[1060px] max-w-full flex-col">
     <header className="flex shrink-0 items-center gap-3 border-b border-line px-6 py-4"><BarChart3 size={18} className="text-accent" /><h2 className="text-[15px] font-semibold">试卷分析与双向细目表</h2><span className="text-[12px] text-muted">{report.count} 题 · {formatPoints(report.totalScore)} 分</span><Button className="ml-auto" size="sm" icon={<Download size={14} />} onClick={async () => { try { if (await saveText(`${exam.title}_细目表`, analysisCsv(exam), "csv")) toast({ title: "细目表已导出" }); } catch (error) { toast({ title: "导出失败", desc: String(error), tone: "warn" }); } }}>导出 CSV</Button><button aria-label="关闭试卷分析" onClick={onClose}><X size={18} /></button></header>
-    <div className="exam-tools-scroll min-h-0 overflow-auto p-6">
+    <nav className="exam-analysis-tabs" role="tablist" aria-label="试卷分析视图">{([{id:"overview",label:"本地统计"},{id:"ai",label:"AI 评估"},{id:"matrix",label:"双向细目表"},{id:"detail",label:"逐题细目"}] as const).map(item=><Button key={item.id} size="sm" role="tab" aria-selected={tab===item.id} variant={tab===item.id?"primary":"ghost"} onClick={()=>setTab(item.id)}>{item.label}</Button>)}</nav>
+    <div className="exam-tools-scroll min-h-0 overflow-auto p-6" role="tabpanel">
+      <div hidden={tab !== "ai"}><ExamAiPanel exam={exam} onLocate={onLocate} onApplyMetadata={onApplyMetadata} /></div>
+      {tab === "overview" && <>
+      <div className="exam-analysis-stats"><div className="exam-analysis-stat"><span>精确总分</span><strong>{formatPoints(report.totalScore)} <small className="text-[12px]">分</small></strong></div><div className="exam-analysis-stat"><span>题量 / 题型</span><strong>{report.count} <small className="text-[12px]">题 · {report.byType.length} 类</small></strong></div><div className="exam-analysis-stat"><span>已标知识点</span><strong>{report.count-missingKnowledge.length} <small className="text-[12px]">/ {report.count} 题</small></strong></div><div className="exam-analysis-stat"><span>已标难度</span><strong>{report.count-missingDifficulty.length} <small className="text-[12px]">/ {report.count} 题</small></strong></div></div>
+      <p className="mb-4 text-[12px] text-muted">以下为当前试卷与已有标签的本地精确统计，不调用模型。难度标签不是实测难度系数；AI 定性估计在独立页面展示。</p>
       <div className="grid grid-cols-2 gap-6">{[["题型", report.byType], ["难度", report.byDifficulty]].map(([label, entries]) => <section key={String(label)}><h3 className="mb-2 font-semibold">{String(label)}分布</h3><table className="exam-tools-table"><thead><tr><th>{String(label)}</th><th>题数</th><th>分值</th><th>占比</th></tr></thead><tbody>{(entries as typeof report.byType).map(row => <tr key={row.name}><td>{row.name}</td><td>{row.count}</td><td>{formatPoints(row.score)}</td><td>{formatPoints(row.percent)}%</td></tr>)}</tbody></table></section>)}</div>
+      <h3 className="mb-2 mt-6 font-semibold">知识点分值 <span className="ml-2 text-[11px] font-normal text-muted">多知识点分值均分；题数允许重复计入</span></h3><table className="exam-tools-table"><thead><tr><th>知识点</th><th>涉及题数</th><th>分摊分值</th><th>分值占比</th></tr></thead><tbody>{report.byKnowledge.map(row=><tr key={row.name}><td>{row.name}</td><td>{row.count}</td><td>{formatPoints(row.score)}</td><td>{formatPoints(row.percent)}%</td></tr>)}</tbody></table>
+      <section className="mt-5 space-y-2 text-[12px] text-muted">{[{label:"未标知识点",rows:missingKnowledge},{label:"未标难度",rows:missingDifficulty},{label:"未填写答案（不代表题目有误）",rows:questions.filter(question=>!question.answer.some(value=>value.trim())).map(question=>({id:question.id}))}].filter(item=>item.rows.length).map(item=><div className="flex items-center gap-3 rounded-lg border border-line p-3" key={item.label}><span>{item.rows.length} 道题{item.label}</span>{onLocate&&<Button size="sm" variant="ghost" icon={<Crosshair size={13}/>} onClick={()=>locate(item.rows[0].id)}>定位第一题</Button>}</div>)}</section>
+      </>}
+      {tab === "matrix" && <>
+      <div className="mb-4 flex flex-wrap items-center gap-2"><span className="mr-auto text-[12px] text-muted">本地标签细目表；多知识点分值均分，不使用 AI 未应用的建议。</span><Button size="sm" variant={matrixMode==="type"?"primary":"outline"} onClick={()=>setMatrixMode("type")}>知识点 × 题型</Button><Button size="sm" variant={matrixMode==="difficulty"?"primary":"outline"} onClick={()=>setMatrixMode("difficulty")}>知识点 × 难度</Button></div>
+      {matrixMode === "type" && <>
       <h3 className="mb-2 mt-6 font-semibold">双向细目表 <span className="ml-2 text-[11px] font-normal text-muted">多知识点分值均分</span></h3>
       <table className="exam-tools-table"><thead><tr><th>知识点</th>{report.types.map(type => <th key={type}>{TYPE_META[type].label}</th>)}<th>分值</th><th>占比</th></tr></thead><tbody>{report.matrix.map(row => <tr key={row.name}><th>{row.name}</th>{report.types.map(type => <td key={type}>{row.cells[type].numbers.length ? <>{row.cells[type].numbers.join("、")} 题 <span className="text-muted">/ {formatPoints(row.cells[type].score)} 分</span></> : "—"}</td>)}<td>{formatPoints(row.score)}</td><td>{formatPoints(row.percent)}%</td></tr>)}</tbody></table>
+      </>}
+      {matrixMode === "difficulty" && <table className="exam-tools-table"><thead><tr><th>知识点</th>{difficultyMatrix.keys.map(key=><th key={key}>{DIFFICULTY_LABELS[key]}</th>)}<th>分值</th><th>占比</th></tr></thead><tbody>{difficultyMatrix.rows.map(row=><tr key={row.name}><th>{row.name}</th>{difficultyMatrix.keys.map(key=><td key={key}>{row.cells[key].numbers.length?<>{row.cells[key].numbers.join("、")} 题 <span className="text-muted">/ {formatPoints(row.cells[key].score)} 分</span></>:"—"}</td>)}<td>{formatPoints(row.score)}</td><td>{formatPoints(report.totalScore?row.score/report.totalScore*100:0)}%</td></tr>)}</tbody></table>}
+      </>}
+      {tab === "detail" && <>
       <h3 className="mb-2 mt-6 font-semibold">逐题细目</h3><table className="exam-tools-table"><thead><tr><th>题号</th><th>题型</th><th>分值</th><th>知识点</th><th>难度</th><th>来源</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.id}><td>{row.number}</td><td>{TYPE_META[row.type].label}</td><td>{row.score}</td><td>{row.knowledge.join("、") || "未设置"}</td><td>{DIFFICULTY_LABELS[row.difficulty]}</td><td>{row.source}</td></tr>)}</tbody></table>
+      </>}
     </div>
   </Modal>;
 }

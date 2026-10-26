@@ -10,11 +10,13 @@ const diagrams = createDiagramService();
 const { requestGeneration } = require('./generation.cjs');
 const { createQuestionBankStore } = require('./question-bank.cjs');
 const { buildDocx } = require('./docx-export.cjs');
+const { createExamAnalysisService } = require('./exam-ai.cjs');
 
 app.setName('Juanye');
 if (process.env.JUANYE_TEST_USER_DATA && path.isAbsolute(process.env.JUANYE_TEST_USER_DATA)) app.setPath('userData', process.env.JUANYE_TEST_USER_DATA);
 let mainWindow;
 let recognition;
+let examAnalysisService;
 let writeQueue = Promise.resolve();
 let baselineDraftPreserved = false;
 const indexPath = path.join(__dirname, '../dist/index.html');
@@ -70,6 +72,15 @@ function installHandlers() {
   handle('bank:save', input => bank.save(input));
   handle('bank:delete', ids => bank.remove(ids));
   handle('bank:restore', () => bank.restore());
+  handle('bank:manage', input => bank.manage(input));
+  handle('bank:revise', input => bank.revise(input));
+  handle('bank:revise-batch', inputs => bank.reviseBatch(inputs));
+  handle('bank:import', input => bank.importBank(input));
+  handle('bank:used', ids => bank.markUsed(ids));
+  examAnalysisService = createExamAnalysisService({ directory: app.getPath('userData'), getConfig: () => modelWithKey() });
+  handle('exam:analyze', input => examAnalysisService.analyze(input));
+  handle('exam:cancel', taskId => examAnalysisService.cancel(taskId));
+  handle('exam:reports', examKey => examAnalysisService.list(examKey));
   handle('document:docx', async options => {
     if (!options?.exam || !options?.layout || JSON.stringify(options).length > 100 * 1024 * 1024) throw new Error('Word导出内容无效或过大');
     const target = await dialog.showSaveDialog(mainWindow, { defaultPath: cleanName(options.name, '.docx'), filters: [{ name: 'Word 可编辑试卷', extensions: ['docx'] }] });
@@ -118,7 +129,8 @@ function installHandlers() {
     finally { if (recognition === controller) recognition = undefined; }
   });
   handle('document:text', async options => {
-    if (!options || typeof options.content !== 'string' || options.content.length > 100 * 1024 * 1024) throw new Error('导出内容无效或过大');
+    const limit = options?.extension === 'json' ? 250 * 1024 * 1024 : 100 * 1024 * 1024;
+    if (!options || typeof options.content !== 'string' || Buffer.byteLength(options.content) > limit) throw new Error('导出内容无效或过大');
     const ext = ['tex', 'juanye', 'json', 'md', 'csv'].includes(options.extension) ? options.extension : 'txt';
     const target = await dialog.showSaveDialog(mainWindow, { defaultPath: cleanName(options.name, `.${ext}`), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (target.canceled || !target.filePath) return { canceled: true };
@@ -165,4 +177,4 @@ async function createWindow() {
 }
 app.whenReady().then(async () => { Menu.setApplicationMenu(null); installHandlers(); await createWindow(); });
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { recognition?.abort(); diagrams.dispose(); });
+app.on('before-quit', () => { recognition?.abort(); examAnalysisService?.dispose(); diagrams.dispose(); });

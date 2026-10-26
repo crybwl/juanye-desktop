@@ -96,7 +96,11 @@ async function main() {
     await command('试卷分析与双向细目表');
     const analysis = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '试卷分析与双向细目表', exact: true }) });
     await analysis.getByText('2 题 · 12 分', { exact: true }).waitFor();
-    assert.equal(await analysis.locator('table').count(), 4);
+    assert.equal(await analysis.locator('table').count(), 3);
+    await analysis.getByRole('tab', { name: '双向细目表', exact: true }).click();
+    assert.equal(await analysis.locator('table').count(), 1);
+    await analysis.getByRole('tab', { name: '逐题细目', exact: true }).click();
+    assert.equal(await analysis.locator('table').count(), 1);
     await analysis.getByRole('button', { name: '导出 CSV', exact: true }).click();
     const csvPath = path.join(out, 'analysis.csv'); await until(async () => fs.existsSync(csvPath), 'CSV export missing');
     const csv = fs.readFileSync(csvPath, 'utf8'); assert.ok(csv.startsWith('\uFEFF')); assert.match(csv, /双向细目表/); assert.match(csv, /函数/); assert.match(csv, /2.5/); assert.match(csv, /方程/);

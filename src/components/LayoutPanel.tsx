@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { RectangleHorizontal, RectangleVertical, Check } from "lucide-react";
 import type { Exam, Layout } from "../types";
 import { Button, Field, SharedPill, Segmented, Slider, Switch, cx, inputCls, spring, softSpring } from "../ui";
+import { PrintSummary } from "./PrintSummary";
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -116,6 +117,7 @@ export function LayoutPanel({
               exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
               variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
             >
+              <div className="pt-4"><PrintSummary layout={layout} /></div>
               <Group title="卷型">
                 <Segmented full size="sm" value={layout.paperMode ?? "questions"} onChange={value => setLayout({ ...layout, paperMode: value, answerSpace: value === "integrated" })} options={[{ value: "questions", label: "普通试卷" }, { value: "integrated", label: "试题答题一体卷" }]} />
               </Group>

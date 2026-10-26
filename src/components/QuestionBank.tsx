@@ -3,7 +3,7 @@ import { BookOpen, Check, GripVertical, Loader2, Plus, RotateCcw, Search, Trash2
 import type { Exam, Question, Section } from "../types";
 import { TYPE_META } from "../data";
 import { MathText } from "../math";
-import { bankBridge, BANK_DRAG_MIME, checkedBankDocument, cloneBankQuestions, filterBankEntries, type BankDocument, type BankFilters } from "../question-bank";
+import { bankBridge, BANK_DRAG_MIME, checkedBankDocument, cloneBankEntries, filterBankEntries, latestBankEntries, type BankDocument, type BankEntry, type BankFilters } from "../question-bank";
 import { Button, Field, inputCls, useToast } from "../ui";
 import { Select } from "./Select";
 import { Checkbox } from "./Checkbox";
@@ -11,7 +11,7 @@ import { WorkspaceSheet } from "./WorkspaceSheet";
 import "./question-bank.css";
 
 const DIFFICULTY = { easy: "基础", medium: "中等", hard: "较难" } as const;
-const empty: BankDocument = { schema: "juanye-bank/1", revision: 0, entries: [] };
+const empty: BankDocument = { schema: "juanye-bank/1", revision: 0, entries: [], collections: [] };
 export interface QuestionBankProps {
   open: boolean;
   onClose: () => void;
@@ -43,7 +43,8 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
   const filtered = useMemo(() => filterBankEntries(bank.entries, filters), [bank.entries, filters]);
   const knowledge = useMemo(() => [...new Set(bank.entries.flatMap(entry => (entry.question.knowledge ?? []).map(tag => tag.trim()).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "zh")), [bank.entries]);
   const sources = useMemo(() => [...new Set(bank.entries.map(entry => entry.question.source?.trim() || entry.origin.examTitle).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh")), [bank.entries]);
-  const selectedEntries = bank.entries.filter(entry => selected.has(entry.id));
+  const liveEntries = latestBankEntries(bank.entries).filter(entry => !entry.trashedAt);
+  const selectedEntries = liveEntries.filter(entry => selected.has(entry.id));
   const targetId = sections.some(section => section.id === target) ? target : sections[0]?.id ?? "";
   const pages = Math.max(1, Math.ceil(filtered.length / 40));
   const currentPage = Math.min(page, pages - 1);
@@ -55,16 +56,18 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
     finally { setBusy(false); }
   }
   const save = (questions: Question[]) => task(async () => {
-    const result = await bankBridge().bankSave({ questions, origin: { examTitle: exam.title } });
+    const result = await bankBridge().bankSave({ questions, origin: { examTitle: exam.title, ...(exam.id ? { examId: exam.id } : {}) } });
     setBank(checkedBankDocument(result.bank));
     toast({ title: `已保存 ${result.added} 道题`, ...(result.duplicates ? { desc: `${result.duplicates} 道已在题库，保留原记录` } : {}) });
     if (result.added) setUndoAvailable(true);
   });
-  const insert = (questions: Question[]) => {
-    if (!targetId || !questions.length) return;
-    onInsert(cloneBankQuestions(questions), targetId);
+  const insert = (entries: BankEntry[]) => task(async () => {
+    if (!targetId || !entries.length) return;
+    await onInsert(cloneBankEntries(entries), targetId);
     setSelected(new Set());
-  };
+    try { setBank(checkedBankDocument(await bankBridge().bankMarkUsed(entries.map(entry => entry.id)))); }
+    catch (error) { setError(`题目已加入，但使用记录未更新：${error instanceof Error ? error.message : String(error)}`); }
+  });
   const restore = () => task(async () => {
     if (!window.confirm("恢复上次题库备份？当前记录也会另存备份，试卷不受影响。")) return;
     setBank(checkedBankDocument(await bankBridge().bankRestore()));
@@ -72,10 +75,10 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
     toast({ title: "题库备份已恢复" });
   });
   const remove = () => task(async () => {
-    if (!selectedEntries.length || !window.confirm(`从题库移除 ${selectedEntries.length} 道题？试卷中的题目不会删除，可恢复上次备份。`)) return;
-    setBank(checkedBankDocument(await bankBridge().bankDelete(selectedEntries.map(entry => entry.id))));
+    if (!selectedEntries.length || !window.confirm(`将 ${selectedEntries.length} 道题移入回收站？试卷中的题目不会删除。`)) return;
+    setBank(checkedBankDocument(await bankBridge().bankManage({ action: "trash", ids: selectedEntries.map(entry => entry.id) })));
     setSelected(new Set()); setUndoAvailable(true);
-    toast({ title: "已从题库移除", desc: "可恢复上次备份" });
+    toast({ title: "已移入回收站", desc: "可在本地题库恢复" });
   });
 
   return <WorkspaceSheet title="本地题库" onClose={onClose} modal={false} width={510} className="question-bank-sheet">
@@ -93,9 +96,9 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
         <Select aria-label="题库来源" value={filters.source ?? ""} onValueChange={source => updateFilters({ source })} options={[{ value: "", label: "全部来源" }, ...sources.map(value => ({ value, label: value }))]} />
       </div>
       <div className="flex flex-wrap items-center gap-2 border-y border-line py-3">
-        <label className="flex items-center gap-1 text-[12px] text-muted"><Checkbox aria-label="全选筛选结果" disabled={busy || !filtered.length} checked={filtered.length > 0 && filtered.every(entry => selected.has(entry.id)) ? true : filtered.some(entry => selected.has(entry.id)) ? "mixed" : false} onCheckedChange={checked => setSelected(checked ? new Set(filtered.map(entry => entry.id)) : new Set())} />{filtered.length} / {bank.entries.length} 题</label>
+        <label className="flex items-center gap-1 text-[12px] text-muted"><Checkbox aria-label="全选筛选结果" disabled={busy || !filtered.length} checked={filtered.length > 0 && filtered.every(entry => selected.has(entry.id)) ? true : filtered.some(entry => selected.has(entry.id)) ? "mixed" : false} onCheckedChange={checked => setSelected(checked ? new Set(filtered.map(entry => entry.id)) : new Set())} />{filtered.length} / {liveEntries.length} 题</label>
         {selected.size > 0 && <button className="text-[12px] text-accent" onClick={() => setSelected(new Set())}>取消选择 {selected.size}</button>}
-        <Button size="sm" className="ml-auto" variant="ghost" disabled={busy || !selectedEntries.length} onClick={() => void remove()} icon={<Trash2 size={13} />}>移除</Button>
+        <Button size="sm" className="ml-auto" variant="ghost" disabled={busy || !selectedEntries.length} onClick={() => void remove()} icon={<Trash2 size={13} />}>移入回收站</Button>
       </div>
       {error && <div role="alert" className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">{error}</div>}
       {busy && <div role="status" className="flex items-center gap-2 py-2 text-[12px] text-muted"><Loader2 size={14} className="animate-spin" />正在处理…</div>}
@@ -114,12 +117,12 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
             <div className="question-bank-stem"><MathText text={q.stem} placeholder="（空题干）" /></div>
             {q.figures?.[0] && <img className="question-bank-thumbnail" src={q.figures[0].src} alt={q.figures[0].caption || "题图"} />}
             <div className="question-bank-tags">{(q.knowledge ?? []).filter(Boolean).slice(0, 5).map((tag, index) => <span key={`${tag}-${index}`}>{tag}</span>)}</div>
-            <div className="flex min-w-0 items-center gap-2 text-[11px] text-faint"><span className="min-w-0 flex-1 truncate" title={q.source || entry.origin.examTitle}>{q.source || entry.origin.examTitle || "未设置来源"}</span><Button size="sm" variant="ghost" disabled={busy || !targetId} icon={<Plus size={12} />} onClick={() => insert([q])}>加入</Button></div>
+            <div className="flex min-w-0 items-center gap-2 text-[11px] text-faint"><span className="min-w-0 flex-1 truncate" title={q.source || entry.origin.examTitle}>{q.source || entry.origin.examTitle || "未设置来源"}</span><Button size="sm" variant="ghost" disabled={busy || !targetId} icon={<Plus size={12} />} onClick={() => void insert([entry])}>加入</Button></div>
           </article>;
         })}
       </div>
       {pages > 1 && <div className="flex items-center justify-center gap-3"><Button size="sm" variant="ghost" disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>上一页</Button><span className="text-[12px] text-muted">{currentPage + 1} / {pages}</span><Button size="sm" variant="ghost" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)}>下一页</Button></div>}
-      <div className="question-bank-insert"><Field label="目标大题"><Select aria-label="题库目标大题" value={targetId} disabled={!sections.length} onValueChange={setTarget} options={sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title}` }))} /></Field><Button variant="primary" className="w-full" disabled={busy || !selectedEntries.length || !targetId} onClick={() => insert(selectedEntries.map(entry => entry.question))} icon={<Check size={14} />}>加入所选 {selectedEntries.length} 道题</Button></div>
+      <div className="question-bank-insert"><Field label="目标大题"><Select aria-label="题库目标大题" value={targetId} disabled={!sections.length} onValueChange={setTarget} options={sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title}` }))} /></Field><Button variant="primary" className="w-full" disabled={busy || !selectedEntries.length || !targetId} onClick={() => void insert(selectedEntries)} icon={<Check size={14} />}>加入所选 {selectedEntries.length} 道题</Button></div>
     </div>
   </WorkspaceSheet>;
 }

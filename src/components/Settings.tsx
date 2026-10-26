@@ -9,6 +9,7 @@ import { errorMessage } from "../errors";
 import { useAppearance } from "../appearance";
 import { TelegramThemePicker } from "./TelegramThemePicker";
 import { useExperimentalWorkbench } from "../experimental-workbench";
+import { version as appVersion } from "../../package.json";
 
 export const ACCENTS: { name: string; c: [string, string] }[] = [
   { name: "长春花", c: ["#9db1ff", "#c4b2ff"] },
@@ -334,7 +335,7 @@ export function SettingsDialog({
                   <Logo size={64} />
                 </motion.div>
                 <div className="mt-5 text-[20px] font-semibold">卷页</div>
-                <div className="mt-1 text-[13px] text-muted">版本 0.4.0-beta.1</div>
+                <div className="mt-1 text-[13px] text-muted">版本 {appVersion}</div>
               </div>
             )}
           </motion.div>

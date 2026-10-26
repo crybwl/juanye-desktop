@@ -43,6 +43,14 @@ function validateQuestion(value: unknown, ids: Set<string>): Question {
     answer: strings(q.answer, "答案").map(normalizeMathDelimiters), analysis: normalizeMathDelimiters(str(q.analysis, "解析")),
   };
   if (q.flag !== undefined) result.flag = str(q.flag, "校对提示", 1000);
+  if (q.bankOrigin !== undefined) {
+    const origin = object(q.bankOrigin, "题库来源");
+    const libraryId = str(origin.libraryId, "题库题目 ID", 200);
+    const revisionId = str(origin.revisionId, "题库修订 ID", 200);
+    const version = number(origin.version, "题库版本", 1, 10000);
+    if (!libraryId || !revisionId || !Number.isSafeInteger(version)) throw Error("题库来源无效");
+    result.bankOrigin = { libraryId, revisionId, version };
+  }
   if (q.image !== undefined) result.image = oneOf(q.image, ["plot"] as const, "题图");
   if (q.sourceImage !== undefined) {
     const image = str(q.sourceImage, "原图", 40 * 1024 * 1024);
@@ -107,6 +115,7 @@ export function parseProject(text: string): { exam: Exam; layout: Layout } {
       return section;
     }),
   };
+  if (e.id !== undefined) { exam.id = str(e.id, "试卷 ID", 200); if (!exam.id) throw Error("试卷 ID 不能为空"); }
   if (ids.size > 2000) throw new Error("单份试卷最多支持 2000 题");
   const l = object(doc.layout, "排版设置");
   const bool = (key: keyof Layout): boolean => {

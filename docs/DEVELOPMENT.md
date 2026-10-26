@@ -27,6 +27,8 @@ npm start
 - `node scripts/import-workflow-regression.cjs --imports-only`：三种导入及 Markdown 导出。
 - `node scripts/performance-regression.cjs --label=local`：120 题、44 页量级的压力样例（实际页数受布局影响）；动效保持开启。
 - `node scripts/verify-release.cjs`：打包后比较 asar 中的版本和入口资源与本地 dist 是否一致。
+- `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
+- `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
 
 UI 测试使用项目的 Playwright；如有需要，可通过 JUANYE_PLAYWRIGHT 指向其他 Playwright 模块。Electron 使用自带浏览器，不需要额外下载 Playwright 浏览器。测试窗口使用临时用户目录，必要时在屏幕外显示以避免后台节流，不接管用户的其他窗口。
 
@@ -40,4 +42,4 @@ CI 在 Windows 上安装锁定依赖、运行单测并构建前端。Windows 打
 
 发布时先将版本提交打为 `v版本号` 标签，再在 Windows packages 工作流填写该标签并勾选 `publish_release`。工作流从标签构建，核对版本及打包资源，生成 SHA-256 校验文件；在草稿 Release 上传安装包和 ZIP，全部成功后才转为公开。已公开的同名 Release 不会被覆盖。发布说明放在 `docs/releases/v版本号.md`。
 
-修改 package.json 的版本时同步 package-lock.json、关于页与相关 UI 版本断言。发布前检查更新记录、导入兼容性、三类打印布局和安装包资源。
+修改 package.json 的版本时同步 package-lock.json 及相关 UI 版本断言；关于页直接读取 package.json。发布前检查更新记录、导入兼容性、三类打印布局和安装包资源。

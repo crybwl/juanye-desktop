@@ -19,5 +19,13 @@ contextBridge.exposeInMainWorld('juanye', Object.freeze({
   bankSave: options => ipcRenderer.invoke('bank:save', options),
   bankDelete: ids => ipcRenderer.invoke('bank:delete', ids),
   bankRestore: () => ipcRenderer.invoke('bank:restore'),
+  bankManage: input => ipcRenderer.invoke('bank:manage', input),
+  bankRevise: input => ipcRenderer.invoke('bank:revise', input),
+  bankReviseBatch: inputs => ipcRenderer.invoke('bank:revise-batch', inputs),
+  bankImport: input => ipcRenderer.invoke('bank:import', input),
+  bankMarkUsed: ids => ipcRenderer.invoke('bank:used', ids),
+  analyzeExam: input => ipcRenderer.invoke('exam:analyze', input),
+  cancelExamAnalysis: taskId => ipcRenderer.invoke('exam:cancel', taskId),
+  loadExamReports: examKey => ipcRenderer.invoke('exam:reports', examKey),
   exportDocx: options => ipcRenderer.invoke('document:docx', options),
 }));
