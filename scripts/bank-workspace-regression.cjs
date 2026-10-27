@@ -41,6 +41,7 @@ async function main() {
     assert.equal((await loadBank()).entries.length, 0);
 
     progress('direct create with options, answer, analysis, metadata and embedded image');
+    await bank().locator('.bank-workspace-header').hover();
     await bank().getByRole('button', { name: '新建题目', exact: true }).click();
     const editor = bank().getByTestId('bank-question-editor');
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('新建题库题：若 $x+1=3$，则 $x=$');
@@ -65,14 +66,17 @@ async function main() {
     checks.push('Direct authoring persists complete question without mutating current paper');
 
     progress('favorite and collection create / assign / rename');
+    await rows().first().hover();
     await rows().first().getByRole('button', { name: '收藏题目', exact: true }).click();
     await bank().locator('[data-bank-view="favorites"]').click();
     await until(async () => await rows().count() === 1, 'Favorite not visible');
+    await bank().locator('.bank-collection-heading').hover();
     await bank().locator('.bank-collection-heading').getByRole('button', { name: '新建收藏夹', exact: true }).click();
     let dialog = page.getByRole('dialog', { name: '新建收藏夹', exact: true });
     await dialog.getByRole('textbox', { name: '收藏夹名称', exact: true }).fill('测试收藏夹');
     await dialog.getByRole('button', { name: '保存', exact: true }).click();
     await until(async () => (await loadBank()).collections.length === 1, 'Collection not saved');
+    await rows().first().hover();
     await rows().first().getByRole('checkbox').click();
     await select(bank(), '批量加入收藏夹', '测试收藏夹');
     await bank().getByRole('button', { name: '确定', exact: true }).click();
@@ -86,10 +90,12 @@ async function main() {
     checks.push('Favorite, collection create/assignment/rename persisted');
 
     progress('edit revision history and batch metadata');
+    await bank().locator('.bank-detail-tools').hover();
     await bank().getByRole('button', { name: '编辑', exact: true }).click();
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('修订题库题：若 $x+1=3$，则 $x=$');
     await bank().locator('.bank-edit-footer').getByRole('button', { name: '保存', exact: true }).click();
     await until(async () => (await loadBank()).entries.length === 2, 'Question revision did not preserve the original');
+    await bank().locator('.bank-detail-tools').hover();
     await bank().getByRole('button', { name: '版本历史', exact: true }).click();
     assert.equal(await bank().getByTestId('bank-version-history').locator(':scope > div').count(), 2);
     await bank().getByRole('button', { name: '批量属性', exact: true }).click();
@@ -107,6 +113,7 @@ async function main() {
     await until(async () => (await loadBank()).entries.every(item => item.trashedAt), 'Trash did not preserve all versions');
     await bank().locator('[data-bank-view="trash"]').click();
     await until(async () => await rows().count() === 1, 'Trash should show one logical question');
+    await rows().first().hover();
     await rows().first().getByRole('button', { name: '恢复', exact: true }).click();
     await until(async () => (await loadBank()).entries.every(item => !item.trashedAt), 'Restore failed');
     stored = await loadBank(); assert.equal(stored.entries.length, 3); assert.equal(stored.entries.at(-1).favorite, true); assert.equal(stored.entries.at(-1).collectionIds.length, 1);
@@ -114,15 +121,18 @@ async function main() {
     checks.push('Trash/restore recovers all revisions and metadata');
 
     progress('ordered basket survives workspace switch and narrow collapse');
+    await bank().locator('.bank-workspace-header').hover();
     await bank().getByLabel('更多题库操作', { exact: true }).click();
     await bank().getByRole('button', { name: '保存当前试卷', exact: true }).click();
     await until(async () => await rows().count() === 2, 'Current paper was not saved into bank');
-    for (const row of await rows().all()) await row.getByRole('button', { name: '选题', exact: true }).click();
+    for (const row of await rows().all()) { await row.hover(); await row.getByRole('button', { name: '选题', exact: true }).click(); }
     const basket = bank().getByTestId('bank-basket');
     assert.equal(await basket.locator('[data-basket-id]').count(), 2);
     const initialOrder = await basket.locator('[data-basket-id]').evaluateAll(items => items.map(item => item.dataset.basketId));
+    await basket.locator('[data-basket-id]').nth(1).hover();
     await basket.getByRole('button', { name: '上移选题 2', exact: true }).click();
     assert.deepEqual(await basket.locator('[data-basket-id]').evaluateAll(items => items.map(item => item.dataset.basketId)), [...initialOrder].reverse());
+    await bank().locator('.bank-catalog-heading').hover();
     await bank().locator('.bank-catalog-heading').getByRole('button', { name: '收起题目详情', exact: true }).click();
     await bank().getByRole('button', { name: '展开题目详情和选题篮，已选 2 题', exact: true }).click();
     await nav('组卷').click(); await openBank();
@@ -147,6 +157,7 @@ async function main() {
     await openBank();
     assert.equal(await basket.locator('[data-basket-id]').count(), 0);
     await until(async () => (await loadBank()).entries.every(item => item.usageCount === 1), 'Usage must increment after insertion');
+    await rows().filter({ hasText: '修订题库题' }).hover();
     await rows().filter({ hasText: '修订题库题' }).getByRole('button', { name: '选题', exact: true }).click();
     await basket.getByRole('button', { name: '选题新建试卷', exact: true }).click();
     await until(async () => (await loadDraft()).exam.title === '题库选题试卷', 'New paper was not created');

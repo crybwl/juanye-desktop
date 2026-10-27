@@ -29,7 +29,8 @@ npm start
 - `node scripts/verify-release.cjs`：打包后比较 asar 中的版本和入口资源与本地 dist 是否一致。
 - `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
 - `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
-- `node scripts/ui-overhaul-regression.cjs [--packaged]`：当前用户补丁的界面与真实动效验收；列表/卡片偏好、题型计数、飞入选题篮、收藏粒子、原生拖放、小数分值、图片键盘操作、编辑分组、20套实际外观及1000/1280/1500px窗口边界，不调用模型或HTTP。报告及截图位于 `artifacts/qa-ui-overhaul/`。
+- `node scripts/ui-overhaul-regression.cjs [--packaged]`：当前用户补丁的界面与真实动效验收；悬停/真实Tab聚焦/粗指针触屏模式、无框底部统计入口、列表/卡片偏好、题型计数、飞入选题篮、收藏粒子、原生拖放、小数分值、图片键盘操作、编辑分组、20套实际外观及1000/1280/1500px窗口边界，不调用模型或HTTP。报告及截图位于 `artifacts/qa-ui-overhaul/`。
+- `node scripts/integrated-surfaces-regression.cjs [--packaged]`：统一按钮与Telegram背景巡检；通过设置界面切换20种外观，直接检查每个主要结构背景的SVG花纹、主按钮普通/悬停可读性、次要按钮边框与阴影，遍历设置/编辑/公式/OCR/导入/分析/导出/历史/题库，验证白纸与打印不受影响；不执行模型。报告及截图位于 `artifacts/qa-integrated-surfaces/`。
 - `node scripts/ui-polish-regression.cjs [--packaged]`：保留 beta.3 的历史表现层验收（宽编辑区、折叠筛选等）；这些布局已被用户指定的新补丁替换，当前界面以 ui-overhaul 验收为准。
 
 UI 测试使用项目的 Playwright；如有需要，可通过 JUANYE_PLAYWRIGHT 指向其他 Playwright 模块。Electron 使用自带浏览器，不需要额外下载 Playwright 浏览器。测试窗口使用临时用户目录，必要时在屏幕外显示以避免后台节流，不接管用户的其他窗口。

@@ -42,7 +42,7 @@
 .bank-workspace kbd, .bank-preview-empty kbd { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px; border: 1px solid var(--color-line-strong); border-bottom-width: 2px; border-radius: 5px; color: var(--color-muted); background: var(--bank-inset); font: 600 10px/1 inherit; }
 
 /* ---------- hero header ---------- */
-.bank-workspace-header { position: relative; z-index: 6; isolation: isolate; display: flex; min-height: 78px; flex-shrink: 0; align-items: center; gap: 14px; padding: 13px 22px 13px 14px; border-bottom: 1px solid var(--color-line); background: color-mix(in srgb, var(--color-panel) 94%, transparent); animation: bank-drop-in .55s var(--bank-ease) backwards; }
+.bank-workspace-header { position: relative; z-index: 6; isolation: isolate; display: flex; min-height: 78px; flex-shrink: 0; align-items: center; gap: 14px; padding: 13px 22px; border-bottom: 1px solid var(--color-line); background: color-mix(in srgb, var(--color-panel) 94%, transparent); animation: bank-drop-in .55s var(--bank-ease) backwards; }
 .bank-hero-aurora { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .bank-hero-aurora i { position: absolute; width: 380px; height: 170px; border-radius: 50%; filter: blur(46px); opacity: .55; will-change: translate; animation: bank-aurora 18s ease-in-out infinite alternate; }
 .bank-hero-aurora i:nth-child(1) { top: -95px; left: -70px; background: color-mix(in srgb, var(--color-accent) 34%, transparent); }
@@ -122,7 +122,15 @@
 .bank-collection-row:hover .bank-collection-tools, .bank-collection-row:focus-within .bank-collection-tools { opacity: 1; translate: 0 0; pointer-events: auto; }
 .bank-empty-collection { display: flex; align-items: center; gap: 7px; margin: 2px 4px; padding: 10px; border: 1px dashed var(--color-line-strong); border-radius: 10px; color: var(--color-faint); font-size: 11px; transition: color .2s, border-color .2s; }
 .bank-empty-collection:hover { border-color: var(--color-accent); color: var(--color-accent); }
-.bank-sidebar-footer { display: flex; flex-direction: column; gap: 4px; margin-top: auto; padding: 11px 12px; border: 1px solid var(--color-line); border-radius: 12px; color: var(--color-muted); background: var(--bank-inset); font-size: 10.5px; }
+.bank-sidebar-bottom { display: flex; flex-shrink: 0; flex-direction: column; gap: 7px; margin-top: auto; padding-top: 24px; }
+.bank-sidebar-stats { display: flex; align-items: center; gap: 24px; padding: 0 12px; }
+.bank-sidebar-stat { display: inline-flex; min-width: 44px; min-height: 32px; align-items: center; justify-content: flex-start; gap: 8px; padding: 3px 0; border: 0; background: transparent; box-shadow: none; color: var(--color-muted); transition: color .16s; }
+.bank-sidebar-stat > b { color: var(--color-fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bank-sidebar-stat[data-tone="favorite"] > svg { color: var(--bank-star); }
+.bank-sidebar-stat[data-tone="review"] > svg { color: var(--color-warn); }
+.bank-sidebar-stat:hover > b, .bank-sidebar-stat[aria-pressed="true"] > b { color: var(--color-accent); }
+.bank-sidebar-stat[aria-pressed="true"] > svg { fill: color-mix(in srgb, currentColor 15%, transparent); }
+.bank-sidebar-footer { display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; border: 1px solid var(--color-line); border-radius: 12px; color: var(--color-muted); background: var(--bank-inset); font-size: 10.5px; }
 .bank-sidebar-footer > div { display: flex; align-items: center; gap: 7px; }
 .bank-sidebar-footer small { padding-left: 13px; color: var(--color-faint); font-size: 9.5px; line-height: 1.5; }
 .bank-local-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-ok, var(--color-accent)); animation: bank-ping 2.4s ease-out infinite; }
@@ -504,6 +512,40 @@
   .bank-entry { padding-right: 11px; padding-left: 14px; }
   .bank-entry-bottom > small { display: none; }
   .bank-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Secondary actions appear in context without moving the surrounding content.
+   They remain focusable, so keyboard focus reveals the same controls. Touch
+   and pen/coarse-pointer devices keep every action visible. */
+@media (hover: hover) and (pointer: fine) {
+  .bank-workspace-actions,
+  .bank-catalog-tools,
+  .bank-collection-add,
+  .bank-detail-action,
+  .bank-detail-collapse,
+  .bank-entry-top > .checkbox-control,
+  .bank-entry-grip,
+  .bank-favorite:not([data-favorite="true"]),
+  .bank-entry-bottom > :is(.bank-pick:not([data-picked]), .bank-restore),
+  .bank-basket-item > button:not(.bank-basket-stem),
+  .bank-preview-bottom-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .16s ease-out, color .16s, background .16s, border-color .16s, box-shadow .16s;
+  }
+  .bank-workspace-header:is(:hover, :focus-within) .bank-workspace-actions,
+  .bank-workspace-header:has(.bank-more[open]) .bank-workspace-actions,
+  .bank-catalog-heading:is(:hover, :focus-within) .bank-catalog-tools,
+  .bank-collection-heading:is(:hover, :focus-within) .bank-collection-add,
+  .bank-detail-tools:is(:hover, :focus-within) .bank-detail-action,
+  .bank-detail-heading:is(:hover, :focus-within) .bank-detail-collapse,
+  .bank-entry:is(:hover, :focus-within) :is(.checkbox-control, .bank-entry-grip, .bank-favorite, .bank-pick, .bank-restore),
+  .bank-catalog[data-batch] .bank-entry .checkbox-control,
+  .bank-basket-item:is(:hover, :focus-within) > button:not(.bank-basket-stem),
+  .bank-preview-scroll:is(:hover, :focus-within) .bank-preview-bottom-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* ---------- reduced motion ---------- */

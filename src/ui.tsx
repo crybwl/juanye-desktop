@@ -37,6 +37,8 @@ type BtnProps = HTMLMotionProps<"button"> & {
 export function Button({ variant = "secondary", size = "md", icon, className, children, ...rest }: BtnProps) {
   return (
     <motion.button
+      data-ui-button="button"
+      data-variant={variant}
       whileTap={{ scale: 0.97 }}
       transition={spring}
       className={cx(
@@ -73,6 +75,8 @@ export function IconButton({
   return (
     <Tooltip label={label} side={side} kbd={kbd}>
       <motion.button
+        data-ui-button="icon"
+        data-active={active || undefined}
         aria-label={label}
         whileTap={{ scale: 0.9 }}
         transition={spring}

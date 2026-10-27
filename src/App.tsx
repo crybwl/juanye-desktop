@@ -693,7 +693,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         </motion.div>
         {bankVisited && <motion.div className="workspace-view workspace-view-bank" data-workspace-view="bank" aria-hidden={workArea !== "bank"} {...(workArea !== "bank" ? { inert: "" } : {})}
           initial={{ opacity: 0, x: reducedMotion ? 0 : 16 }} animate={workArea === "bank" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : 16, transitionEnd: { visibility: "hidden" } }}
-          transition={{ opacity: { duration: workArea === "bank" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "bank" ? "auto" : "none", zIndex: workArea === "bank" ? 2 : 1 }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} onBack={() => setWorkArea("exam")} /></Suspense></motion.div>}
+          transition={{ opacity: { duration: workArea === "bank" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "bank" ? "auto" : "none", zIndex: workArea === "bank" ? 2 : 1 }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} /></Suspense></motion.div>}
       </div>
 
       <AnimatePresence initial={false}>

@@ -5,6 +5,7 @@ import "katex/dist/katex.min.css";
 import "./index.css";
 import App from "./App";
 import { initializeAppearance } from "./appearance";
+import "./integrated-surfaces.css";
 
 initializeAppearance();
 

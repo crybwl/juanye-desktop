@@ -84,6 +84,7 @@ async function main() {
 
     progress('bank-only edits survive workspace switching and do not change paper');
     const bank = page.getByTestId('bank-workspace');
+    await bank.locator('.bank-detail-tools').hover();
     await bank.getByRole('button', { name: '编辑', exact: true }).click();
     const bankEditor = page.getByTestId('bank-question-editor');
     await bankEditor.getByPlaceholder('输入题干…', { exact: true }).fill('未保存的题库草稿 $x+1$');
@@ -144,6 +145,7 @@ async function main() {
     progress('bank source revisions are compared and manually adopted, never auto overwritten');
     await nav().getByRole('button', { name: '本地题库', exact: true }).click();
     const firstRow = bank.getByTestId('bank-entry').filter({ hasText: 'f(2)' }).first();
+    await firstRow.hover();
     await firstRow.getByRole('button', { name: '选题', exact: true }).click();
     await bank.getByRole('button', { name: '加入当前试卷', exact: true }).click();
     await until(async () => (await draft()).exam.sections[0].questions.length === 2, 'Linked snapshot not inserted');

@@ -1,0 +1,240 @@
+/* Shared chrome belongs to its panel, rather than floating above it as a grid of
+   separate boxes. Keep sizing, Motion gestures and component-specific layouts. */
+@media screen {
+  :root {
+    --ui-action-ink: var(--color-accent);
+    --ui-action-idle: color-mix(in srgb, var(--color-accent) 7%, transparent);
+    --ui-action-hover: color-mix(in srgb, var(--color-accent) 13%, transparent);
+    --ui-action-selected: color-mix(in srgb, var(--color-accent) 16%, transparent);
+    --ui-action-line: color-mix(in srgb, var(--color-accent) 21%, transparent);
+    --ui-panel-line: color-mix(in srgb, var(--color-line) 70%, transparent);
+  }
+  :root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) {
+    /* A little semantic foreground keeps even warm palettes readable over the
+       unchanged 24% hover tint (80% accent alone is still too light for ember). */
+    --ui-action-ink: color-mix(in srgb, var(--color-accent) 72%, var(--color-fg));
+  }
+
+  :root .btn[data-ui-button][data-variant] {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  :root .btn[data-ui-button][data-variant="primary"] {
+    background: color-mix(in srgb, var(--color-accent) 17%, var(--color-panel));
+    color: var(--ui-action-ink);
+    box-shadow: inset 0 0 0 1px var(--ui-action-line);
+  }
+  :root .btn[data-ui-button][data-variant="primary"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-accent) 24%, var(--color-panel));
+    filter: none;
+  }
+  :root .btn[data-ui-button][data-variant="primary"]::after { opacity: .18; }
+  :root .btn[data-ui-button]:is([data-variant="secondary"], [data-variant="outline"]) {
+    background: var(--ui-action-idle);
+    color: var(--color-fg);
+  }
+  :root .btn[data-ui-button]:is([data-variant="secondary"], [data-variant="outline"]):hover:not(:disabled) {
+    background: var(--ui-action-hover);
+    border-color: transparent;
+  }
+  :root .btn[data-ui-button][data-variant="ghost"] {
+    background: transparent;
+    color: var(--color-muted);
+  }
+  :root .btn[data-ui-button][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--ui-action-hover);
+    color: var(--color-fg);
+  }
+  :root .btn[data-ui-button][data-variant="danger"] {
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    color: var(--color-danger);
+  }
+  :root .btn[data-ui-button][data-variant="danger"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-danger) 17%, transparent);
+  }
+  :root [data-ui-button="icon"] {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+  :root [data-ui-button="icon"]:hover:not(:disabled) {
+    background: var(--ui-action-hover);
+    color: var(--color-fg);
+  }
+  :root [data-ui-button="icon"][data-active="true"] {
+    background: var(--ui-action-selected);
+    color: var(--ui-action-ink);
+  }
+  :root [data-ui-button="icon"][data-active="true"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    color: var(--ui-action-ink);
+  }
+  :root [data-ui-button]:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  :root [data-ui-button="icon"]:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Selection stays explicit, but uses the same quiet inset tint everywhere.
+     Animated shared pills remain the selection layer; no new motion is added. */
+  :root .btn[data-ui-button]:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) {
+    color: var(--ui-action-ink);
+  }
+  :root :is(.workspace-nav-pill, .workbench-tab-pill, .exam-analysis-tab-pill, .export-format-pill, .bank-nav-pill, .bank-density-pill) {
+    background: var(--ui-action-selected);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  :root .workspace-nav-pill::after, :root .bank-nav-pill::before { box-shadow: none; }
+  :root :is(.workbench-nav, .exam-analysis-tabs, .exam-matrix-switch, .export-target-switch, .bank-density, [role="tablist"][class~="ring-inset"]) {
+    border-color: transparent;
+    background-color: var(--surface-inset);
+    --tw-ring-color: transparent;
+    box-shadow: none;
+  }
+  :root [role="tablist"] > [role="tab"] > [class~="bg-[#262a37]"] {
+    background: var(--ui-action-selected);
+    box-shadow: none;
+  }
+  :root :is(.dialog-header-icon, .export-format-icon) {
+    border-color: transparent;
+    background: var(--ui-action-idle);
+    box-shadow: none;
+  }
+  :root :is(.export-format-selected .export-format-icon, .workbench-tab[aria-selected="true"]) {
+    color: var(--ui-action-ink);
+  }
+  /* Bank controls use their own animated pills; retain their category hues and
+     native focus/selection behavior while sharing the surrounding soft material. */
+  :root .bank-type-pill {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 16%, transparent);
+    box-shadow: none;
+  }
+  :root .bank-type-rail button {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 6%, transparent);
+  }
+  :root .bank-type-rail button:hover {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 11%, transparent);
+  }
+  :root .bank-type-rail button[aria-pressed="true"] { background: transparent; }
+  :root .bank-density button[aria-pressed="true"] { color: var(--ui-action-ink); }
+  :root .bank-more > summary {
+    border-color: transparent;
+    background: var(--ui-action-idle);
+    box-shadow: none;
+  }
+  :root .bank-more > summary:hover {
+    border-color: transparent;
+    background: var(--ui-action-hover);
+  }
+  :root .bank-more[open] > summary {
+    border-color: transparent;
+    background: var(--ui-action-selected);
+    color: var(--ui-action-ink);
+  }
+  :root :is(.question-sidebar .question-type-button, .workbench-footer > button) {
+    border-color: transparent;
+    background: var(--ui-action-idle);
+    box-shadow: none;
+  }
+  :root .question-sidebar .question-type-button:hover {
+    background: var(--ui-action-hover);
+  }
+  :root .question-sidebar .question-type-button:is([aria-pressed="true"], [data-active="true"]) {
+    background: var(--ui-action-selected);
+    border-color: var(--ui-action-line);
+    color: var(--ui-action-ink) !important;
+    box-shadow: none;
+  }
+  :root .question-sidebar .question-type-button:is([aria-pressed="true"], [data-active="true"]) .question-type-icon {
+    color: var(--ui-action-ink);
+  }
+  :root .app-bg :is(.sidebar-summary, section[data-workbench-group], .workbench-panel--experimental) {
+    border-color: var(--ui-panel-line);
+    box-shadow: none;
+  }
+  :root .select-trigger {
+    border-color: var(--ui-panel-line);
+    background-color: color-mix(in srgb, var(--surface-input) 88%, var(--color-panel));
+    box-shadow: none;
+  }
+  :root .select-trigger:hover:not(:disabled) { border-color: var(--ui-action-line); }
+  :root .select-trigger:is(:focus-visible, [aria-expanded="true"]) {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+
+  /* The selected Telegram wallpaper is a shared material, including portals
+     mounted under body. These are opaque structural hosts, never a wildcard
+     background reset: paper, images, inputs and highlighted TeX stay untouched.
+     Static CSS tiles add no moving/composited layers; workspace-wallpaper keeps
+     the existing, single drifting workspace layer. */
+  :root[data-theme="telegram"] {
+    --ui-wallpaper-wash: 68%;
+  }
+  :root[data-theme="telegram"][data-telegram-scheme="light"] {
+    --ui-wallpaper-wash: 76%;
+  }
+  :root[data-theme="telegram"] :is(
+    body, :where(#root), .app-bg,
+    .app-bg > header, .workspace-nav,
+    .question-sidebar, .sidebar-rail, .sidebar-drawer, .sidebar-summary, .sidebar-actions,
+    .workspace-exam-area > [class~="bg-panel/80"],
+    [data-editor-workbench], section[data-workbench-group],
+    .workbench-panel--experimental, .workbench-nav,
+    .workspace-preview-stage > div > [class~="shrink-0"],
+    .glass, .glass > aside, .glass > main,
+    .glass > header, .glass > footer, .glass > [class~="border-b"], .glass > [class~="border-t"],
+    .dialog-header, .export-options, .export-format-list,
+    .bank-workspace, .bank-workspace-header, .bank-library-sidebar, .bank-catalog,
+    .bank-detail-pane, .bank-basket, .bank-preview-paper, .bank-more-menu,
+    .bank-detail-rail, .bank-pagination, .bank-edit-footer, .bank-batch-toolbar,
+    .telegram-gallery, .select-menu
+  ),
+  :root[data-theme="telegram"] .workspace-view-exam > .shrink-0:not(.workspace-editor-stage):not(.workspace-preview-stage) {
+    background-color: var(--ui-wallpaper-base, var(--color-panel));
+    background-image:
+      linear-gradient(
+        color-mix(in srgb, var(--ui-wallpaper-base, var(--color-panel)) var(--ui-wallpaper-wash), transparent),
+        color-mix(in srgb, var(--ui-wallpaper-base, var(--color-panel)) var(--ui-wallpaper-wash), transparent)
+      ),
+      var(--tg-workspace-wallpaper, var(--tg-wallpaper, none));
+    background-repeat: repeat;
+    background-size: auto, 440px 440px;
+    background-position: 0 0;
+  }
+  :root[data-theme="telegram"] :is(body, :where(#root), .app-bg) { --ui-wallpaper-base: var(--color-bg); }
+  /* Reset the inherited base at each surface level so a nested modal or sidebar
+     uses its own material rather than borrowing the application's canvas. */
+  :root[data-theme="telegram"] :is(
+    .app-bg > header, .workspace-nav, .question-sidebar, .sidebar-rail, .sidebar-drawer,
+    .sidebar-summary, .sidebar-actions, .workspace-exam-area > [class~="bg-panel/80"],
+    [data-editor-workbench], section[data-workbench-group], .workbench-panel--experimental, .workbench-nav,
+    .workspace-preview-stage > div > [class~="shrink-0"],
+    .glass > aside, .glass > main, .glass > header, .glass > footer,
+    .glass > [class~="border-b"], .glass > [class~="border-t"],
+    .dialog-header, .export-format-list,
+    .bank-workspace, .bank-workspace-header, .bank-library-sidebar, .bank-catalog,
+    .bank-detail-pane, .bank-basket, .bank-preview-paper, .bank-more-menu,
+    .bank-detail-rail, .bank-pagination, .bank-edit-footer, .bank-batch-toolbar
+  ) { --ui-wallpaper-base: var(--color-panel); }
+  :root[data-theme="telegram"] .app-bg > header { --ui-wallpaper-base: var(--tg-header, var(--color-panel)); }
+  :root[data-theme="telegram"] :is(.question-sidebar, .sidebar-drawer, .sidebar-actions) { --ui-wallpaper-base: var(--tg-sidebar, var(--color-panel)); }
+  :root[data-theme="telegram"] .sidebar-rail { --ui-wallpaper-base: var(--tg-rail, var(--color-panel)); }
+  :root[data-theme="telegram"] .sidebar-summary { --ui-wallpaper-base: var(--tg-card, var(--color-raised)); }
+  :root[data-theme="telegram"] .glass { --ui-wallpaper-base: var(--surface-glass); }
+  :root[data-theme="telegram"] .export-options { --ui-wallpaper-base: var(--color-raised); }
+  :root[data-theme="telegram"] :is(.bank-preview-paper, .bank-basket) { --ui-wallpaper-wash: 84%; }
+  :root[data-theme="telegram"] .telegram-gallery { --ui-wallpaper-base: var(--tg-gallery, var(--color-panel)); }
+  :root[data-theme="telegram"] .select-menu {
+    --ui-wallpaper-base: var(--surface-popup);
+    --ui-wallpaper-wash: 86%;
+  }
+  /* Reading/content surfaces remain calm and opaque inside the patterned chrome. */
+  :root[data-theme="telegram"] .workbench-live-preview {
+    background: color-mix(in srgb, var(--color-accent) 4%, var(--color-panel));
+  }
+}

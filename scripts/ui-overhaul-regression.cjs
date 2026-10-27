@@ -99,7 +99,7 @@ async function main() {
   const buildFile = path.join(root, packaged ? 'release/win-unpacked/resources/app.asar' : 'dist/index.html');
   const build = { file: buildFile, sha256: crypto.createHash('sha256').update(fs.readFileSync(buildFile)).digest('hex'), modified: fs.statSync(buildFile).mtime.toISOString() };
   let app, page, stage = 'launch', report, rendererRequests = 0;
-  const errors = [], checks = [], screenshots = [], appearances = [], motion = {};
+  const errors = [], checks = [], screenshots = [], appearances = [], hoverControls = [], motion = {};
   const progress = value => { stage = value; console.log(JSON.stringify({ progress: value, packaged })); };
   const watchdog = setTimeout(() => { app?.process().kill(); console.error(`UI overhaul QA timed out: ${stage}`); process.exit(1); }, 240000);
   try {
@@ -124,10 +124,50 @@ async function main() {
     const rows = () => bank().getByTestId('bank-entry');
     const basket = () => bank().getByTestId('bank-basket');
     const basketIds = () => basket().locator('[data-basket-id]').evaluateAll(nodes => nodes.map(node => node.dataset.basketId));
+    const header = () => bank().locator('.bank-workspace-header');
+    const catalogHeading = () => bank().locator('.bank-catalog-heading');
+    const detailTools = () => bank().locator('.bank-detail-tools');
+    const detailHeading = () => bank().locator('.bank-detail-heading');
+    const headerControls = () => bank().locator('.bank-workspace-actions > button, .bank-workspace-actions > details > summary');
+    const cardControls = card => card.locator('.bank-favorite, .bank-pick, [role="checkbox"]');
+    const basketTools = item => item.locator('button:not(.bank-basket-stem)');
+    const idlePointer = async () => { await bank().getByRole('textbox', { name: '搜索题库', exact: true }).focus(); await page.mouse.move(3, 3); };
+    // Opacity can be on an ancestor (e.g. the header action group), not the button.
+    const controlStates = controls => controls.evaluateAll(nodes => nodes.map(node => {
+      const style = getComputedStyle(node), rect = node.getBoundingClientRect();
+      let opacity = 1;
+      for (let parent = node; parent; parent = parent.parentElement) opacity *= +getComputedStyle(parent).opacity;
+      return { name: node.getAttribute('aria-label') || node.textContent.trim(), opacity, pointerEvents: style.pointerEvents, disabled: !!node.disabled, rendered: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none' };
+    }));
+    const exposed = async (controls, visible, label) => {
+      let states = [];
+      try {
+        await until(async () => {
+          states = await controlStates(controls);
+          return states.length > 0 && states.every(state => state.rendered && (visible
+            ? state.opacity >= (state.disabled ? .15 : .95) && (state.disabled || state.pointerEvents !== 'none')
+            : state.opacity <= .01 && state.pointerEvents === 'none'));
+        }, label, 4000);
+      } catch { throw Error(`${label}: ${JSON.stringify(states)}`); }
+      hoverControls.push({ label, visible, states });
+    };
+    const keyboardFocus = async control => {
+      // Enter the real sequential focus order from the preceding control. Opacity
+      // and pointer-events must not make hover-only actions keyboard-inaccessible.
+      await control.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+      assert.equal(await control.evaluate(node => node === document.activeElement && node.matches(':focus-visible')), true, 'Tab did not focus the hover-only control');
+    };
+    const hoverAndFocus = async (container, controls, label) => {
+      await idlePointer(); await exposed(controls, false, `${label}: hidden at rest`);
+      await container.hover(); await exposed(controls, true, `${label}: hover reveals controls`);
+      await idlePointer(); await exposed(controls, false, `${label}: pointer leave hides controls`);
+      await keyboardFocus(controls.first()); await exposed(controls, true, `${label}: keyboard focus reveals controls`);
+      await idlePointer(); await exposed(controls, false, `${label}: focus leave hides controls`);
+    };
     const settled = async count => { await until(async () => await rows().count() === count && await bank().getByTestId('bank-question-list').getAttribute('aria-busy') === 'false', `Expected ${count} settled bank cards`); await pause(450); };
     const openBank = async () => { await nav('本地题库').click(); await bank().waitFor(); await until(async () => await bank().getByTestId('bank-question-list').getAttribute('aria-busy') === 'false', 'Bank load did not settle'); };
     const select = async (label, name) => { await bank().getByRole('combobox', { name: label, exact: true }).click(); await page.getByRole('option', { name, exact: true }).click(); await pause(400); };
-    const shot = async name => { await bank().locator('.bank-catalog-list').evaluate(node => { node.scrollTop = 0; }); await page.mouse.move(3, 3); await page.evaluate(() => document.fonts.ready); await pause(550); const file = `${name}.png`; await page.screenshot({ path: path.join(output, file) }); screenshots.push(file); };
+    const shot = async (name, hoverTarget) => { await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await bank().locator('.bank-catalog-list, .bank-preview-scroll').evaluateAll(nodes => nodes.forEach(node => { node.scrollTop = 0; })); await page.mouse.move(3, 3); await page.evaluate(() => document.fonts.ready); if (hoverTarget) await hoverTarget.hover(); await pause(550); const file = `${name}.png`; await page.screenshot({ path: path.join(output, file) }); screenshots.push(file); };
     const settings = async action => {
       await page.getByRole('button', { name: '设置', exact: true }).click();
       const dialog = page.getByRole('dialog'); await dialog.getByRole('button', { name: '外观', exact: true }).click();
@@ -167,6 +207,35 @@ async function main() {
     await bank().getByRole('button', { name: '题库上一页', exact: true }).click(); await settled(25);
     checks.push('Empty illustration, 84 complete questions, bounded 25-card pagination, seven type counters, live hero spectrum');
 
+    progress('quiet bank header, unboxed footer statistics and hover/keyboard controls');
+    assert.equal(await header().getByRole('button', { name: '返回组卷', exact: true }).count(), 0);
+    assert.equal(await header().locator('.bank-brand-orb, .bank-workspace-brand .lucide-library').count(), 0);
+    assert.equal(await header().locator('[data-tone="favorite"], [data-tone="review"]').count(), 0);
+    const sidebarStats = bank().locator('.bank-sidebar-stats');
+    assert.equal(await sidebarStats.locator('[data-tone="favorite"], [data-tone="review"]').count(), 2);
+    const statGeometry = await sidebarStats.evaluate(node => {
+      const rect = node.getBoundingClientRect(), footer = document.querySelector('.bank-sidebar-footer').getBoundingClientRect();
+      return { bottom: rect.bottom, footerTop: footer.top, controls: [...node.querySelectorAll('[data-tone]')].map(button => {
+        const style = getComputedStyle(button); return { background: style.backgroundColor, border: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth], shadow: style.boxShadow };
+      }) };
+    });
+    assert.ok(statGeometry.bottom <= statGeometry.footerTop + 1, 'Favorite/review statistics must sit above local-only footer');
+    for (const stat of statGeometry.controls) { assert.match(stat.background, /^(transparent|rgba\(0, 0, 0, 0\))$/); assert.deepEqual(stat.border, ['0px', '0px', '0px', '0px']); assert.equal(stat.shadow, 'none'); }
+    hoverControls.push({ label: 'Unboxed favorite/review icon counters above local-only footer', statGeometry });
+    assert.equal(await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches), true, 'Desktop hover checks need a fine hover-capable pointer');
+    await hoverAndFocus(header(), headerControls(), 'Header actions');
+    await hoverAndFocus(catalogHeading(), bank().locator('.bank-catalog-tools button'), 'Catalog display tools');
+    await hoverAndFocus(bank().locator('.bank-collection-heading'), bank().locator('.bank-collection-heading button'), 'New collection action');
+    await hoverAndFocus(rows().first(), cardControls(rows().first()), 'Question favorite/selection/checkbox');
+    await hoverAndFocus(detailTools(), detailTools().locator('button'), 'Detail history/edit actions');
+    await hoverAndFocus(detailHeading(), detailHeading().locator('button'), 'Detail collapse action');
+    await hoverAndFocus(bank().locator('.bank-preview-scroll'), bank().locator('.bank-preview-bottom-actions button'), 'Detail preview actions');
+    await exposed(sidebarStats.locator('button'), true, 'Footer favorite/review navigation remains visible');
+    await exposed(bank().locator('.bank-type-rail > button'), true, 'Type filters remain visible');
+    await shot('bank-quiet-default-dark');
+    await shot('bank-question-hover-dark', rows().first());
+    checks.push('Removed top return/library icon; unboxed favorite/review counters above local-only note; seven action groups hide at rest, reveal on hover and real Tab focus');
+
     progress('type filters preserve contextual counts; selection and keyboard navigation');
     await bank().locator('.bank-type-rail > button').filter({ hasText: '单选' }).click(); await settled(12);
     await select('题库知识点', '函数与运算'); await settled(12);
@@ -177,43 +246,49 @@ async function main() {
     assert.equal(await bank().getByRole('textbox', { name: '搜索题库', exact: true }).evaluate(node => node === document.activeElement), true);
     await page.keyboard.type('绝不会命中的隔离关键词'); await settled(0);
     await bank().getByRole('heading', { name: '没有符合条件的题目', exact: true }).waitFor();
-    await shot('bank-search-empty'); await page.keyboard.press('Escape'); await settled(25);
+    await shot('bank-search-empty'); await bank().getByRole('textbox', { name: '搜索题库', exact: true }).focus(); await page.keyboard.press('Escape'); await settled(25);
     await page.keyboard.press('Tab');
     await page.locator('body').click({ position: { x: 2, y: 200 } });
     const firstActive = await bank().locator('.bank-entry[data-active="true"]').getAttribute('data-bank-id');
     await page.keyboard.press('ArrowDown'); await pause(450);
     assert.notEqual(await bank().locator('.bank-entry[data-active="true"]').getAttribute('data-bank-id'), firstActive);
-    for (let index = 0; index < 3; index++) await rows().nth(index).getByRole('checkbox').click();
+    for (let index = 0; index < 3; index++) { await rows().nth(index).hover(); await rows().nth(index).getByRole('checkbox').click(); }
     await bank().getByTestId('bank-batch-toolbar').waitFor();
     assert.equal(await bank().locator('.bank-entry[data-selected="true"]').count(), 3);
+    await idlePointer(); await exposed(bank().locator('.bank-entry[data-selected="true"] [role="checkbox"]'), true, 'Checked question selectors remain visible without hover');
     checks.push('Contextual type counts, always-visible filters, search/Escape, slash focus, arrow preview and three-card batch selection');
 
     progress('list/grid persisted preference and attractive populated delivery views');
     await applyAppearance({ mode: 'dark' }); await shot('bank-populated-list-dark');
-    await bank().getByRole('button', { name: '卡片视图', exact: true }).click(); await pause(600);
+    await catalogHeading().hover(); await bank().getByRole('button', { name: '卡片视图', exact: true }).click(); await pause(600);
     assert.equal(await bank().getByTestId('bank-question-list').getAttribute('data-density'), 'grid');
     assert.equal(await page.evaluate(() => localStorage.getItem('juanye.bankDensity')), 'grid');
     await shot('bank-populated-grid-dark');
     await page.reload(); await openBank(); await settled(25);
     assert.equal(await bank().getByRole('button', { name: '卡片视图', exact: true }).getAttribute('aria-pressed'), 'true');
-    await bank().getByRole('button', { name: '列表视图', exact: true }).click(); await pause(500);
+    await hoverAndFocus(rows().first(), cardControls(rows().first()), 'Grid question favorite/selection/checkbox');
+    await catalogHeading().hover(); await bank().getByRole('button', { name: '列表视图', exact: true }).click(); await pause(500);
     assert.equal(await page.evaluate(() => localStorage.getItem('juanye.bankDensity')), 'list');
     checks.push('Both densities render; grid choice survives renderer reload; list choice is saved');
 
-    progress('favorite starburst persists via real IPC and updates hero/view counts');
+    progress('favorite starburst persists via real IPC and updates sidebar/view counts');
     const favoriteId = await rows().first().getAttribute('data-bank-id');
+    await rows().first().hover();
     motion.favorite = await motionFrames(rows().first().getByRole('button', { name: '收藏题目', exact: true }), { burst: '.bank-star-burst', star: '.bank-favorite[data-favorite="true"] > span' });
     motion.favoriteEvidence = renderedMotion(motion.favorite, 'burst', 'Favorite star burst');
     assert.equal((await page.evaluate(() => window.juanye.bankLoad())).entries.find(entry => entry.id === favoriteId).favorite, true);
-    assert.equal((await bank().locator('.bank-hero-stat[data-tone="favorite"] b [aria-hidden="true"]').innerText()).trim(), '1');
+    assert.equal((await bank().locator('.bank-sidebar-stats [data-tone="favorite"] b [aria-hidden="true"]').innerText()).trim(), '1');
+    await idlePointer(); await exposed(rows().first().locator('.bank-favorite[data-favorite="true"]'), true, 'Favorited question star remains visible without hover');
     await bank().locator('[data-bank-view="favorites"]').click(); await settled(1);
     await bank().locator('[data-bank-view="all"]').click(); await settled(25);
-    checks.push('Rendered favorite particles, persisted favorite, live hero count and favorite view');
+    checks.push('Rendered favorite particles, persisted favorite, live sidebar count, favorite view and always-visible favorited star');
 
     progress('fly-to-basket, native drop, reordering, removal, clear and workspace persistence');
+    await rows().first().hover();
     motion.flight = await motionFrames(rows().first().getByRole('button', { name: '选题', exact: true }), { flight: '.bank-flight > span', anchor: '[data-basket-anchor]' }, 1100);
     motion.flightEvidence = renderedMotion(motion.flight, 'flight', 'Fly-to-basket');
     assert.equal((await basketIds()).length, 1); assert.equal(await page.locator('.bank-flight').count(), 0);
+    await idlePointer(); await exposed(rows().first().locator('.bank-pick[data-picked]'), true, 'Already-picked question action remains visible without hover');
     const drop = await rows().nth(1).evaluate(async card => {
       const transfer = new DataTransfer(), target = document.querySelector('[data-testid="bank-basket"]');
       card.dispatchEvent(new DragEvent('dragstart', { dataTransfer: transfer, bubbles: true, cancelable: true }));
@@ -226,13 +301,38 @@ async function main() {
     });
     assert.equal(drop.active, 'true'); assert.ok(drop.types.includes('application/x-juanye-bank-id'));
     await until(async () => (await basketIds()).length === 2, 'Native bank drop failed'); await pause(450);
+    await hoverAndFocus(basket().locator('.bank-basket-item').nth(1), basketTools(basket().locator('.bank-basket-item').nth(1)), 'Basket row actions');
+    progress('real touch/no-hover media fallback keeps controls discoverable');
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+      await until(() => page.evaluate(() => matchMedia('(hover: none) and (pointer: coarse)').matches), 'Chromium did not expose a real coarse/no-hover pointer');
+      await idlePointer();
+      for (const [label, controls] of [
+        ['Touch header actions', headerControls()],
+        ['Touch catalog tools', bank().locator('.bank-catalog-tools button')],
+        ['Touch new collection action', bank().locator('.bank-collection-heading button')],
+        ['Touch question actions', cardControls(rows().nth(2))],
+        ['Touch detail tools', detailTools().locator('button')],
+        ['Touch detail collapse', detailHeading().locator('button')],
+        ['Touch detail preview actions', bank().locator('.bank-preview-bottom-actions button')],
+        ['Touch basket row actions', basketTools(basket().locator('.bank-basket-item').nth(1))],
+      ]) await exposed(controls, true, label);
+      hoverControls.push({ label: 'Native no-hover media verified', media: await page.evaluate(() => ({ hoverNone: matchMedia('(hover: none)').matches, coarse: matchMedia('(pointer: coarse)').matches, maxTouchPoints: navigator.maxTouchPoints })) });
+    } finally {
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false }); await cdp.detach();
+    }
+    await until(() => page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches), 'Desktop pointer media was not restored');
+    await idlePointer(); await exposed(headerControls(), false, 'Desktop hover-only behavior is restored after touch fallback');
+    checks.push('Basket row actions reveal on hover/Tab; native Chromium coarse/no-hover mode exposes all eight control groups; desktop mode restores hidden actions');
     const originalOrder = await basketIds();
+    await basket().locator('.bank-basket-item').nth(1).hover();
     await basket().getByRole('button', { name: '上移选题 2', exact: true }).click(); await pause(400);
     assert.deepEqual(await basketIds(), [...originalOrder].reverse());
     await nav('组卷').click(); await openBank(); assert.deepEqual(await basketIds(), [...originalOrder].reverse());
-    await basket().getByRole('button', { name: '移除选题 1', exact: true }).click(); assert.equal((await basketIds()).length, 1);
+    await basket().locator('.bank-basket-item').first().hover(); await basket().getByRole('button', { name: '移除选题 1', exact: true }).click(); assert.equal((await basketIds()).length, 1);
     await basket().getByRole('button', { name: '清空选题篮', exact: true }).click(); assert.equal((await basketIds()).length, 0);
-    for (let index = 0; index < 3; index++) await rows().nth(index).getByRole('checkbox').click();
+    for (let index = 0; index < 3; index++) { await rows().nth(index).hover(); await rows().nth(index).getByRole('checkbox').click(); }
     await bank().getByTestId('bank-batch-toolbar').getByRole('button', { name: '加入选题篮', exact: true }).click();
     await until(async () => (await basketIds()).length === 3, 'Batch basket add failed'); await pause(1200);
     const scores = await basket().locator('.bank-basket-item small').allTextContents();
@@ -265,22 +365,22 @@ async function main() {
       if (item.mode === 'light') await shot('bank-populated-list-light');
       if (item.mode === 'telegram' && item.id === 'ember') {
         await shot(`bank-populated-list-telegram-${item.scheme}`);
-        await bank().getByRole('button', { name: '卡片视图', exact: true }).click(); await pause(500); await shot(`bank-populated-grid-telegram-${item.scheme}`);
-        await bank().getByRole('button', { name: '列表视图', exact: true }).click(); await pause(500);
+        await catalogHeading().hover(); await bank().getByRole('button', { name: '卡片视图', exact: true }).click(); await pause(500); await shot(`bank-populated-grid-telegram-${item.scheme}`);
+        await catalogHeading().hover(); await bank().getByRole('button', { name: '列表视图', exact: true }).click(); await pause(500);
       }
     }
     const widths = [];
     for (const width of [1000, 1280, 1500]) for (const density of ['列表视图', '卡片视图']) {
-      await page.setViewportSize({ width, height: 900 }); await bank().getByRole('button', { name: density, exact: true }).click(); await pause(500);
+      await page.setViewportSize({ width, height: 900 }); await catalogHeading().hover(); await bank().getByRole('button', { name: density, exact: true }).click(); await pause(500);
       const geometry = await bounds(); assert.deepEqual(geometry.overflow, [], `${width}px ${density} horizontal overflow`); assert.ok(geometry.document <= geometry.width + 1); widths.push({ density, ...geometry });
     }
     await page.setViewportSize({ width: 1500, height: 900 });
-    await bank().getByRole('button', { name: '列表视图', exact: true }).click();
+    await catalogHeading().hover(); await bank().getByRole('button', { name: '列表视图', exact: true }).click();
     checks.push('Public settings really apply all 20 appearances; list/grid stay within 1000/1280/1500px supported widths');
 
     progress('new-editor sections, keyboard tabs and independent unsaved bank draft');
     await settings(async dialog => { const toggle = dialog.getByRole('switch', { name: '实验性题目编辑台', exact: true }); if (await toggle.getAttribute('aria-checked') !== 'true') await toggle.click(); });
-    await bank().getByRole('button', { name: '新建题目', exact: true }).click();
+    await header().hover(); await bank().getByRole('button', { name: '新建题目', exact: true }).click();
     const editor = bank().getByTestId('bank-question-editor'); await editor.waitFor();
     const tablist = editor.getByRole('tablist', { name: '题目编辑分组', exact: true }); assert.equal(await tablist.getByRole('tab').count(), 4);
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('本地题库独立草稿：$x+1=3$');
@@ -307,10 +407,12 @@ async function main() {
         assert.equal(await page.locator('[data-interface-motion]').getAttribute('data-interface-motion'), 'reduced');
       }
       await basket().getByRole('button', { name: '清空选题篮', exact: true }).click();
+      await rows().first().hover();
       const frames = await motionFrames(rows().first().getByRole('button', { name: '选题', exact: true }), { flight: '.bank-flight', count: '.bank-basket-summary' }, 350);
       assert.equal(frames.filter(frame => frame.nodes.flight).length, 0, `${preference} reduced motion creates a flight`);
       assert.equal((await basketIds()).length, 1);
       const favorite = rows().filter({ has: page.getByRole('button', { name: '收藏题目', exact: true }) }).first();
+      await favorite.hover();
       const favoriteFrames = await motionFrames(favorite.getByRole('button', { name: '收藏题目', exact: true }), { burst: '.bank-star-burst' }, 350);
       assert.equal(favoriteFrames.filter(frame => frame.nodes.burst).length, 0, `${preference} reduced motion creates particles`);
       motion[`reduced-${preference}`] = { flightFrames: frames, favoriteFrames };
@@ -319,11 +421,11 @@ async function main() {
     assert.deepEqual((await page.evaluate(() => window.juanye.loadDraft())).exam, exam, 'UI overhaul QA changed the current paper');
     const counters = await app.evaluate(() => globalThis.__overhaul);
     assert.equal(counters.network + rendererRequests, 0); assert.equal(counters.modelCalls, 0); assert.deepEqual(errors, []);
-    report = { passed: true, packaged, build, checks, screenshots, appearances, widths, motion, nativeDrop: drop, externalRequests: counters.network + rendererRequests, paidModelCalls: counters.modelCalls, rendererErrors: errors, profile, note: 'Real Electron/preload IPC, isolated synthetic data, no accounts/network/paid calls. Offscreen inactive window; snapshots demonstrate renderer output, not desktop FPS.' };
+    report = { passed: true, packaged, build, checks, screenshots, appearances, widths, hoverControls, motion, nativeDrop: drop, externalRequests: counters.network + rendererRequests, paidModelCalls: counters.modelCalls, rendererErrors: errors, profile, note: 'Real Electron/preload IPC, isolated synthetic data, no accounts/network/paid calls. Offscreen inactive window; snapshots demonstrate renderer output, not desktop FPS.' };
     console.log(JSON.stringify({ passed: true, packaged, checks, screenshots, appearances: appearances.length, externalRequests: 0, paidModelCalls: 0 }));
   } catch (error) {
     if (page) await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
-    report = { passed: false, packaged, build, stage, error: error.stack || String(error), checks, screenshots, appearances, motion, rendererErrors: errors, profile };
+    report = { passed: false, packaged, build, stage, error: error.stack || String(error), checks, screenshots, appearances, hoverControls, motion, rendererErrors: errors, profile };
     console.error(JSON.stringify({ ...report, motion: Object.keys(motion) }, null, 2)); process.exitCode = 1;
   } finally {
     clearTimeout(watchdog); if (app) await app.close().catch(() => app.process().kill());
