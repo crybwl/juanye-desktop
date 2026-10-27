@@ -17,7 +17,7 @@ const output = path.join(root, 'artifacts', 'qa-integrated-surfaces', suffix);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const paletteIds = ['ocean', 'spring', 'frost', 'gem', 'classroom', 'blossom', 'dusk', 'ember', 'neon'];
 const commonSurfaces = ['.app-bg > header', '.workspace-nav', '.question-sidebar', '.sidebar-rail', '.sidebar-drawer', '.sidebar-summary', '.sidebar-actions', '.workspace-exam-area > [class~="bg-panel/80"]', '.workspace-preview-stage > div > [class~="shrink-0"]', '[data-editor-workbench]', 'section[data-workbench-group]'];
-const bankSurfaces = ['.bank-workspace-header', '.bank-library-sidebar', '.bank-catalog', '.bank-detail-pane', '.bank-basket', '.bank-preview-paper'];
+const bankSurfaces = ['.bank-library-summary', '.bank-library-sidebar', '.bank-catalog', '.bank-detail-pane', '.bank-basket', '.bank-preview-paper'];
 async function until(check, message, timeout = 12000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { if (await check()) return; await pause(50); }
@@ -61,10 +61,15 @@ async function main() {
   const progress = value => { stage = value; console.log(JSON.stringify({ progress: value, packaged })); };
   const watchdog = setTimeout(() => { try { app?.process().kill(); } catch {} console.error(`Integrated-surface QA timed out: ${stage}`); process.exit(1); }, 300000);
 
-  // Require an actual resolved SVG URL on the target itself. Inherited custom
-  // properties, a pattern hidden behind an opaque child, or an unresolved var()
-  // must not make a panel pass this check.
+  // Require one decoded continuous scene; ordinary panes must NOT stamp a
+  // fresh texture at their own origin. Only each popup root owns another tile.
   async function inspect(label, selectors, expectedPattern = true) {
+    if (expectedPattern === true) {
+      assert.equal(await page.locator('[data-scene-backdrop]').count(), 1, 'Scene must have one application owner');
+      await page.waitForFunction(() => document.documentElement.dataset.sceneReady === 'true');
+      const image = await page.locator('.scene-backdrop-art').evaluate(node => getComputedStyle(node).backgroundImage);
+      assert.match(image, /data:image\/png/, 'Scene must reuse the decoded PNG texture');
+    }
     const value = await page.evaluate(({ selectors }) => {
       const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
       const context = canvas.getContext('2d', { willReadFrequently: true });
@@ -78,7 +83,7 @@ async function main() {
         return nodes.map(node => {
           const style = getComputedStyle(node), image = style.backgroundImage, bg = background(node);
           const fg = over(rgba(style.color), bg), a = luminance(fg), b = luminance(bg);
-          return { selector, missing: false, count: nodes.length, pattern: /url\(["']?data:image\/svg\+xml/i.test(image), unresolved: image.includes('var('), image: image.length > 300 ? `${image.slice(0, 65)}… (${image.length} chars)` : image, background: style.backgroundColor, foreground: style.color, contrast: +((Math.max(a, b) + .05) / (Math.min(a, b) + .05)).toFixed(2), border: style.borderColor, shadow: style.boxShadow };
+          return { selector, missing: false, count: nodes.length, rootTexture: node.matches(".glass, .select-menu, .bank-more-menu"), pattern: /url\(["']?data:image\/(?:png|svg\+xml)/i.test(image), unresolved: image.includes('var('), image: image.length > 300 ? `${image.slice(0, 65)}… (${image.length} chars)` : image, background: style.backgroundColor, foreground: style.color, contrast: +((Math.max(a, b) + .05) / (Math.min(a, b) + .05)).toFixed(2), border: style.borderColor, shadow: style.boxShadow };
         });
       });
     }, { selectors });
@@ -86,7 +91,7 @@ async function main() {
     for (const node of value) {
       assert.equal(node.missing, false, `${label}: missing structural surface ${node.selector}`);
       assert.equal(node.unresolved, false, `${label}: unresolved image token on ${node.selector}`);
-      if (expectedPattern !== null) assert.equal(node.pattern, expectedPattern, `${label}: ${node.selector} ${expectedPattern ? 'has no resolved SVG wallpaper' : 'retains Telegram wallpaper in an ordinary theme'}`);
+      if (expectedPattern !== null) assert.equal(node.pattern, expectedPattern && node.rootTexture, `${label}: ${node.selector} has an unexpected independently restarted texture`);
       if (expectedPattern === null && node.contrast < 4.5) contrastIssues.push({ label, selector: node.selector, contrast: node.contrast, foreground: node.foreground, background: node.background });
       else assert.ok(node.contrast >= 4.5, `${label}: main text contrast ${node.contrast} on ${node.selector}`);
     }
@@ -141,6 +146,7 @@ async function main() {
       await dialog.locator('label').filter({ has: page.locator(`input[name="juanye-telegram-theme"][value="${id}"]`) }).click();
     }
     await page.waitForFunction(({ mode, scheme, id }) => document.documentElement.dataset.theme === mode && document.documentElement.style.colorScheme === (mode === 'telegram' ? scheme : mode) && (mode !== 'telegram' || document.documentElement.dataset.telegramTheme === id), { mode, scheme, id });
+    if (mode === 'telegram') await page.waitForFunction(() => document.documentElement.dataset.sceneReady === 'true');
     await pause(170);
   }
   async function command(title) {
@@ -149,7 +155,7 @@ async function main() {
     await dialog.getByText(title, { exact: true }).click(); await pause(450);
   }
   async function exclusions(label) {
-    const value = await page.locator('input:not([type="radio"]), textarea, .workbench-live-preview, .print-summary-paper').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => ({ node: node.getAttribute('aria-label') || node.className, image: getComputedStyle(node).backgroundImage })).filter(node => /data:image\/svg\+xml/.test(node.image)));
+    const value = await page.locator('input:not([type="radio"]), textarea, .workbench-live-preview, .print-summary-paper').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => ({ node: node.getAttribute('aria-label') || node.className, image: getComputedStyle(node).backgroundImage })).filter(node => /data:image\/(?:png|svg\+xml)/.test(node.image)));
     assert.deepEqual(value, [], `${label}: wallpaper invaded document/input content`);
   }
   async function neutralControls(label) {
@@ -167,7 +173,7 @@ async function main() {
     controls.push({ label, ...value });
   }
   async function wallpaper() {
-    return page.locator('.workspace-wallpaper').evaluate(node => { const style = getComputedStyle(node, '::before'); return { image: /data:image\/svg\+xml/.test(style.backgroundImage), animation: style.animationName, duration: style.animationDuration, transform: style.transform }; });
+    return page.locator('.scene-backdrop-art').evaluate(node => { const style = getComputedStyle(node); return { image: /data:image\/(?:png|svg\+xml)/.test(style.backgroundImage), animation: style.animationName, duration: style.animationDuration, transform: style.transform }; });
   }
 
   try {
@@ -206,7 +212,7 @@ async function main() {
       const nodes = await inspect(label, [...commonSurfaces, ...bankSurfaces, '.glass[role="dialog"]', '.glass > aside', '.telegram-gallery']);
       await neutralControls(label);
       await close(dialog);
-      const primary = await inspect(`${label}-primary-actions`, ['.app-bg > header [data-ui-button][data-variant="primary"]', '.bank-workspace-header [data-ui-button][data-variant="primary"]'], null);
+      const primary = await inspect(`${label}-primary-actions`, ['.app-bg > header [data-ui-button][data-variant="primary"]'], null);
       await page.locator('.app-bg > header [data-ui-button][data-variant="primary"]').hover(); await pause(220);
       const hovered = await inspect(`${label}-primary-hover`, ['.app-bg > header [data-ui-button][data-variant="primary"]'], null);
       await page.mouse.move(3, 3);
@@ -222,14 +228,14 @@ async function main() {
       await page.locator('.app-bg > header [data-ui-button][data-variant="primary"]').hover(); await pause(220);
       const hovered = await inspect(`ordinary-${mode}-primary-hover`, ['.app-bg > header [data-ui-button][data-variant="primary"]'], null);
       await page.mouse.move(3, 3);
-      assert.equal(await page.locator('.workspace-wallpaper').evaluate(node => getComputedStyle(node).display), 'none');
+      assert.equal(await page.locator('.scene-backdrop').evaluate(node => getComputedStyle(node).display), 'none');
       await paper(mode); appearances.push({ mode, primaryContrast: primary.map(node => node.contrast), primaryHoverContrast: hovered[0].contrast });
       dialog = await settings();
     }
     assert.equal(appearances.length, 20);
     console.log(JSON.stringify({ primaryContrast: appearances.map(({ mode, scheme, id, primaryContrast, primaryHoverContrast }) => ({ mode, scheme, id, primaryContrast, primaryHoverContrast })), contrastIssues }));
     await close(dialog);
-    checks.push('All 20 real settings-driven appearances: resolved wallpaper on every primary chrome/editor/bank/settings surface, readable main text and normal/hover primary actions, neutral buttons without hard borders or shadows, ordinary modes without Telegram pattern, white paper');
+    checks.push('All 20 real settings-driven appearances: one decoded continuous scene across chrome/editor/bank/settings, no restarted pane textures, readable main text and normal/hover primary actions, neutral buttons without hard borders or shadows, ordinary modes without Telegram pattern, white paper');
 
     for (const scheme of ['dark', 'light']) {
       progress(`complete ${scheme} Telegram interface tour`);
@@ -316,7 +322,7 @@ async function main() {
       await inspect(`${scheme}-bank-workspace`, bankSurfaces);
       await geometry(`${scheme}-bank-workspace`, ['.bank-workspace', '.bank-library-sidebar', '.bank-catalog', '.bank-detail-pane', '.bank-basket']);
       await shot(`telegram-${scheme}-bank`);
-      await bank().locator('.bank-workspace-header').hover(); await bank().getByRole('button', { name: '新建题目', exact: true }).click();
+      await bank().locator('.bank-search-toolbar').hover(); await bank().getByRole('button', { name: '新建题目', exact: true }).click();
       await bank().getByTestId('bank-question-editor').waitFor();
       await inspect(`${scheme}-bank-authoring`, ['.bank-question-editor [data-editor-workbench]']);
       await bank().locator('.bank-edit-footer').getByRole('button', { name: '取消', exact: true }).click();

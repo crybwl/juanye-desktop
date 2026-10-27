@@ -1,6 +1,7 @@
-/* One composited transition per workspace; inner PDF geometry never animates. */
-.workspace-view { position: absolute; inset: 0; display: flex; min-width: 0; min-height: 0; overflow: hidden; isolation: isolate; }
-.workspace-view[aria-hidden="true"] { pointer-events: none; }
+/* Fixed workspace geometry contains the parked subtree without unmounting it.
+   Motion hides content only after the existing fade/slide finishes, then sets
+   native inert. Capture guards protect the exit without invalidating descendants. */
+.workspace-view { position: absolute; inset: 0; display: flex; min-width: 0; min-height: 0; overflow: hidden; isolation: isolate; contain: layout paint style; }
 :root[data-theme="telegram"] .workspace-view-exam { background: transparent; }
 :root[data-theme="telegram"] .workspace-view-exam > .shrink-0:not(.workspace-editor-stage):not(.workspace-preview-stage) { background: var(--surface-input); }
 :root[data-theme="telegram"] .workspace-view-exam > :is(.workspace-editor-stage, .workspace-preview-stage) { background: transparent; }

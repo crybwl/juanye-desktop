@@ -31,6 +31,7 @@ async function main() {
     await page.setViewportSize({ width: 1280, height: 800 });
     const bank = () => page.getByTestId('bank-workspace');
     const rows = () => bank().getByTestId('bank-entry');
+    const searchToolbar = () => bank().locator('.bank-search-toolbar');
     const nav = name => page.getByRole('navigation', { name: '工作区', exact: true }).getByRole('button', { name, exact: true });
     const loadBank = () => page.evaluate(() => window.juanye.bankLoad());
     const loadDraft = () => page.evaluate(() => window.juanye.loadDraft());
@@ -39,9 +40,20 @@ async function main() {
     await page.getByRole('complementary', { name: '试卷目录', exact: true }).waitFor();
     await openBank();
     assert.equal((await loadBank()).entries.length, 0);
+    assert.equal(await bank().locator('.bank-workspace-header, .bank-workspace-brand, .bank-hero-stats').count(), 0, 'Repeated bank hero/title must not return');
+    assert.equal(await bank().getByRole('heading', { name: '本地题库', exact: true }).count(), 0);
+    assert.equal(await searchToolbar().getByRole('textbox', { name: '搜索题库', exact: true }).count(), 1);
+    assert.equal(await searchToolbar().getByRole('button', { name: '新建题目', exact: true }).count(), 1);
+    assert.equal(await searchToolbar().getByLabel('更多题库操作', { exact: true }).count(), 1);
+    const footerOrder = await bank().locator('.bank-sidebar-bottom').evaluate(node => {
+      const summary = node.querySelector('.bank-library-summary').getBoundingClientRect(), favorites = node.querySelector('.bank-sidebar-stats').getBoundingClientRect(), footer = node.querySelector('.bank-sidebar-footer').getBoundingClientRect();
+      return { summaryBottom: summary.bottom, favoriteTop: favorites.top, favoriteBottom: favorites.bottom, footerTop: footer.top };
+    });
+    assert.ok(footerOrder.summaryBottom <= footerOrder.favoriteTop + 1 && footerOrder.favoriteBottom <= footerOrder.footerTop + 1, 'Quiet usage/distribution must precede bottom favorite/review navigation and local-only note');
+    checks.push('No repeated bank hero/title; search-adjacent action anchors; usage/distribution above favorite/review footer');
 
     progress('direct create with options, answer, analysis, metadata and embedded image');
-    await bank().locator('.bank-workspace-header').hover();
+    await searchToolbar().hover();
     await bank().getByRole('button', { name: '新建题目', exact: true }).click();
     const editor = bank().getByTestId('bank-question-editor');
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('新建题库题：若 $x+1=3$，则 $x=$');
@@ -121,7 +133,7 @@ async function main() {
     checks.push('Trash/restore recovers all revisions and metadata');
 
     progress('ordered basket survives workspace switch and narrow collapse');
-    await bank().locator('.bank-workspace-header').hover();
+    await searchToolbar().hover();
     await bank().getByLabel('更多题库操作', { exact: true }).click();
     await bank().getByRole('button', { name: '保存当前试卷', exact: true }).click();
     await until(async () => await rows().count() === 2, 'Current paper was not saved into bank');

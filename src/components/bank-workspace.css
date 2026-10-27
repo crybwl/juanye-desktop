@@ -63,13 +63,14 @@
 .bank-hero-stat[data-tone="review"] > svg { color: var(--color-warn); }
 .bank-hero-stat[data-tone="usage"] > svg { color: var(--bank-heat); }
 .bank-hero-spectrum { display: flex; width: 150px; flex-direction: column; gap: 6px; padding: 0 6px; color: var(--color-faint); font-size: 10px; animation: bank-rise .5s var(--bank-ease) .18s backwards; }
-.bank-type-spectrum { display: flex; height: 6px; gap: 2px; overflow: hidden; border-radius: 99px; background: var(--bank-inset); }
-.bank-type-spectrum > span { min-width: 3px; flex-basis: 0; border-radius: 99px; }
-.bank-type-spectrum-empty { flex: 1; }
-.bank-workspace-actions { display: flex; min-width: 0; align-items: center; gap: 8px; margin-left: auto; }
-.bank-workspace-actions > .btn-primary { box-shadow: 0 0 0 1px rgb(255 255 255 / .12) inset, 0 10px 24px -10px color-mix(in srgb, var(--color-accent) 80%, transparent); }
+.bank-type-spectrum { position: relative; height: 6px; overflow: hidden; border-radius: 99px; background: var(--bank-inset); }
+.bank-type-spectrum > span { position: absolute; inset: 0; width: 100%; }
+.bank-type-spectrum-empty { background: var(--bank-inset); }
+.bank-workspace-actions { display: flex; min-width: 0; flex-shrink: 0; align-items: center; gap: 3px; }
+.bank-workspace-actions > span > button { width: 30px; height: 32px; color: var(--color-muted); }
+.bank-workspace-actions > span > button:hover { color: var(--color-accent); }
 .bank-more { position: relative; }
-.bank-more > summary { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--color-line-strong); border-radius: 9px; color: var(--color-muted); list-style: none; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+.bank-more > summary { display: grid; width: 30px; height: 32px; place-items: center; border: 1px solid transparent; border-radius: 9px; color: var(--color-muted); list-style: none; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
 .bank-more > summary > svg { transition: rotate .35s var(--bank-pop); }
 .bank-more > summary::-webkit-details-marker { display: none; }
 .bank-more > summary:hover { color: var(--color-fg); background: var(--bank-hover); }
@@ -123,6 +124,11 @@
 .bank-empty-collection { display: flex; align-items: center; gap: 7px; margin: 2px 4px; padding: 10px; border: 1px dashed var(--color-line-strong); border-radius: 10px; color: var(--color-faint); font-size: 11px; transition: color .2s, border-color .2s; }
 .bank-empty-collection:hover { border-color: var(--color-accent); color: var(--color-accent); }
 .bank-sidebar-bottom { display: flex; flex-shrink: 0; flex-direction: column; gap: 7px; margin-top: auto; padding-top: 24px; }
+.bank-library-summary { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 9px; color: var(--color-muted); font-size: 10px; }
+.bank-library-usage { display: flex; align-items: center; gap: 6px; }
+.bank-library-usage > b { margin-left: auto; color: var(--color-muted); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.bank-library-distribution { display: flex; flex-direction: column; gap: 6px; }
+.bank-library-distribution .bank-type-spectrum { height: 3px; opacity: .55; }
 .bank-sidebar-stats { display: flex; align-items: center; gap: 24px; padding: 0 12px; }
 .bank-sidebar-stat { display: inline-flex; min-width: 44px; min-height: 32px; align-items: center; justify-content: flex-start; gap: 8px; padding: 3px 0; border: 0; background: transparent; box-shadow: none; color: var(--color-muted); transition: color .16s; }
 .bank-sidebar-stat > b { color: var(--color-fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -137,17 +143,19 @@
 
 /* ---------- catalog ---------- */
 .bank-catalog { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; animation: bank-rise .6s var(--bank-ease) .08s backwards; }
-.bank-catalog-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 22px 14px; }
+.bank-catalog-heading { display: flex; min-height: 48px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 22px 5px; }
 .bank-catalog-title { position: relative; display: flex; min-width: 0; align-items: center; gap: 10px; }
-.bank-catalog-title h2 { overflow: hidden; margin: 0; padding: 2px 0; background: linear-gradient(95deg, var(--color-fg) 30%, color-mix(in srgb, var(--color-fg) 45%, var(--color-accent))); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 20px; font-weight: 750; letter-spacing: -.4px; text-overflow: ellipsis; white-space: nowrap; }
-.bank-catalog-count { flex-shrink: 0; padding: 2px 9px; border-radius: 99px; color: var(--color-accent); background: var(--bank-accent-soft); font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.bank-catalog-title h2 { overflow: hidden; margin: 0; padding: 2px 0; color: var(--color-muted); font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.bank-catalog-context { min-width: 0; }
+.bank-catalog-count { flex-shrink: 0; color: var(--color-faint); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .bank-catalog-tools { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
 .bank-density { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--color-line); border-radius: 10px; background: var(--bank-inset); }
 .bank-density button { position: relative; isolation: isolate; display: grid; width: 28px; height: 25px; place-items: center; border-radius: 7px; color: var(--color-faint); transition: color .2s; }
 .bank-density button:hover { color: var(--color-fg); }
 .bank-density button[aria-pressed="true"] { color: var(--color-accent); }
 .bank-density-pill { position: absolute; inset: 0; z-index: -1; border-radius: 7px; background: var(--color-panel); box-shadow: 0 2px 6px rgb(0 0 0 / .22), inset 0 0 0 1px var(--color-line-strong); }
-.bank-search { position: relative; display: flex; flex-shrink: 0; align-items: center; margin: 0 22px 12px; }
+.bank-search-toolbar { position: relative; z-index: 6; display: flex; flex-shrink: 0; align-items: center; gap: 8px; margin: 0 22px 12px; }
+.bank-search { position: relative; display: flex; min-width: 80px; flex: 1; align-items: center; }
 .bank-search > svg { position: absolute; z-index: 1; left: 14px; color: var(--color-faint); pointer-events: none; transition: color .2s, scale .35s var(--bank-pop); }
 .bank-search .bank-search-input { height: 42px; padding-right: 42px; padding-left: 40px; border-radius: 13px; font-size: 12.5px; transition: border-color .2s, box-shadow .3s var(--bank-ease), background .2s; }
 .bank-search:focus-within > svg { color: var(--color-accent); scale: 1.12; }
@@ -184,7 +192,7 @@
 .bank-result-toolbar .bank-sort { width: 136px; max-width: 40%; height: 32px; border-radius: 9px; font-size: 11.5px; }
 .bank-result-toolbar > .bank-sort:first-of-type { margin-left: auto; }
 .bank-result-hint + .bank-sort { margin-left: 0 !important; }
-.bank-catalog-list { min-height: 0; flex: 1; overflow-y: auto; padding: 16px 18px 26px; scroll-padding-bottom: 120px; scrollbar-gutter: stable; }
+.bank-catalog-list { min-width: 0; min-height: 0; flex: 1; overflow-y: auto; margin: 0; padding: 16px 18px 26px; border: 0; scroll-padding-bottom: 120px; scrollbar-gutter: stable; }
 .bank-catalog[data-batch] .bank-catalog-list { padding-bottom: 130px; }
 .bank-entry-grid { display: flex; flex-direction: column; gap: 12px; }
 .bank-catalog-list[data-density="grid"] .bank-entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; }
@@ -198,8 +206,8 @@
 .bank-entry:active { cursor: grabbing; }
 .bank-entry[data-active="true"] { border-color: color-mix(in srgb, var(--color-accent) 62%, var(--color-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 14%, transparent), 0 18px 40px -22px color-mix(in srgb, var(--color-accent) 80%, transparent); }
 .bank-entry[data-selected] { background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 9%, var(--color-panel)), color-mix(in srgb, var(--color-accent) 4%, var(--color-panel))); }
-.bank-entry-accent { position: absolute; top: 15px; bottom: 15px; left: 0; width: 3px; border-radius: 0 4px 4px 0; background: var(--type-hue); opacity: .6; transition: opacity .25s, top .35s var(--bank-ease), bottom .35s var(--bank-ease), box-shadow .35s; }
-.bank-entry:hover .bank-entry-accent, .bank-entry[data-active="true"] .bank-entry-accent { top: 0; bottom: 0; opacity: 1; box-shadow: 0 0 16px var(--type-hue); }
+.bank-entry-accent { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; border-radius: 0 4px 4px 0; background: var(--type-hue); opacity: .6; transform: scaleY(.82); transition: opacity .25s, transform .35s var(--bank-ease), box-shadow .35s; }
+.bank-entry:hover .bank-entry-accent, .bank-entry[data-active="true"] .bank-entry-accent { transform: scaleY(1); opacity: 1; box-shadow: 0 0 16px var(--type-hue); }
 .bank-entry-top { display: flex; min-height: 22px; align-items: center; gap: 8px; color: var(--color-faint); font-size: 10.5px; }
 .bank-type-tag { display: inline-flex; height: 21px; flex-shrink: 0; align-items: center; gap: 4px; padding: 0 7px 0 5px; border-radius: 7px; color: var(--type-ink); background: color-mix(in srgb, var(--type-hue) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--type-hue) 24%, transparent); font-size: 10.5px; font-weight: 650; }
 .bank-score-tag { color: var(--color-muted); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -463,7 +471,7 @@
 @keyframes bank-fade-down { from { opacity: 0; translate: 0 -8px; } }
 @keyframes bank-pop-in { from { opacity: 0; scale: .9; translate: 0 -5px; } }
 @keyframes bank-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-ok, var(--color-accent)) 60%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
-@keyframes bank-sweep { 0% { left: -40%; } 100% { left: 100%; } }
+@keyframes bank-sweep { from { transform: translateX(0); } to { transform: translateX(350%); } }
 @keyframes bank-shimmer { to { background-position: -220% 0; } }
 @keyframes bank-breathe { 0%, 100% { opacity: .65; scale: .94; } 50% { opacity: 1; scale: 1.06; } }
 @keyframes bank-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
@@ -489,7 +497,7 @@
   .bank-library-sidebar { padding-right: 8px; padding-left: 8px; }
   .bank-workspace-header { padding-right: 16px; }
   .bank-catalog-heading, .bank-type-rail, .bank-filter-grid, .bank-active-filters > div { padding-right: 16px; padding-left: 16px; }
-  .bank-search { margin-right: 16px; margin-left: 16px; }
+  .bank-search-toolbar { margin-right: 16px; margin-left: 16px; }
   .bank-result-toolbar { padding-right: 16px; padding-left: 16px; }
   .bank-catalog-list { padding: 12px; }
   .bank-preview-scroll { padding-right: 13px; padding-left: 13px; }
@@ -498,7 +506,7 @@
   .bank-basket-insert > .btn { height: 30px; }
   .bank-batch-toolbar { right: 12px; left: 12px; }
 }
-@media (max-height: 800px) { .bank-basket-list { max-height: 104px; } .bank-catalog-heading { padding-top: 15px; padding-bottom: 11px; } .bank-workspace-header { min-height: 64px; padding-top: 9px; padding-bottom: 9px; } .bank-search { margin-bottom: 10px; } .bank-search .bank-search-input { height: 38px; } }
+@media (max-height: 800px) { .bank-basket-list { max-height: 104px; } .bank-catalog-heading { padding-top: 7px; padding-bottom: 3px; } .bank-search-toolbar { margin-bottom: 10px; } .bank-search .bank-search-input { height: 38px; } }
 @media (max-width: 920px) {
   .bank-workspace-layout { grid-template-columns: 140px minmax(240px, 1fr) minmax(300px, 330px); }
   .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 140px minmax(240px, 1fr) 38px; }
@@ -518,7 +526,12 @@
    They remain focusable, so keyboard focus reveals the same controls. Touch
    and pen/coarse-pointer devices keep every action visible. */
 @media (hover: hover) and (pointer: fine) {
-  .bank-workspace-actions,
+  .bank-nav-pill { right: auto; width: 38px; transition: width .24s var(--bank-ease); }
+  .bank-library-sidebar:is(:hover, :focus-within) .bank-nav-pill { width: 100%; }
+  .bank-context-action,
+  .bank-catalog-context,
+  .bank-nav-label,
+  .bank-nav-item > small,
   .bank-catalog-tools,
   .bank-collection-add,
   .bank-detail-action,
@@ -533,8 +546,10 @@
     pointer-events: none;
     transition: opacity .16s ease-out, color .16s, background .16s, border-color .16s, box-shadow .16s;
   }
-  .bank-workspace-header:is(:hover, :focus-within) .bank-workspace-actions,
-  .bank-workspace-header:has(.bank-more[open]) .bank-workspace-actions,
+  .bank-search-toolbar:is(:hover, :focus-within) .bank-context-action,
+  .bank-search-toolbar:has(.bank-more[open]) .bank-context-action,
+  .bank-catalog-heading:is(:hover, :focus-within) .bank-catalog-context,
+  .bank-library-sidebar:is(:hover, :focus-within) :is(.bank-nav-label, .bank-nav-item > small),
   .bank-catalog-heading:is(:hover, :focus-within) .bank-catalog-tools,
   .bank-collection-heading:is(:hover, :focus-within) .bank-collection-add,
   .bank-detail-tools:is(:hover, :focus-within) .bank-detail-action,
@@ -547,13 +562,19 @@
     pointer-events: auto;
   }
 }
+@media (hover: none), (pointer: coarse) {
+  .bank-collection-tools { opacity: 1; translate: 0 0; pointer-events: auto; }
+  .bank-collection-row .bank-nav-item > small { visibility: hidden; }
+}
 
 /* ---------- reduced motion ---------- */
 .app-bg[data-interface-motion="reduced"] :is(.bank-workspace, .bank-workspace *, .bank-dialog *, .bank-lightbox, .bank-lightbox *) { animation: none !important; }
 .app-bg[data-interface-motion="reduced"] :is(.bank-entry, .bank-entry *, .bank-type-rail button, .bank-hero-stat, .bank-complete-options > div, .bank-nav-icon) { translate: none !important; scale: none !important; rotate: none !important; }
+.app-bg[data-interface-motion="reduced"] .bank-nav-pill { transition: none; }
 /* Body portals must honor the interface preference outside the app subtree. */
 :root:has(.app-bg[data-interface-motion="reduced"]) :is(.bank-dialog, .bank-dialog *, .bank-lightbox, .bank-lightbox *) { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
+  .bank-nav-pill { transition: none; }
   :is(.bank-workspace, .bank-workspace *, .bank-dialog *, .bank-lightbox *) { animation: none !important; }
   :is(.bank-entry, .bank-entry *, .bank-type-rail button, .bank-hero-stat, .bank-complete-options > div, .bank-nav-icon) { translate: none !important; scale: none !important; rotate: none !important; }
 }

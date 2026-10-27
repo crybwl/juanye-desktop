@@ -44,8 +44,8 @@ export function useRichMotion() {
 export const cardSpring = { type: "spring", stiffness: 420, damping: 32, mass: 0.8 } as const;
 export const listVariants = { hidden: {}, show: { transition: { staggerChildren: 0.032, delayChildren: 0.03 } } };
 export const cardVariants = {
-  hidden: { opacity: 0, y: 18, scale: 0.98 },
-  show: { opacity: 1, y: 0, scale: 1, transition: cardSpring },
+  hidden: { opacity: 0, transform: "translateY(18px) scale(0.98)" },
+  show: { opacity: 1, transform: "translateY(0px) scale(1)", transition: cardSpring },
 };
 
 /** Counts up/down smoothly; screen readers always receive the final value. */
@@ -76,8 +76,14 @@ export function TypeSpectrum({ segments, className = "", decorative }: { segment
   const rich = useRichMotion();
   const total = segments.reduce((sum, item) => sum + item.count, 0);
   const label = total ? segments.filter(item => item.count).map(item => `${item.label} ${item.count}`).join("，") : "暂无题目";
+  let offset = 0;
   return <div className={`bank-type-spectrum ${className}`} {...decorative ? { "aria-hidden": true } : { role: "img", "aria-label": `题型分布：${label}` }}>
-    {total ? segments.filter(item => item.count).map((item, index) => <motion.span key={item.key} title={`${item.label} · ${item.count}`} style={{ background: item.hue }} initial={rich ? { flexGrow: 0, opacity: 0 } : false} animate={{ flexGrow: item.count, opacity: 1 }} transition={rich ? { type: "spring", stiffness: 160, damping: 22, delay: 0.08 + index * 0.06 } : { duration: 0 }} />) : <span className="bank-type-spectrum-empty" />}
+    {total ? segments.filter(item => item.count).map((item, index) => {
+      const left = offset / total * 100; offset += item.count;
+      // Proportions animate on the compositor instead of relaying out every
+      // flex segment (and the neighboring sidebar/basket) on each frame.
+      return <motion.span key={item.key} title={`${item.label} · ${item.count}`} style={{ background: item.hue, transformOrigin: "left" }} initial={rich ? { transform: `translateX(${left}%) scaleX(0)`, opacity: 0 } : false} animate={{ transform: `translateX(${left}%) scaleX(${item.count / total})`, opacity: 1 }} transition={rich ? { type: "spring", stiffness: 160, damping: 22, delay: 0.08 + index * 0.06 } : { duration: 0 }} />;
+    }) : <span className="bank-type-spectrum-empty" />}
   </div>;
 }
 
@@ -93,8 +99,8 @@ export function FlightLayer({ flights, onArrive }: { flights: Flight[]; onArrive
     const tx = flight.to.left + flight.to.width / 2, ty = flight.to.top + flight.to.height / 2;
     const dx = tx - sx, dy = ty - sy, lift = Math.min(140, 60 + Math.abs(dx) * 0.18);
     return <motion.div key={flight.id} className="bank-flight" style={{ left: sx, top: sy, "--type-hue": flight.hue } as CSSProperties}
-      initial={{ x: 0, y: 0, scale: 0.6, opacity: 0, rotate: 0 }}
-      animate={{ x: [0, dx * 0.42, dx], y: [0, dy * 0.42 - lift, dy], scale: [0.6, 1.08, 0.36], opacity: [0, 1, 0.9], rotate: [0, -10, 18] }}
+      initial={{ transform: "translate(0px, 0px) scale(0.6) rotate(0deg)", opacity: 0 }}
+      animate={{ transform: ["translate(0px, 0px) scale(0.6) rotate(0deg)", `translate(${dx * 0.42}px, ${dy * 0.42 - lift}px) scale(1.08) rotate(-10deg)`, `translate(${dx}px, ${dy}px) scale(0.36) rotate(18deg)`], opacity: [0, 1, 0.9] }}
       transition={{ duration: 0.72, delay: flight.delay, ease: [0.45, 0, 0.2, 1], times: [0, 0.45, 1] }}
       onAnimationComplete={() => arrive.current(flight.id)}><span>{flight.label}</span></motion.div>;
   })}</div>, document.body);
@@ -106,9 +112,9 @@ export function StarBurst({ burst }: { burst: number }) {
   return <AnimatePresence>{rich && burst > 0 && <motion.span key={burst} className="bank-star-burst" aria-hidden="true" initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 0.7, delay: 0.25 }}>
     {Array.from({ length: 8 }, (_, index) => {
       const angle = (index / 8) * Math.PI * 2, distance = index % 2 ? 15 : 20;
-      return <motion.i key={index} initial={{ x: 0, y: 0, scale: 0.4 }} animate={{ x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, scale: [0.4, 1, 0] }} transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }} />;
+      return <motion.i key={index} initial={{ transform: "translate(0px, 0px) scale(0.4)" }} animate={{ transform: ["translate(0px, 0px) scale(0.4)", `translate(${Math.cos(angle) * distance * 0.5}px, ${Math.sin(angle) * distance * 0.5}px) scale(1)`, `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0)`] }} transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }} />;
     })}
-    <motion.b initial={{ scale: 0.2, opacity: 0.8 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 0.5 }} />
+    <motion.b initial={{ transform: "scale(0.2)", opacity: 0.8 }} animate={{ transform: "scale(1.9)", opacity: 0 }} transition={{ duration: 0.5 }} />
   </motion.span>}</AnimatePresence>;
 }
 

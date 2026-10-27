@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/react";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
@@ -38,9 +38,15 @@ import { isOcrPasteTarget } from "./ocr-queue";
 import { ExportCenter, type ExportFormat } from "./components/ExportCenter";
 import { examSnapshotFingerprint, type ExamMetadataPatch } from "./exam-ai";
 import { BankSourceNotice } from "./components/BankSourceNotice";
+import { patchWorkspaceQuestion } from "./workspace-edits";
+import { SceneBackdrop } from "./SceneBackdrop";
+import { WorkspaceView } from "./components/WorkspaceView";
 import "./workspace-motion.css";
 
 const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
+const WorkspaceSidebar = memo(Sidebar);
+const WorkspaceLayoutPanel = memo(LayoutPanel);
+const EMPTY_COMMANDS: Command[] = [];
 
 export default function App() {
   const [motionPref, setMotionPref] = useState<"full" | "reduced">("full");
@@ -96,61 +102,53 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   });
   const importRef = useRef<HTMLInputElement>(null);
   const lastSaved = useRef("");
+  const lastSavedFrame = useRef<{ exam: Exam; layout: typeof layout }>();
   const persistRef = useRef<() => Promise<void>>(async () => {});
 
   /* ---------- 派生数据 ---------- */
-  const flat = useMemo(() => exam.sections.flatMap((s, si) => s.questions.map((q) => ({ q, s, si }))), [exam]);
-  const score = flat.reduce((a, x) => a + x.q.score, 0);
+  const flat = useMemo(() => exam.sections.flatMap((s, si) => s.questions.map((q) => ({ q, s, si }))), [exam.sections]);
+  const score = useMemo(() => flat.reduce((a, x) => a + x.q.score, 0), [flat]);
   const count = flat.length;
-  const idx = flat.findIndex((x) => x.q.id === activeId);
+  const bankSelection = useMemo(() => flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q), [flat, selected]);
+  const indexById = useMemo(() => new Map(flat.map((item, index) => [item.q.id, index])), [flat]);
+  const idx = activeId ? indexById.get(activeId) ?? -1 : -1;
   const cur = idx >= 0 ? flat[idx] : null;
   useEffect(() => {
-    const existing = new Set(flat.map(item => item.q.id));
-    if (activeId && !existing.has(activeId)) setActiveId(flat[0]?.q.id ?? null);
+    if (activeId && !indexById.has(activeId)) setActiveId(flat[0]?.q.id ?? null);
     setSelected(previous => {
-      const next = new Set([...previous].filter(id => existing.has(id)));
+      const next = new Set([...previous].filter(id => indexById.has(id)));
       return next.size === previous.size ? previous : next;
     });
-  }, [flat, activeId]);
+  }, [flat, indexById, activeId]);
 
   const select = useCallback(
     (id: string | null) => {
       if (id) {
-        const ni = flat.findIndex((x) => x.q.id === id);
+        const ni = indexById.get(id) ?? -1;
         setDir(ni >= idx ? 1 : -1);
       }
       setActiveId(id);
     },
-    [flat, idx],
+    [indexById, idx],
   );
-  const go = (d: number) => {
+  const go = useCallback((d: number) => {
     const n = flat[idx + d];
     if (n) select(n.q.id);
-  };
+  }, [flat, idx, select]);
 
-  const setMode = (m: Mode) => {
+  const setMode = useCallback((m: Mode) => {
     setWorkArea("exam");
     if (m === mode) return;
     setAnimating(true);
     setModeRaw(m);
     window.setTimeout(() => setAnimating(false), 750);
-  };
+  }, [mode]);
 
   const updateQ = useCallback((id: string, patch: Partial<Question>) => {
-    setExam((e) => {
-      const original = e.sections.flatMap(s => s.questions).find(q => q.id === id);
-      if (!original) return e;
-      const updated = { ...original, ...patch };
-      if (!patch.type || patch.type === original.type) return { ...e, sections: e.sections.map(s => ({ ...s, questions: s.questions.map(q => q.id === id ? updated : q) })) };
-      const sections = e.sections.map(s => ({ ...s, questions: s.questions.filter(q => q.id !== id) }));
-      let target = sections.find(s => s.type === updated.type);
-      if (!target) { target = { id: uid(), type: updated.type, title: TYPE_META[updated.type].label, note: "", questions: [] }; sections.push(target); }
-      target.questions.push(updated);
-      return { ...e, sections };
-    });
-  }, []);
+    setExam(e => patchWorkspaceQuestion(e, id, patch));
+  }, [setExam]);
 
-  const addQuestions = (qs: Question[]) => {
+  const addQuestions = useCallback((qs: Question[]) => {
     setExam((e) => {
       const sections = e.sections.map((s) => ({ ...s, questions: [...s.questions] }));
       qs.forEach((q) => {
@@ -160,18 +158,18 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       });
       return { ...e, sections };
     });
-  };
+  }, [setExam]);
 
-  const insertBankQuestions = (questions: Question[], targetSectionId: string) => {
+  const insertBankQuestions = useCallback((questions: Question[], targetSectionId: string) => {
     const target = exam.sections.find(section => section.id === targetSectionId);
     if (!questions.length || !target) throw Error("请选择有效的目标大题");
     if (target.questions.length + questions.length > 1000 || count + questions.length > 2000) throw Error("单个大题最多1000道题，整卷最多2000道题，请分卷导入");
     setExam(previous => ({ ...previous, sections: previous.sections.map(section => section.id === targetSectionId ? { ...section, questions: [...section.questions, ...questions] } : section) }));
     setActiveId(questions[0].id); setMode("edit");
     toast({ title: `已从题库加入 ${questions.length} 道题` });
-  };
+  }, [exam.sections, count, setExam, setMode, toast]);
 
-  const createExamFromBank = async (questions: Question[]) => {
+  const createExamFromBank = useCallback(async (questions: Question[]) => {
     if (!questions.length || questions.length > 2000) throw Error("请选择 1–2000 道题");
     if (!window.confirm("用选题篮新建试卷？当前卷会保留在历史记录中。")) throw Error("已取消新建试卷");
     const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · 从题库新建前`, exam: structuredClone(exam), layout: { ...layout } };
@@ -187,7 +185,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     setSnapshots(nextHistory); setExam({ id: uid(), title: "题库选题试卷", subtitle: "", duration: 120, notice: [], sections });
     setActiveId(questions[0].id); setMode("edit");
     toast({ title: `已用 ${questions.length} 道题新建试卷` });
-  };
+  }, [exam, layout, snapshots, setExam, setMode, toast]);
 
   const applyExamMetadata = (patches: ExamMetadataPatch[], expectedFingerprint: string) => {
     if (examSnapshotFingerprint(exam) !== expectedFingerprint) { toast({ title: "试卷已变更，请刷新分析后再采用", tone: "warn" }); return false; }
@@ -232,7 +230,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     return () => window.removeEventListener("paste", paste);
   }, [workArea, ready, ocr, settings, palette, bank, history, structure, batch, importKind, aiTask, abPaper, examAnalysis, exportCenter]);
 
-  const newQuestion = (sectionId?: string) => {
+  const newQuestion = useCallback((sectionId?: string) => {
     const sec = exam.sections.find(section => section.id === sectionId) ?? cur?.s ?? exam.sections[0];
     if (!sec) {
       const q: Question = { id: uid(), type: "essay", score: 12, stem: "", options: [], answer: [], analysis: "" };
@@ -243,15 +241,15 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     setDir(1);
     setActiveId(q.id);
     if (mode !== "edit") setMode("edit");
-  };
+  }, [exam.sections, cur?.s, addQuestions, mode, setMode, setExam]);
 
-  const removeQuestions = (ids: Set<string>) => {
+  const removeQuestions = useCallback((ids: Set<string>) => {
     setExam((e) => ({ ...e, sections: e.sections.map((s) => ({ ...s, questions: s.questions.filter((q) => !ids.has(q.id)) })) }));
     if (activeId && ids.has(activeId)) setActiveId(null);
-  };
+  }, [activeId, setExam]);
 
   /** 校对：把误识别为选择题的题目转成解答题，并从题干提取分值 */
-  const convertToEssay = (id: string) => {
+  const convertToEssay = useCallback((id: string) => {
     const found = flat.find((x) => x.q.id === id);
     if (!found) return;
     const m = found.q.stem.match(/^\s*[(（](\d+)\s*分[)）]\s*/);
@@ -272,7 +270,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       return { ...e, sections };
     });
     toast({ title: "已转为解答题", desc: m ? `并从题干识别出分值 ${m[1]} 分` : "已移动到解答题" });
-  };
+  }, [flat, setExam, toast]);
 
   /* ---------- 本地草稿与可恢复历史 ---------- */
   useEffect(() => {
@@ -282,9 +280,12 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       if (raw) {
         const data = raw as WorkspaceData;
         if (data.version !== 1 || !Array.isArray(data.exam?.sections) || !data.layout?.paper || !Array.isArray(data.history)) throw new Error("本地草稿格式无效，未覆盖原文件");
-        resetWorkspace({ exam: { ...data.exam, id: data.exam.id || uid() }, layout: data.layout }); setSnapshots(data.history);
+        const loadedExam = { ...data.exam, id: data.exam.id || uid() };
+        resetWorkspace({ exam: loadedExam, layout: data.layout }); setSnapshots(data.history);
         setActiveId(data.exam.sections.flatMap(s => s.questions)[0]?.id ?? null);
         lastSaved.current = JSON.stringify({ exam: data.exam, layout: data.layout });
+        // Legacy drafts still need one save to persist their newly assigned ID.
+        if (data.exam.id) lastSavedFrame.current = { exam: loadedExam, layout: data.layout };
       }
       setReady(true);
     }).catch(error => { if (live) { setSaveError(String(error.message || error)); toast({ title: "草稿载入失败", desc: String(error.message || error), tone: "warn" }); } });
@@ -293,14 +294,17 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
 
   persistRef.current = async () => {
     if (!ready) return;
+    // UI-only updates and repeated flush events cannot dirty an immutable frame.
+    if (lastSavedFrame.current?.exam === exam && lastSavedFrame.current.layout === layout) { setSaving(false); return; }
     const serialized = JSON.stringify({ exam, layout });
-    if (serialized === lastSaved.current) { setSaving(false); return; }
+    if (serialized === lastSaved.current) { lastSavedFrame.current = { exam, layout }; setSaving(false); return; }
     setSaving(true);
     const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · ${count} 题 · ${score} 分`, exam: structuredClone(exam), layout: { ...layout } };
     const nextHistory = [snapshot, ...snapshots].slice(0, 50);
     try {
       await saveWorkspace({ version: 1, exam, layout, history: nextHistory });
       lastSaved.current = serialized;
+      lastSavedFrame.current = { exam, layout };
       setSnapshots(nextHistory); setSaveError("");
     } catch (error) { setSaveError(error instanceof Error ? error.message : "保存失败"); }
     finally { setSaving(false); }
@@ -367,10 +371,10 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     return () => { canceled = true; clearTimeout(t); style.remove(); };
   }, [printing]);
 
-  const exportSource = async (name = exam.title) => {
+  const exportSource = useCallback(async (name = exam.title) => {
     try { if (await saveText(name, exportTex(exam, layout), "tex")) toast({ title: "已导出 LaTeX 源文件" }); }
     catch (error) { toast({ title: "导出失败", desc: String(error), tone: "warn" }); }
-  };
+  }, [exam, layout, toast]);
   const exportMd = async (name = exam.title) => {
     try { if (await saveText(name, exportMarkdown(exam, layout), "md")) toast({ title: "Markdown 已导出" }); }
     catch (error) { toast({ title: "导出失败", desc: error instanceof Error ? error.message : String(error), tone: "warn" }); }
@@ -455,18 +459,21 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       ? { outline: outlineWidth, layout: 0, editor: W - outlineWidth - previewEdit, preview: previewEdit }
       : { outline: 0, layout: 340, editor: 0, preview: W - 340 };
   const colT = animating ? { type: "spring" as const, stiffness: 210, damping: 30 } : { duration: 0.24, ease: [0.2, 0.8, 0.2, 1] as const };
-  const expandSidebar = (expanded: boolean) => {
+  const expandSidebar = useCallback((expanded: boolean) => {
     setSidebarExpanded(expanded);
     if (!expanded) { setBatch(false); setSelected(new Set()); }
-  };
+  }, []);
   useEffect(() => {
     try { localStorage.setItem("juanye.sidebar-expanded.v1", String(sidebarExpanded)); }
     catch { /* UI state remains usable when preference storage is unavailable. */ }
   }, [sidebarExpanded]);
 
   /* ---------- 命令面板 ---------- */
+  // Avoid formatting every question's search title on each keystroke while closed.
+  // Retain the last committed list so the palette's exit animation keeps its content.
+  const lastCommands = useRef<Command[]>(EMPTY_COMMANDS);
   const commands: Command[] = useMemo(
-    () => [
+    () => palette ? [
       { id: "ocr", group: "功能", title: "一图多题识别", icon: <ScanText size={15} />, run: () => setOcr(true) },
       { id: "import-questions", group: "导入", title: "导入题目文件", icon: <FileInput size={15} />, run: () => setImportKind("questions") },
       { id: "import-solutions", group: "导入", title: "导入解析文件", icon: <FileInput size={15} />, run: () => setImportKind("solutions") },
@@ -512,15 +519,53 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         icon: <Hash size={15} />,
         run: () => (setMode("edit"), select(x.q.id)),
       })),
-    ],
+    ] : lastCommands.current,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flat, exam, layout, mode, ready, printing, activeId],
+    [palette, flat, exam, layout, mode, ready, printing, activeId],
   );
+  useLayoutEffect(() => { if (palette) lastCommands.current = commands; }, [commands, palette]);
 
-  const neighbor = (d: number) => {
-    const n = flat[idx + d];
-    return n ? { num: idx + d + 1, stem: plain(n.q.stem) } : undefined;
-  };
+  const previousQuestion = flat[idx - 1]?.q;
+  const nextQuestion = flat[idx + 1]?.q;
+  const neighbors = useMemo(() => ({
+    prev: previousQuestion ? { num: idx, stem: plain(previousQuestion.stem) } : undefined,
+    next: nextQuestion ? { num: idx + 2, stem: plain(nextQuestion.stem) } : undefined,
+  }), [idx, previousQuestion, nextQuestion]);
+  const changeCurrent = useCallback((patch: Partial<Question>) => { if (activeId) updateQ(activeId, patch); }, [activeId, updateQ]);
+  const previous = useCallback(() => go(-1), [go]);
+  const next = useCallback(() => go(1), [go]);
+  const convertCurrent = useCallback(() => { if (activeId) convertToEssay(activeId); }, [activeId, convertToEssay]);
+  const deleteCurrent = useCallback(() => {
+    if (activeId) { removeQuestions(new Set([activeId])); toast({ title: "已删除题目" }); }
+  }, [activeId, removeQuestions, toast]);
+  const duplicateCurrent = useCallback(() => { if (activeId) setExam(exam => copyQuestions(exam, new Set([activeId]))); }, [activeId, setExam]);
+  const moveCurrent = useCallback((sectionId: string) => { if (activeId) setExam(exam => transferQuestions(exam, new Set([activeId]), sectionId)); }, [activeId, setExam]);
+  const start = useCallback(() => { if (flat[0]) select(flat[0].q.id); }, [flat, select]);
+  const openOcr = useCallback(() => setOcr(true), []);
+  const openStructure = useCallback(() => setStructure(true), []);
+  const editMode = useCallback(() => setMode("edit"), [setMode]);
+  const toggleLayout = useCallback(() => setMode(mode === "edit" ? "preview" : "edit"), [setMode, mode]);
+  const previewTex = useCallback(() => { void exportSource(); }, [exportSource]);
+  const reorder = useCallback((sectionId: string, questions: Question[]) => setExam(exam => ({ ...exam, sections: exam.sections.map(section => section.id === sectionId ? { ...section, questions } : section) })), [setExam]);
+  const changeBatch = useCallback((value: boolean) => { if (value) setSidebarExpanded(true); setBatch(value); setSelected(new Set()); }, []);
+  const toggleSelected = useCallback((id: string) => setSelected(previous => {
+    const next = new Set(previous);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  }), []);
+  const selectSection = useCallback((sectionId: string) => {
+    const ids = exam.sections.find(section => section.id === sectionId)?.questions.map(question => question.id) ?? [];
+    setSelected(previous => {
+      const next = new Set(previous);
+      const allSelected = ids.every(id => next.has(id));
+      ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  }, [exam.sections]);
+  const jumpFlag = useCallback(() => {
+    const found = flat.find(item => item.q.flag);
+    if (found) select(found.q.id);
+  }, [flat, select]);
 
   return (
     <div className="app-bg flex h-full min-w-[960px] flex-col" data-interface-motion={motionPref}
@@ -535,6 +580,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         try { const ids = parseBankDrag(event.dataTransfer.getData(BANK_DRAG_MIME)); void resolveBankDrag(ids).then(questions => insertBankQuestions(questions, sectionId)).catch(error => toast({ title: "题库拖入失败", desc: String(error), tone: "warn" })); }
         catch (error) { toast({ title: "题库拖入失败", desc: String(error), tone: "warn" }); }
       }}>
+      <SceneBackdrop />
       <TitleBar
         title={exam.title}
         mode={mode}
@@ -561,9 +607,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
 
       <div ref={main} className="workspace-stage relative flex min-h-0 flex-1 overflow-hidden">
         <div className="workspace-wallpaper" aria-hidden="true" />
-        <motion.div className="workspace-view workspace-view-exam workspace-exam-area" data-workspace-view="exam" aria-hidden={workArea !== "exam"} {...(workArea !== "exam" ? { inert: "" } : {})} initial={false}
-          animate={workArea === "exam" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : -14, transitionEnd: { visibility: "hidden" } }}
-          transition={{ opacity: { duration: workArea === "exam" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "exam" ? "auto" : "none", zIndex: workArea === "exam" ? 2 : 1 }}>
+        <WorkspaceView name="exam" active={workArea === "exam"} offset={-14} reducedMotion={reducedMotion} className="workspace-exam-area">
         {/* 左：试卷结构 */}
         <motion.div
           initial={{ opacity: 0, x: -12 }}
@@ -572,46 +616,29 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           className="shrink-0 overflow-hidden border-r border-line bg-panel/80"
           style={{ "--sidebar-expanded-width": `${outlineFull}px` } as CSSProperties}
         >
-            <Sidebar
+            <WorkspaceSidebar
               expanded={sidebarExpanded}
               onExpandedChange={expandSidebar}
               requestedSectionId={requestedSectionId}
               exam={exam}
               activeId={activeId}
               onSelect={select}
-              onReorder={(sid, qs) => setExam((e) => ({ ...e, sections: e.sections.map((s) => (s.id === sid ? { ...s, questions: qs } : s)) }))}
+              onReorder={reorder}
               batch={batch}
-              setBatch={(v) => { if (v) setSidebarExpanded(true); setBatch(v); setSelected(new Set()); }}
+              setBatch={changeBatch}
               selected={selected}
-              toggleSelect={(id) =>
-                setSelected((s) => {
-                  const n = new Set(s);
-                  n.has(id) ? n.delete(id) : n.add(id);
-                  return n;
-                })
-              }
+              toggleSelect={toggleSelected}
               score={score}
               count={count}
               onAdd={newQuestion}
-              onOcr={() => setOcr(true)}
-              onManageSections={() => setStructure(true)}
-              onSelectSection={(sectionId) => {
-                const ids = exam.sections.find(section => section.id === sectionId)?.questions.map(q => q.id) ?? [];
-                setSelected(previous => {
-                  const next = new Set(previous);
-                  const allSelected = ids.every(id => next.has(id));
-                  ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
-                  return next;
-                });
-              }}
+              onOcr={openOcr}
+              onManageSections={openStructure}
+              onSelectSection={selectSection}
               onUndo={undo}
               onRedo={redo}
               canUndo={canUndo}
               canRedo={canRedo}
-              onJumpFlag={() => {
-                const f = flat.find((x) => x.q.flag);
-                if (f) select(f.q.id);
-              }}
+              onJumpFlag={jumpFlag}
             />
         </motion.div>
 
@@ -622,7 +649,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           transition={{ ...colT, opacity: { duration: 0.25 } }}
           className="shrink-0 overflow-hidden border-r border-line bg-panel/80"
         >
-          <LayoutPanel layout={layout} setLayout={setLayout} exam={exam} setExam={setExam} onDone={() => setMode("edit")} />
+          <WorkspaceLayoutPanel layout={layout} setLayout={setLayout} exam={exam} setExam={setExam} onDone={editMode} />
         </motion.div>
 
         {/* 中：题目编辑 */}
@@ -653,17 +680,17 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
               num={idx + 1}
               total={count}
               dir={dir}
-              onChange={(p) => activeId && updateQ(activeId, p)}
-              onPrev={() => go(-1)}
-              onNext={() => go(1)}
-              onConvert={() => activeId && convertToEssay(activeId)}
-              onDelete={() => activeId && (removeQuestions(new Set([activeId])), toast({ title: "已删除题目" }))}
-              onDuplicate={() => activeId && setExam(exam => copyQuestions(exam, new Set([activeId])))}
-              onMove={(sectionId) => activeId && setExam(exam => transferQuestions(exam, new Set([activeId]), sectionId))}
+              onChange={changeCurrent}
+              onPrev={previous}
+              onNext={next}
+              onConvert={convertCurrent}
+              onDelete={deleteCurrent}
+              onDuplicate={duplicateCurrent}
+              onMove={moveCurrent}
               sections={exam.sections}
-              onStart={() => flat[0] && select(flat[0].q.id)}
-              onOcr={() => setOcr(true)}
-              neighbors={{ prev: neighbor(-1), next: neighbor(1) }}
+              onStart={start}
+              onOcr={openOcr}
+              neighbors={neighbors}
             />
             </div>
           </div>
@@ -683,17 +710,15 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
             setView={setView}
             mode={mode}
             activeId={activeId}
-            onPick={(id) => select(id)}
-            onLayout={() => setMode(mode === "edit" ? "preview" : "edit")}
-            onTex={() => { void exportSource(); }}
+            onPick={select}
+            onLayout={toggleLayout}
+            onTex={previewTex}
             score={score}
             count={count}
           />
         </motion.div>
-        </motion.div>
-        {bankVisited && <motion.div className="workspace-view workspace-view-bank" data-workspace-view="bank" aria-hidden={workArea !== "bank"} {...(workArea !== "bank" ? { inert: "" } : {})}
-          initial={{ opacity: 0, x: reducedMotion ? 0 : 16 }} animate={workArea === "bank" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : 16, transitionEnd: { visibility: "hidden" } }}
-          transition={{ opacity: { duration: workArea === "bank" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "bank" ? "auto" : "none", zIndex: workArea === "bank" ? 2 : 1 }}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={flat.filter(({ q }) => selected.has(q.id)).map(({ q }) => q)} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} /></Suspense></motion.div>}
+        </WorkspaceView>
+        {bankVisited && <WorkspaceView name="bank" active={workArea === "bank"} offset={16} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={bankSelection} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} /></Suspense></WorkspaceView>}
       </div>
 
       <AnimatePresence initial={false}>

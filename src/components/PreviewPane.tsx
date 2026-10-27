@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useSpring, useTransform, type MotionValue } from "motion/react";
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FileText, LayoutGrid, Maximize2, Minus, Plus, SlidersHorizontal, FileCode2 } from "lucide-react";
 import type { Exam, Layout, Mode, PreviewView } from "../types";
 import { AnswerCard, PaperPages, pageDims } from "./Paper";
@@ -56,7 +56,7 @@ function PageCounter({ canvas, scale, ph, pages }: { canvas: RefObject<HTMLDivEl
   </span>;
 }
 
-export function PreviewPane({
+export const PreviewPane = memo(function PreviewPane({
   exam,
   layout,
   view,
@@ -85,6 +85,12 @@ export function PreviewPane({
   const cw = useMotionValue(560);
   const zoom = useMotionValue(1);
   const [pages, setPages] = useState(1);
+  // Only the on-screen document can lag behind typing. App's print portal and all
+  // exports keep the immediate exam. Selection changes bypass this deferral so
+  // new/imported questions remain available to the existing auto-scroll effect.
+  const document = useMemo(() => ({ exam, score, count, activeId }), [exam, score, count, activeId]);
+  const deferredDocument = useDeferredValue(document);
+  const preview = deferredDocument.activeId === activeId ? deferredDocument : document;
   const { pw, ph } = pageDims(layout);
   const paperWidth = useMotionValue(pw);
   const cap = useMotionValue(mode === "preview" ? 1.05 : 1);
@@ -124,7 +130,7 @@ export function PreviewPane({
   const paperLabel = `${layout.paper} ${layout.orientation === "portrait" ? "纵向" : "横向"}${view === "paper" && layout.columns === 2 ? " · 双栏" : ""}${layout.sealLine ? " · 密封线" : ""}`;
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col">
+    <div className="relative flex h-full min-w-0 flex-col" data-preview-pending={preview.exam !== exam || undefined}>
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-3.5">
         <Segmented
           size="sm"
@@ -158,17 +164,17 @@ export function PreviewPane({
           >
             {view === "paper" ? (
               <PaperPages
-                exam={exam}
+                exam={preview.exam}
                 layout={layout}
-                totalScore={score}
-                qCount={count}
+                totalScore={preview.score}
+                qCount={preview.count}
                 interactive
                 activeId={activeId}
                 onPick={pick}
                 render={renderPage}
               />
             ) : (
-              <AnswerCard exam={exam} layout={layout} render={renderPage} />
+              <AnswerCard exam={preview.exam} layout={layout} render={renderPage} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -202,4 +208,4 @@ export function PreviewPane({
       </motion.div>
     </div>
   );
-}
+});

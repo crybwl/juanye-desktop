@@ -8,7 +8,7 @@ import {
   useIsPresent,
   type HTMLMotionProps,
 } from "motion/react";
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Info, AlertTriangle, X } from "lucide-react";
 
@@ -346,6 +346,17 @@ export function RollingNumber({ value, className }: { value: number; className?:
 }
 
 /* ---------------- Modal ---------------- */
+// Align one popup texture with the application's scene after opening/resizing.
+// No per-frame geometry reads or inherited root-variable writes are involved.
+function alignScene(element: HTMLElement | null) {
+  if (!element || document.documentElement.dataset.theme !== "telegram") return;
+  const plane = document.querySelector<HTMLElement>(".scene-backdrop-art");
+  if (!plane) return;
+  const origin = plane.getBoundingClientRect(), box = element.getBoundingClientRect();
+  element.style.setProperty("--scene-origin-x", `${Math.round(origin.left - box.left)}px`);
+  element.style.setProperty("--scene-origin-y", `${Math.round(origin.top - box.top)}px`);
+}
+
 export function Modal({
   open,
   onClose,
@@ -372,11 +383,18 @@ export function Modal({
   // 自己管理挂载/卸载，而不是依赖 AnimatePresence：
   // 更可控：关闭动画结束后再卸载，遮罩在关闭瞬间即不再拦截点击。
   const [mounted, setMounted] = useState(open);
+  const surface = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (open) return setMounted(true);
     const t = setTimeout(() => setMounted(false), 240);
     return () => clearTimeout(t);
   }, [open]);
+  useLayoutEffect(() => {
+    if (!mounted || !visible) return;
+    const observer = new ResizeObserver(() => alignScene(surface.current));
+    if (surface.current) observer.observe(surface.current);
+    return () => observer.disconnect();
+  }, [mounted, visible]);
   if (!mounted) return null;
   return createPortal(
     <motion.div
@@ -393,17 +411,19 @@ export function Modal({
     >
       <div className="absolute inset-0 bg-[#05060a]/60 backdrop-blur-[6px]" onClick={onClose} />
       <motion.div
+        ref={surface}
         role="dialog"
         aria-label={label}
         aria-modal={visible || undefined}
         aria-hidden={!visible || undefined}
-        initial={{ opacity: 0, scale: 0.976, y: align === "top" ? -10 : 14 }}
+        initial={{ opacity: 0, transform: `translateY(${align === "top" ? -10 : 14}px) scale(0.976)` }}
         animate={
           visible
-            ? { opacity: 1, scale: 1, y: 0 }
-            : { opacity: 0, scale: 0.984, y: 6, transition: { duration: 0.16 } }
+            ? { opacity: 1, transform: "translateY(0px) scale(1)" }
+            : { opacity: 0, transform: "translateY(6px) scale(0.984)", transition: { duration: 0.16 } }
         }
-        exit={{ opacity: 0, scale: 0.984, y: 6, transition: { duration: 0.16 } }}
+        exit={{ opacity: 0, transform: "translateY(6px) scale(0.984)", transition: { duration: 0.16 } }}
+        onAnimationComplete={() => alignScene(surface.current)}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
         className={cx(
           "glass relative overflow-hidden rounded-2xl border border-line-strong shadow-[0_30px_80px_-20px_rgba(0,0,0,.8)]",

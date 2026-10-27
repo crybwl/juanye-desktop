@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
+import { ChevronDown, Eye, FileDown, History, Loader2, PenLine, Search, Settings } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import type { Mode } from "../types";
 import { Button, IconButton, Kbd, Segmented } from "../ui";
@@ -80,7 +80,7 @@ export function TitleBar({
 
       <div className="absolute left-1/2 -translate-x-1/2">
         <AnimatePresence mode="wait" initial={false}>
-          {workspace === "bank" ? <motion.span key="bank" initial={{ opacity: 0, y: 6, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -6, filter: "blur(4px)" }} transition={{ duration: 0.2 }} className="titlebar-bank-label inline-flex items-center gap-2 text-[13px] font-semibold text-muted max-[1180px]:hidden"><BookOpen size={15} />本地题库</motion.span> : <motion.div key="exam" initial={{ opacity: 0, y: 6, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -6, filter: "blur(4px)" }} transition={{ duration: 0.2 }}><Segmented
+          {workspace === "exam" && <motion.div key="exam" initial={{ opacity: 0, transform: "translateY(6px)", filter: "blur(4px)" }} animate={{ opacity: 1, transform: "translateY(0px)", filter: "blur(0px)" }} exit={{ opacity: 0, transform: "translateY(-6px)", filter: "blur(4px)" }} transition={{ duration: 0.2 }}><Segmented
             value={mode}
             onChange={setMode}
             options={[

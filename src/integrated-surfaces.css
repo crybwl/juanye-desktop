@@ -167,74 +167,83 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
-  /* The selected Telegram wallpaper is a shared material, including portals
-     mounted under body. These are opaque structural hosts, never a wildcard
-     background reset: paper, images, inputs and highlighted TeX stay untouched.
-     Static CSS tiles add no moving/composited layers; workspace-wallpaper keeps
-     the existing, single drifting workspace layer. */
-  :root[data-theme="telegram"] {
-    --ui-wallpaper-wash: 68%;
+  /* One continuous, decoded scene under the whole application. Pane backgrounds
+     are washes over that scene, never copies of the SVG restarted in each box. */
+  .app-bg { position: relative; isolation: isolate; }
+  .scene-backdrop { display: none; }
+  :root[data-theme="telegram"] .scene-backdrop {
+    display: block; position: absolute; inset: 0; z-index: -1;
+    overflow: hidden; pointer-events: none; background: var(--color-bg);
+    contain: strict;
   }
-  :root[data-theme="telegram"][data-telegram-scheme="light"] {
-    --ui-wallpaper-wash: 76%;
+  .scene-backdrop-art {
+    position: absolute; inset: -64px; pointer-events: none;
+    background-image: var(--scene-wallpaper, none);
+    background-size: 1440px 1000px; background-repeat: repeat;
+    opacity: .66;
+  }
+  .app-bg[data-interface-motion="full"] .scene-backdrop-art {
+    animation: workspace-wallpaper-drift 80s linear infinite alternate;
+    will-change: transform;
+  }
+  .app-bg[data-interface-motion="reduced"] .scene-backdrop-art {
+    animation: none; transform: none; will-change: auto;
+  }
+  /* The former preview-only layer remains a geometry-compatible placeholder,
+     not a second moving texture or repaint surface. */
+  :root[data-theme="telegram"] .workspace-wallpaper { display: none; }
+  :root[data-theme="telegram"] .workspace-wallpaper::before { content: none; animation: none; }
+
+  :root[data-theme="telegram"] :is(.app-bg, .workspace-stage, .workspace-view,
+    .question-sidebar, .sidebar-rail, .sidebar-drawer, .sidebar-actions,
+    [data-editor-workbench], .workbench-panel--experimental,
+    .bank-workspace, .bank-catalog, .bank-library-sidebar,
+    .workspace-preview-stage .canvas-dots) {
+    background: transparent;
   }
   :root[data-theme="telegram"] :is(
-    body, :where(#root), .app-bg,
     .app-bg > header, .workspace-nav,
-    .question-sidebar, .sidebar-rail, .sidebar-drawer, .sidebar-summary, .sidebar-actions,
-    .workspace-exam-area > [class~="bg-panel/80"],
-    [data-editor-workbench], section[data-workbench-group],
-    .workbench-panel--experimental, .workbench-nav,
     .workspace-preview-stage > div > [class~="shrink-0"],
-    .glass, .glass > aside, .glass > main,
-    .glass > header, .glass > footer, .glass > [class~="border-b"], .glass > [class~="border-t"],
-    .dialog-header, .export-options, .export-format-list,
-    .bank-workspace, .bank-workspace-header, .bank-library-sidebar, .bank-catalog,
-    .bank-detail-pane, .bank-basket, .bank-preview-paper, .bank-more-menu,
-    .bank-detail-rail, .bank-pagination, .bank-edit-footer, .bank-batch-toolbar,
-    .telegram-gallery, .select-menu
+    .bank-detail-pane, .bank-basket, .bank-detail-rail,
+    .bank-pagination, .bank-edit-footer, .workbench-nav
   ),
   :root[data-theme="telegram"] .workspace-view-exam > .shrink-0:not(.workspace-editor-stage):not(.workspace-preview-stage) {
-    background-color: var(--ui-wallpaper-base, var(--color-panel));
-    background-image:
-      linear-gradient(
-        color-mix(in srgb, var(--ui-wallpaper-base, var(--color-panel)) var(--ui-wallpaper-wash), transparent),
-        color-mix(in srgb, var(--ui-wallpaper-base, var(--color-panel)) var(--ui-wallpaper-wash), transparent)
-      ),
-      var(--tg-workspace-wallpaper, var(--tg-wallpaper, none));
-    background-repeat: repeat;
-    background-size: auto, 440px 440px;
-    background-position: 0 0;
+    background: color-mix(in srgb, var(--color-panel) 18%, transparent);
   }
-  :root[data-theme="telegram"] :is(body, :where(#root), .app-bg) { --ui-wallpaper-base: var(--color-bg); }
-  /* Reset the inherited base at each surface level so a nested modal or sidebar
-     uses its own material rather than borrowing the application's canvas. */
-  :root[data-theme="telegram"] :is(
-    .app-bg > header, .workspace-nav, .question-sidebar, .sidebar-rail, .sidebar-drawer,
-    .sidebar-summary, .sidebar-actions, .workspace-exam-area > [class~="bg-panel/80"],
-    [data-editor-workbench], section[data-workbench-group], .workbench-panel--experimental, .workbench-nav,
-    .workspace-preview-stage > div > [class~="shrink-0"],
-    .glass > aside, .glass > main, .glass > header, .glass > footer,
-    .glass > [class~="border-b"], .glass > [class~="border-t"],
-    .dialog-header, .export-format-list,
-    .bank-workspace, .bank-workspace-header, .bank-library-sidebar, .bank-catalog,
-    .bank-detail-pane, .bank-basket, .bank-preview-paper, .bank-more-menu,
-    .bank-detail-rail, .bank-pagination, .bank-edit-footer, .bank-batch-toolbar
-  ) { --ui-wallpaper-base: var(--color-panel); }
-  :root[data-theme="telegram"] .app-bg > header { --ui-wallpaper-base: var(--tg-header, var(--color-panel)); }
-  :root[data-theme="telegram"] :is(.question-sidebar, .sidebar-drawer, .sidebar-actions) { --ui-wallpaper-base: var(--tg-sidebar, var(--color-panel)); }
-  :root[data-theme="telegram"] .sidebar-rail { --ui-wallpaper-base: var(--tg-rail, var(--color-panel)); }
-  :root[data-theme="telegram"] .sidebar-summary { --ui-wallpaper-base: var(--tg-card, var(--color-raised)); }
-  :root[data-theme="telegram"] .glass { --ui-wallpaper-base: var(--surface-glass); }
-  :root[data-theme="telegram"] .export-options { --ui-wallpaper-base: var(--color-raised); }
-  :root[data-theme="telegram"] :is(.bank-preview-paper, .bank-basket) { --ui-wallpaper-wash: 84%; }
-  :root[data-theme="telegram"] .telegram-gallery { --ui-wallpaper-base: var(--tg-gallery, var(--color-panel)); }
-  :root[data-theme="telegram"] .select-menu {
-    --ui-wallpaper-base: var(--surface-popup);
-    --ui-wallpaper-wash: 86%;
+  :root[data-theme="telegram"] :is(.sidebar-summary, section[data-workbench-group], .bank-preview-paper) {
+    background: color-mix(in srgb, var(--color-panel) 86%, transparent);
   }
-  /* Reading/content surfaces remain calm and opaque inside the patterned chrome. */
   :root[data-theme="telegram"] .workbench-live-preview {
     background: color-mix(in srgb, var(--color-accent) 4%, var(--color-panel));
+  }
+
+  /* A popup gets one cached texture at its root, not another texture on every
+     nested header, sidebar, card and option. Text remains over an opaque wash. */
+  :root[data-theme="telegram"] :is(.glass, .select-menu, .bank-more-menu) {
+    background-color: var(--surface-glass);
+    background-image: linear-gradient(
+      color-mix(in srgb, var(--surface-glass) 58%, transparent),
+      color-mix(in srgb, var(--surface-glass) 58%, transparent)
+    ), var(--scene-wallpaper, none);
+    background-size: auto, 1440px 1000px;
+    background-repeat: repeat;
+    background-position: 0 0, var(--scene-origin-x, 0px) var(--scene-origin-y, 0px);
+  }
+  :root[data-theme="telegram"] :is(
+    .glass > aside, .glass > main, .glass > header, .glass > footer,
+    .glass > [class~="border-b"], .glass > [class~="border-t"],
+    .dialog-header, .export-options, .export-format-list, .telegram-gallery
+  ) {
+    background: color-mix(in srgb, var(--color-panel) 12%, transparent);
+  }
+  :root[data-theme="telegram"] .select-menu {
+    background-color: var(--surface-popup);
+    background-image: linear-gradient(
+      color-mix(in srgb, var(--surface-popup) 72%, transparent),
+      color-mix(in srgb, var(--surface-popup) 72%, transparent)
+    ), var(--scene-wallpaper, none);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scene-backdrop-art { animation: none !important; transform: none; will-change: auto; }
   }
 }

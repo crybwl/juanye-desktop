@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { createContext, forwardRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { createContext, forwardRef, memo, useCallback, useContext, useDeferredValue, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -42,6 +42,8 @@ import { useExperimentalWorkbench } from "../experimental-workbench";
 import { questionFigures } from "../figures";
 import "./editor-workbench.css";
 
+const QuestionDrawingEditor = memo(DrawingEditor);
+
 /* ---------- 带语法高亮的 LaTeX 编辑器（透明 textarea 叠在高亮层上） ---------- */
 export type TexHandle = { insert: (snippet: string, caretBack?: number) => void };
 export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: string) => void; onCommit?: (v: string) => void; placeholder?: string; minH?: number }>(
@@ -49,6 +51,7 @@ export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: st
     const ta = useRef<HTMLTextAreaElement>(null);
     const [formula, setFormula] = useState(false);
     const [initial, setInitial] = useState("");
+    const highlighted = useMemo(() => highlightTex(value), [value]);
     const selection = useRef({ start: 0, end: 0 });
     const insert = (snippet: string, caretBack = 0) => {
       const el = ta.current!;
@@ -73,7 +76,7 @@ export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: st
           aria-hidden
           className="tex-editor m-0 px-4 py-3 text-fg/80"
           style={{ minHeight: minH }}
-          dangerouslySetInnerHTML={{ __html: highlightTex(value) }}
+          dangerouslySetInnerHTML={{ __html: highlighted }}
         />
         <textarea
           ref={ta}
@@ -131,7 +134,8 @@ function Card({ title, right, children, className, group = "question" }: { title
   );
 }
 
-function LivePreview({ text, image }: { text: string; image?: boolean }) {
+const LivePreview = memo(function LivePreview({ text, image }: { text: string; image?: boolean }) {
+  const deferredText = useDeferredValue(text);
   return (
     <div className="workbench-live-preview mt-3 rounded-xl bg-white/[0.025] px-4 py-3.5 ring-1 ring-inset ring-white/[0.04]">
       <div className="mb-2 flex items-center gap-2 text-[11.5px] text-faint">
@@ -142,7 +146,7 @@ function LivePreview({ text, image }: { text: string; image?: boolean }) {
         预览
       </div>
       <div className="font-serif text-[15.5px] leading-[1.9] text-fg/95">
-        <MathText text={text} placeholder="在上方输入题干…" />
+        <MathText text={deferredText} placeholder="在上方输入题干…" />
       </div>
       {image && (
         <div className="mt-3 flex justify-center">
@@ -151,7 +155,7 @@ function LivePreview({ text, image }: { text: string; image?: boolean }) {
       )}
     </div>
   );
-}
+});
 
 function ScoreStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -306,7 +310,7 @@ function Empty({ onStart, onOcr }: { onStart: () => void; onOcr: () => void }) {
 }
 
 /* ---------- 编辑器主体 ---------- */
-export function Editor({
+export const Editor = memo(function Editor({
   q,
   dataReady = true,
   paperMode = "questions",
@@ -351,6 +355,8 @@ export function Editor({
   const workbenchId = useId();
   const groupNav = useRef<HTMLDivElement>(null);
   const [showAnalysis, setShowAnalysis] = useState(true);
+  const workbenchContext = useMemo(() => ({ enabled: workbench, group }), [workbench, group]);
+  const changeDrawing = useCallback((drawing: string) => onChange({ drawing }), [onChange]);
   const inspectedQuestion = useRef<string | null>(null);
   useEffect(() => {
     if (!dataReady || !q || inspectedQuestion.current === q.id) return;
@@ -365,7 +371,7 @@ export function Editor({
   };
 
   return (
-    <WorkbenchContext.Provider value={{ enabled: workbench, group }}>
+    <WorkbenchContext.Provider value={workbenchContext}>
     <div className={cx("h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
       <AnimatePresence mode="wait" custom={dir} initial={false}>
         {!q || !sec ? (
@@ -504,7 +510,7 @@ export function Editor({
 
             {q.sourceImage && <Card group="figures" title="原图对照"><SourceOcr key={q.id} question={q} onChange={onChange} /></Card>}
             <Card group="figures"><FigureEditor key={q.id} question={q} onChange={onChange} /></Card>
-            <Card group="figures"><DrawingEditor key={q.id} value={q.drawing || ""} onChange={drawing => onChange({ drawing })} /></Card>
+            <Card group="figures"><QuestionDrawingEditor key={q.id} value={q.drawing || ""} onChange={changeDrawing} /></Card>
             <Card group="properties" title="属性">
               <div className="space-y-3 text-[12px]">
                 {onMove && sections && <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">所属大题</span><Select aria-label="移动到大题" value={sec.id} onValueChange={onMove} options={sections.map(section => ({ value: section.id, label: section.title }))} /></label>}
@@ -645,4 +651,4 @@ export function Editor({
     </div>
     </WorkbenchContext.Provider>
   );
-}
+});
