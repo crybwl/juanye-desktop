@@ -127,6 +127,11 @@ async function main() {
     await bank().getByRole('button', { name: '展开题目详情和选题篮，已选 2 题', exact: true }).click();
     await nav('组卷').click(); await openBank();
     assert.equal(await basket.locator('[data-basket-id]').count(), 2);
+    // Check final geometry, not the intermediate x of the workspace slide.
+    await until(() => page.locator('[data-workspace-view="bank"]').evaluate(element => {
+      const style = getComputedStyle(element);
+      return Number(style.opacity) > .999 && (style.transform === 'none' || Math.abs(new DOMMatrixReadOnly(style.transform).m41) < .1);
+    }), 'Workspace transition did not settle');
     const geometry = await page.evaluate(() => { const main = document.querySelector('[data-testid="bank-workspace"]'); const rect = el => { const r = el.getBoundingClientRect(); return { x: r.x, right: r.right, width: r.width, bottom: r.bottom }; }; return { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth, main: rect(main), catalog: rect(main.querySelector('.bank-catalog')), detail: rect(main.querySelector('.bank-detail-pane')) }; });
     assert.ok(geometry.scrollWidth <= geometry.width + 1); assert.ok(geometry.catalog.right <= geometry.detail.x + 1); assert.ok(geometry.detail.right <= geometry.width + 1); assert.ok(geometry.detail.bottom <= geometry.height + 1);
     await page.screenshot({ path: path.join(artifacts, 'bank-workspace-1280.png') });

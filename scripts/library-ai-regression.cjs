@@ -58,6 +58,13 @@ async function main() {
       await page.evaluate(item => { const values = { 'juanye.appearance.v1': item.theme, 'juanye.telegram-scheme.v1': item.scheme || 'dark', 'juanye.telegram-theme.v1': item.id || 'ember' }; for (const [key, value] of Object.entries(values)) { localStorage.setItem(key, value); window.dispatchEvent(new StorageEvent('storage', { key, newValue: value })); } }, item);
       await nav().getByRole('button', { name: '本地题库', exact: true }).click();
       await page.getByTestId('bank-entry').first().waitFor();
+      // Inspect settled palette/layout, not the patch's initial clips, stagger
+      // or the mounted workspace's slide into view.
+      await until(() => page.locator('[data-workspace-view="bank"]').evaluate(element => {
+        const style = getComputedStyle(element);
+        return Number(style.opacity) > .999 && (style.transform === 'none' || Math.abs(new DOMMatrixReadOnly(style.transform).m41) < .1);
+      }), 'Workspace transition did not settle');
+      await pause(750);
       for (const experimental of [false, true]) {
         await page.evaluate(value => { const key = 'juanye.experimental-workbench.v1'; localStorage.setItem(key, String(value)); window.dispatchEvent(new StorageEvent('storage', { key, newValue: String(value) })); }, experimental);
         const colors = await page.getByTestId('bank-workspace').evaluate(el => { const style = getComputedStyle(el), list = el.querySelector('.bank-catalog'); return { theme: document.documentElement.dataset.theme, scheme: document.documentElement.dataset.telegramScheme, color: style.color, bg: style.backgroundColor, fg: style.getPropertyValue('--color-fg').trim(), panel: style.getPropertyValue('--color-panel').trim(), width: el.getBoundingClientRect().width, viewport: innerWidth, overflow: el.scrollWidth > el.clientWidth + 1, listWidth: list?.getBoundingClientRect().width ?? 0 }; });

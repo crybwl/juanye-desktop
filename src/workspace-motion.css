@@ -1,15 +1,8 @@
 /* One composited transition per workspace; inner PDF geometry never animates. */
 .workspace-view { position: absolute; inset: 0; display: flex; min-width: 0; min-height: 0; overflow: hidden; isolation: isolate; }
 .workspace-view[aria-hidden="true"] { pointer-events: none; }
-.workspace-nav { gap: 3px; padding-block: 4px; }
-.workspace-nav .workspace-tab { position: relative; overflow: visible; min-width: 84px; isolation: isolate; background: transparent !important; }
-.workspace-nav .workspace-tab-indicator { position: absolute; inset: 0; z-index: -1; border: 1px solid color-mix(in srgb, var(--color-accent) 18%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--color-accent) 10%, var(--color-panel)); box-shadow: 0 1px 3px #0000000b, inset 0 1px color-mix(in srgb, var(--color-fg) 4%, transparent); }
-.workspace-paper-summary { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0 5px; color: var(--color-muted); font-size: 12px; }
-.workspace-paper-summary > span:first-child { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-paper-summary-count { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--color-faint); }
 :root[data-theme="telegram"] .workspace-view-exam { background: transparent; }
 :root[data-theme="telegram"] .workspace-view-exam > .shrink-0:not(.workspace-editor-stage):not(.workspace-preview-stage) { background: var(--surface-input); }
 :root[data-theme="telegram"] .workspace-view-exam > :is(.workspace-editor-stage, .workspace-preview-stage) { background: transparent; }
-@media (max-width: 1100px) { .workspace-paper-summary > span:first-child { max-width: 140px; } }
 [data-interface-motion="reduced"] .workspace-view { transform: none !important; }
 @media (prefers-reduced-motion: reduce) { .workspace-view { transform: none !important; } }

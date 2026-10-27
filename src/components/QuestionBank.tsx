@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BookOpen, Check, GripVertical, Loader2, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import type { Exam, Question, Section } from "../types";
 import { TYPE_META } from "../data";
@@ -104,16 +104,16 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
       {busy && <div role="status" className="flex items-center gap-2 py-2 text-[12px] text-muted"><Loader2 size={14} className="animate-spin" />正在处理…</div>}
       {!busy && !filtered.length && <div className="question-bank-empty"><BookOpen size={26} /><p>{bank.entries.length ? "没有符合条件的题目" : "题库暂无题目"}</p></div>}
       <div className="question-bank-list">
-        {visible.map(entry => {
+        {visible.map((entry, index) => {
           const q = entry.question;
           const chosen = selected.has(entry.id);
-          return <article key={entry.id} className="question-bank-card" data-bank-id={entry.id} draggable={!busy} onDragStart={event => {
+          return <article key={entry.id} className="question-bank-card" data-bank-id={entry.id} data-selected={chosen || undefined} style={{ "--type-hue": TYPE_META[q.type].hue, "--i": Math.min(index, 12) } as CSSProperties} draggable={!busy} onDragStart={event => {
             const ids = chosen ? selectedEntries.map(item => item.id) : [entry.id];
             if (ids.length > 200) { event.preventDefault(); toast({ title: "单次最多拖入 200 道题", desc: "也可以使用下方批量加入", tone: "warn" }); return; }
             event.dataTransfer.effectAllowed = "copy";
             event.dataTransfer.setData(BANK_DRAG_MIME, JSON.stringify(ids));
           }}>
-            <div className="question-bank-card-top"><Checkbox aria-label={`选择题库题目 ${entry.id}`} checked={chosen} onCheckedChange={checked => setSelected(value => { const next = new Set(value); if (checked) next.add(entry.id); else next.delete(entry.id); return next; })} /><span className="text-[11px] text-muted">{TYPE_META[q.type].label} · {q.score} 分{q.difficulty ? ` · ${DIFFICULTY[q.difficulty]}` : ""}{entry.version > 1 ? ` · 版本 ${entry.version}` : ""}</span><GripVertical size={14} className="ml-auto text-faint" aria-hidden="true" /></div>
+            <div className="question-bank-card-top"><Checkbox aria-label={`选择题库题目 ${entry.id}`} checked={chosen} onCheckedChange={checked => setSelected(value => { const next = new Set(value); if (checked) next.add(entry.id); else next.delete(entry.id); return next; })} /><i className="question-bank-type-dot" aria-hidden="true" /><span className="text-[11px] text-muted">{TYPE_META[q.type].label} · {q.score} 分{q.difficulty ? ` · ${DIFFICULTY[q.difficulty]}` : ""}{entry.version > 1 ? ` · 版本 ${entry.version}` : ""}</span><GripVertical size={14} className="ml-auto text-faint" aria-hidden="true" /></div>
             <div className="question-bank-stem"><MathText text={q.stem} placeholder="（空题干）" /></div>
             {q.figures?.[0] && <img className="question-bank-thumbnail" src={q.figures[0].src} alt={q.figures[0].caption || "题图"} />}
             <div className="question-bank-tags">{(q.knowledge ?? []).filter(Boolean).slice(0, 5).map((tag, index) => <span key={`${tag}-${index}`}>{tag}</span>)}</div>

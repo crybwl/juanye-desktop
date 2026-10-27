@@ -5,7 +5,7 @@ import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
-import { Button, RollingNumber, SharedPill, ToastProvider, cx, softSpring, spring, useToast } from "./ui";
+import { Button, SharedPill, ToastProvider, cx, softSpring, useToast } from "./ui";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
@@ -550,20 +550,18 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       />
 
       <nav aria-label="工作区" className="workspace-nav relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line px-4">
-        {([{ id: "exam", label: "组卷", icon: PenLine }, { id: "bank", label: "本地题库", icon: BookOpen }] as const).map(item => <Button key={item.id} size="sm" variant="ghost" className="workspace-tab" aria-current={workArea === item.id ? "page" : undefined} onClick={() => setWorkArea(item.id)}>
-          {workArea === item.id && <SharedPill layoutId="workspace-main-tab" transition={spring} className="workspace-tab-indicator" />}
-          <item.icon size={15} /><span>{item.label}</span>
-        </Button>)}
-        <div className="ml-auto flex items-center gap-1">{workArea === "exam" ? <>
+        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "exam" ? "page" : undefined} icon={<>{workArea === "exam" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<PenLine size={15} /></>} onClick={() => setWorkArea("exam")}>组卷</Button>
+        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "bank" ? "page" : undefined} icon={<>{workArea === "bank" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("bank")}>本地题库</Button>
+        <div key={workArea} className="workspace-nav-tools ml-auto flex items-center gap-1">{workArea === "exam" ? <>
           <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
           <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={() => setExamAnalysis(true)}>试卷分析</Button>
           <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
-        </> : <motion.span key="bank-exam-summary" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={softSpring} className="workspace-paper-summary"><span>{exam.title}</span><span className="workspace-paper-summary-count"><RollingNumber value={count} /> 题 · <RollingNumber value={score} /> 分</span></motion.span>}</div>
+        </> : <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span>}</div>
       </nav>
 
       <div ref={main} className="workspace-stage relative flex min-h-0 flex-1 overflow-hidden">
         <div className="workspace-wallpaper" aria-hidden="true" />
-        <motion.div className="workspace-view workspace-view-exam" data-workspace-view="exam" aria-hidden={workArea !== "exam"} {...(workArea !== "exam" ? { inert: "" } : {})} initial={false}
+        <motion.div className="workspace-view workspace-view-exam workspace-exam-area" data-workspace-view="exam" aria-hidden={workArea !== "exam"} {...(workArea !== "exam" ? { inert: "" } : {})} initial={false}
           animate={workArea === "exam" ? { opacity: 1, x: 0, visibility: "visible" } : { opacity: 0, x: reducedMotion ? 0 : -14, transitionEnd: { visibility: "hidden" } }}
           transition={{ opacity: { duration: workArea === "exam" ? 0.22 : 0.14 }, x: softSpring }} style={{ pointerEvents: workArea === "exam" ? "auto" : "none", zIndex: workArea === "exam" ? 2 : 1 }}>
         {/* 左：试卷结构 */}

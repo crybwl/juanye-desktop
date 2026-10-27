@@ -1,10 +1,40 @@
 .workspace-nav { background: var(--color-panel); }
-.workspace-nav button[aria-current="page"] { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel)); color: var(--color-accent); }
+.workspace-nav { isolation: isolate; }
+.workspace-nav .workspace-nav-tab { overflow: visible; isolation: isolate; }
+.workspace-nav .workspace-nav-tab > svg { transition: transform .35s cubic-bezier(.2,.9,.25,1.25); }
+.workspace-nav .workspace-nav-tab:hover > svg { transform: translateY(-1px) rotate(-6deg); }
+.workspace-nav button[aria-current="page"] { background: transparent; color: var(--color-accent); }
+.workspace-nav button[aria-current="page"]:hover { background: transparent; }
+.workspace-nav-pill { position: absolute; inset: 0; z-index: -1; border-radius: 8px; background: color-mix(in srgb, var(--color-accent) 13%, var(--color-panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 22%, transparent), 0 6px 18px -10px var(--color-accent); }
+.workspace-nav-pill::after { position: absolute; right: 22%; bottom: -6px; left: 22%; height: 2px; border-radius: 2px; background: var(--color-accent); box-shadow: 0 0 10px var(--color-accent); content: ""; }
+.workspace-nav-tools { animation: workspace-tools-in .38s cubic-bezier(.2,.8,.2,1) backwards; }
+.workspace-nav-tools > * { animation: workspace-tools-in .42s cubic-bezier(.2,.8,.2,1) backwards; }
+.workspace-nav-tools > :nth-child(2) { animation-delay: .04s; }
+.workspace-nav-tools > :nth-child(3) { animation-delay: .08s; }
+.workspace-exam-area > * { animation: workspace-area-in .46s cubic-bezier(.2,.8,.2,1) backwards; }
+.workspace-exam-area > :nth-child(2) { animation-delay: .05s; }
+.workspace-exam-area > :nth-child(3) { animation-delay: .1s; }
+@keyframes workspace-tools-in { from { opacity: 0; translate: 10px 0; } }
+@keyframes workspace-area-in { from { opacity: 0; translate: 0 10px; } }
+@media (prefers-reduced-motion: reduce) { .workspace-nav-tools, .workspace-nav-tools > *, .workspace-exam-area > * { animation: none; } .workspace-nav .workspace-nav-tab:hover > svg { transform: none; } }
+[data-interface-motion="reduced"] .workspace-nav-tools, [data-interface-motion="reduced"] .workspace-nav-tools > *, [data-interface-motion="reduced"] .workspace-exam-area > * { animation: none; }
+.export-center { background: var(--color-panel); }
+.export-center-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+.export-options { border-left: 1px solid var(--color-line); background: var(--surface-inset); }
+.print-summary-paper { position: relative; margin: auto; overflow: hidden; background: #fff; border: 1px solid #cbd0d7; box-shadow: 0 3px 12px #0002; border-radius: 2px; }
+.print-summary-content { padding: 12% 10%; }
+.print-summary-content i { display: block; height: 2px; margin-bottom: 5px; background: #b6bec9; }
+.print-summary-title { width: 58%; height: 4px; margin: 0 auto 9px; background: #566172; }
+.print-summary-seal { position: absolute; inset: 0 auto 0 0; border-right: 1px dashed #838b96; display: grid; place-items: center; }
+.print-summary-seal span { writing-mode: vertical-rl; color: #747e89; font-size: 6px; letter-spacing: 3px; }
+@media (max-width: 1100px) { .workspace-nav .nav-secondary-label { display: none; } }
+@media (max-width: 700px) { .export-center-body { grid-template-columns: 1fr; } .export-options { border-left: 0; border-top: 1px solid var(--color-line); } }
+
+/* Compatibility for the existing shared dialog chrome and export-center controls. */
 .dialog-header { background: var(--color-panel); }
 .dialog-header-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 13px; color: var(--color-accent); background: linear-gradient(145deg,color-mix(in srgb,var(--color-accent) 15%,var(--color-panel)),color-mix(in srgb,var(--color-accent) 5%,var(--color-panel))); border: 1px solid color-mix(in srgb,var(--color-accent) 18%,transparent); box-shadow: inset 0 1px 0 color-mix(in srgb,var(--color-fg) 5%,transparent),0 3px 8px rgb(0 0 0 / .035); }
-.export-center { background: var(--color-panel); }
-.export-center-body { display: grid; grid-template-columns: minmax(0, 1fr) 330px; scrollbar-gutter: stable; }
-.export-options { display: grid; align-content: start; gap: 20px; border-left: 1px solid var(--color-line); background: var(--surface-inset); }
+.export-center-body { scrollbar-gutter: stable; }
+.export-options { display: grid; align-content: start; gap: 20px; }
 .export-section-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-fg); font-size: 12.5px; font-weight: 600; line-height: 1.5; }
 .export-section-label > span { color: var(--color-muted); font-size: 11.5px; font-weight: 400; }
 .export-format-list { display: grid; align-content: start; gap: 9px; }
@@ -25,12 +55,4 @@
 .export-target-switch button > span:not(.exam-analysis-tab-pill) { position: relative; z-index: 1; }
 .export-target-switch button[aria-pressed="true"] { color: var(--color-fg); }
 .export-target-switch .exam-analysis-tab-pill { position: absolute; inset: 0; z-index: 0; border-radius: inherit; background: var(--surface-selected); border: 1px solid var(--color-line-strong); box-shadow: 0 2px 5px rgb(0 0 0 / .06); }
-.print-summary-paper { position: relative; margin: auto; overflow: hidden; background: #fff; border: 1px solid #cbd0d7; box-shadow: 0 3px 12px #0002; border-radius: 2px; }
-.print-summary-content { padding: 12% 10%; }
-.print-summary-content i { display: block; height: 2px; margin-bottom: 5px; background: #b6bec9; }
-.print-summary-title { width: 58%; height: 4px; margin: 0 auto 9px; background: #566172; }
-.print-summary-seal { position: absolute; inset: 0 auto 0 0; border-right: 1px dashed #838b96; display: grid; place-items: center; }
-.print-summary-seal span { writing-mode: vertical-rl; color: #747e89; font-size: 6px; letter-spacing: 3px; }
-@media (max-width: 1100px) { .workspace-nav .nav-secondary-label { display: none; } }
-@media (max-width: 700px) { .export-center-body { grid-template-columns: 1fr; } .export-options { border-left: 0; border-top: 1px solid var(--color-line); } }
 @media(prefers-reduced-motion:reduce) { .export-format-list .export-format,.export-format-icon { transition: none !important; } }
