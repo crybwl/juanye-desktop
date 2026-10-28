@@ -29,6 +29,9 @@ test('knowledge × difficulty matrix conserves score, deduplicates labels and ke
   assert.equal(matrix.rows.find(row=>row.name==='未设置')?.cells.unset.score,4);
 });
 test('oversized per-question payload and invalid output budgets fail locally',()=>{
-  assert.throws(()=>planExamAnalysis(exam,{maxOutputTokens:10000}),/预算/);
-  const huge=structuredClone(exam);huge.sections[0].questions[0].stem='x'.repeat(17000);assert.throws(()=>planExamAnalysis(huge),/单次分析上限/);
+  assert.throws(()=>planExamAnalysis(exam,{maxOutputTokens:131073}),/预算/);
+  assert.equal(planExamAnalysis(exam,{maxOutputTokens:65536}).maxOutputTokens,65536);
+  const huge=structuredClone(exam);huge.sections[0].questions[0].stem='x'.repeat(17000);assert.equal(planExamAnalysis(huge).chunks[0][0].stem.length,17000);
+  huge.sections[0].questions[0].stem='x'.repeat(150000);assert.throws(()=>planExamAnalysis(huge),/单次输入上限/);
+  assert.equal(planExamAnalysis(huge,{maxChunkChars:200000}).chunks[0][0].stem.length,150000);
 });

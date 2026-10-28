@@ -11,6 +11,7 @@ import { TikzDrawing } from "../TikzDrawing";
 import { parseProject } from "../documents";
 import { changeQuestionType } from "../structure";
 import { bankBridge, BANK_DRAG_MIME, checkedBankDocument, cloneBankEntries, latestBankEntries, parseBankDrag, sortBankEntries, type BankDocument, type BankEntry, type BankFilters } from "../question-bank";
+import { planCollectionDrop } from "../collection-drop";
 import { Button, Field, IconButton, Modal, SharedPill, inputCls, useToast } from "../ui";
 import { Select } from "./Select";
 import { Checkbox } from "./Checkbox";
@@ -129,6 +130,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   const [pulse, setPulse] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const [collectionDropId, setCollectionDropId] = useState("");
   const [bursts, setBursts] = useState<Record<string, number>>({});
   const [zoom, setZoom] = useState<ZoomFigure | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -272,7 +274,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
     return () => window.removeEventListener("pointerdown", dismiss);
   }, [active]);
   useEffect(() => {
-    if (!active || !rich) { setFlights([]); setDragging(false); setDropActive(false); }
+    if (!active || !rich) { setFlights([]); setDragging(false); setDropActive(false); setCollectionDropId(""); }
   }, [active, rich]);
 
   // "/" focuses search; ↑/↓ walk the visible list while previewing (never while editing a draft).
@@ -399,6 +401,14 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
     acceptBank(await bankBridge().bankManage({ action: "metadata", ids: selectedEntries.map(entry => entry.id), appendCollectionId: collectionTarget }));
     setCollectionTarget(""); toast({ title: "已加入收藏夹" });
   });
+  const dropIntoCollection = (raw: string, targetId: string) => task(async () => {
+    const plan = planCollectionDrop(bankRef.current, raw, targetId);
+    if (!plan.ids.length) { toast({ title: `题目已在“${plan.name}”中` }); return; }
+    // Append in one atomic backend operation. Never replace memberships, move
+    // the source question, create a content revision, or add it to the paper.
+    acceptBank(await bankBridge().bankManage({ action: "metadata", ids: plan.ids, appendCollectionId: targetId }));
+    toast({ title: `已将 ${plan.ids.length} 道题加入“${plan.name}”`, ...(plan.already ? { desc: `${plan.already} 道已有题目已跳过` } : {}) });
+  });
   async function readPackage(file: File) {
     if (file.size > 250 * 1024 * 1024) throw Error("题库备份超过 250 MB，请拆分后导入");
     const content = await file.text();
@@ -433,9 +443,9 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
       if (busy) return false;
       const ids = isSelected ? selected : [entry.id];
       if (ids.length > 200) { toast({ title: "单次最多拖入 200 道题", tone: "warn" }); return false; }
-      transfer.effectAllowed = "copy"; transfer.setData(BANK_DRAG_MIME, JSON.stringify(ids)); dragGhost(transfer, ids.length, entry.question.type); setDragging(true); return true;
+      transfer.effectAllowed = "copy"; transfer.setData(BANK_DRAG_MIME, JSON.stringify(ids)); dragGhost(transfer, ids.length, entry.question.type); setDragging(true); setSidebarOpen(true); return true;
     },
-    dragEnd: () => { setDragging(false); setDropActive(false); },
+    dragEnd: () => { setDragging(false); setDropActive(false); setCollectionDropId(""); if (!sidebarHovered.current && !sidebarRef.current?.contains(document.activeElement)) setSidebarOpen(false); },
   };
   const nav = (id: LibraryView, label: string, icon: ReactNode, count: number, tone: string) => <button key={id} className="bank-nav-item" data-active={view === id} data-bank-view={id} data-tone={tone} aria-label={`${label}，${count} 道题`} title={label} aria-pressed={view === id} onClick={() => changeView(id)}>
     {view === id && <SharedPill layoutId="bank-nav-pill" className="bank-nav-pill" transition={motionTransition} />}
@@ -467,15 +477,19 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
 
     <AnimatePresence initial={false}>{error && <motion.div key="error" className="bank-workspace-error" role="alert" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={motionTransition}><span>{error}</span><button aria-label="关闭题库错误" onClick={() => setError("")}><X size={15} /></button></motion.div>}</AnimatePresence>
     <div className="bank-workspace-layout">
-      <aside ref={sidebarRef} className="bank-library-sidebar" aria-label="题库导航" data-expanded={sidebarOpen} onPointerDown={event => { sidebarTouch.current = event.pointerType === "touch"; }} onPointerEnter={event => { if (event.pointerType === "mouse" && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { sidebarHovered.current = true; setSidebarOpen(true); } }} onPointerLeave={() => { sidebarHovered.current = false; if (!sidebarRef.current?.contains(document.activeElement)) setSidebarOpen(false); }} onFocusCapture={event => { if (!sidebarTouch.current || event.target.matches(":focus-visible")) setSidebarOpen(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !sidebarHovered.current) setSidebarOpen(false); }} onKeyDown={event => { if (event.key === "Escape" && sidebarOpen) { event.preventDefault(); event.stopPropagation(); sidebarRef.current?.querySelector<HTMLButtonElement>("[data-testid='bank-sidebar-toggle']")?.focus(); setSidebarOpen(false); } }}>
+      <aside ref={sidebarRef} className="bank-library-sidebar" aria-label="题库导航" data-expanded={sidebarOpen} onPointerDown={event => { sidebarTouch.current = event.pointerType !== "mouse"; }} onPointerEnter={event => { if (event.pointerType === "mouse" && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { sidebarHovered.current = true; setSidebarOpen(true); } }} onPointerLeave={() => { sidebarHovered.current = false; if (!dragging && !sidebarRef.current?.contains(document.activeElement)) setSidebarOpen(false); }} onFocusCapture={event => { if (!sidebarTouch.current || event.target.matches(":focus-visible")) setSidebarOpen(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !sidebarHovered.current && !dragging) setSidebarOpen(false); }} onDragOver={event => { if (busy || !event.dataTransfer.types.includes(BANK_DRAG_MIME)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; if (!sidebarOpen) setSidebarOpen(true); }} onKeyDown={event => { if (event.key === "Escape" && sidebarOpen) { event.preventDefault(); event.stopPropagation(); sidebarRef.current?.querySelector<HTMLButtonElement>("[data-testid='bank-sidebar-toggle']")?.focus(); setSidebarOpen(false); } }}>
         <div className="bank-sidebar-surface" aria-hidden="true" />
         <button type="button" className="bank-sidebar-toggle" data-testid="bank-sidebar-toggle" aria-label={sidebarOpen ? "收起题库导航" : "展开题库导航"} title={sidebarOpen ? "收起题库导航" : "展开题库导航"} aria-expanded={sidebarOpen} aria-controls={sidebarPanelId} onClick={() => setSidebarOpen(value => !value)}>{sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>
         <div className="bank-sidebar-panel" id={sidebarPanelId}>
         <nav className="bank-nav">{nav("all", "全部题目", <Library size={16} />, live.length, "all")}{nav("trash", "回收站", <Trash2 size={16} />, trashCount, "trash")}</nav>
         <div className="bank-sidebar-label bank-collection-heading"><span>收藏夹</span><IconButton label="新建收藏夹" className="bank-collection-add" disabled={busy} onClick={() => setCollectionEdit({ id: crypto.randomUUID(), name: "", ...(collectionId ? { parentId: collectionId } : {}) })}><FolderPlus size={15} /></IconButton></div>
-        <div className="bank-collection-tree" data-testid="bank-collection-tree">{tree.map(({ collection, depth }, index) => <div key={collection.id} className="bank-collection-row" data-depth={Math.min(depth, 5)} style={{ paddingLeft: Math.min(depth, 5) * 14, "--i": index, "--depth": Math.min(depth, 5) } as CSSProperties}>
+        <div className="bank-collection-tree" data-testid="bank-collection-tree">{tree.map(({ collection, depth }, index) => <div key={collection.id} className="bank-collection-row" data-collection-id={collection.id} data-drop={collectionDropId === collection.id || undefined} data-depth={Math.min(depth, 5)} style={{ paddingLeft: Math.min(depth, 5) * 14, "--i": index, "--depth": Math.min(depth, 5) } as CSSProperties}
+          onDragOver={event => { if (busy || !event.dataTransfer.types.includes(BANK_DRAG_MIME)) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "copy"; if (!sidebarOpen) setSidebarOpen(true); if (collectionDropId !== collection.id) setCollectionDropId(collection.id); }}
+          onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setCollectionDropId(previous => previous === collection.id ? "" : previous); }}
+          onDrop={event => { if (!event.dataTransfer.types.includes(BANK_DRAG_MIME)) return; event.preventDefault(); event.stopPropagation(); const payload = event.dataTransfer.getData(BANK_DRAG_MIME); setCollectionDropId(""); setDragging(false); setDropActive(false); if (!busy) void dropIntoCollection(payload, collection.id); }}>
           <button className="bank-nav-item" data-active={collectionId === collection.id} aria-label={collection.name} title={collection.name} aria-pressed={collectionId === collection.id} onClick={() => changeView(`collection:${collection.id}`)}>{collectionId === collection.id && <SharedPill layoutId="bank-nav-pill" className="bank-nav-pill" transition={motionTransition} />}<span className="bank-nav-icon"><Folder size={15} /></span><span className="bank-nav-label" title={collection.name}>{collection.name}</span><small><AnimatedNumber value={collectionCounts.get(collection.id) ?? 0} /></small></button>
           <div className="bank-collection-tools"><button aria-label={`重命名收藏夹 ${collection.name}`} disabled={busy} onClick={() => setCollectionEdit({ ...collection })}><Pencil size={12} /></button><button aria-label={`删除收藏夹 ${collection.name}`} disabled={busy} onClick={() => void deleteCollection(collection)}><Trash2 size={12} /></button></div>
+          {collectionDropId === collection.id && <span className="bank-folder-drop-hint" aria-hidden="true">松开加入</span>}
         </div>)}{!tree.length && <button className="bank-empty-collection" onClick={() => setCollectionEdit({ id: crypto.randomUUID(), name: "" })}><Plus size={13} />新建收藏夹</button>}</div>
         <div className="bank-sidebar-bottom">
           <div className="bank-library-summary" role="group" aria-label="题库概况">
@@ -489,6 +503,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
           <div className="bank-sidebar-footer"><div><span className="bank-local-dot" /><HardDrive size={13} />仅保存在本机</div><small>每次修改都会保留历史版本</small></div>
         </div>
         </div>
+        <div className="sr-only" role="status" aria-live="polite">{collectionDropId ? `松开以加入收藏夹“${bank.collections.find(item => item.id === collectionDropId)?.name ?? ""}”` : ""}</div>
       </aside>
 
       <section className="bank-catalog" aria-label="题目列表" data-batch={selected.length > 0 || undefined}>

@@ -8,7 +8,7 @@ const {createExamAnalysisService,validateChunk,parseModelJson}=require('./exam-a
 const {contentHash,stableStringify,examSnapshotFingerprint,planExamAnalysis,DEFAULT_EXAM_AI_CONFIG}=require('./exam-ai-shared.mjs');
 const savedModel={baseUrl:'https://example.test/v1',model:'saved-model',key:'fake-test-key'};
 const exam=(count=2)=>({id:'exam-a',title:'测试卷',subtitle:'数学',duration:120,notice:['认真作答'],sections:[{id:'s1',title:'选择题',type:'single',note:'',questions:Array.from({length:count},(_,i)=>({id:`q${i+1}`,type:'single',stem:`求 $${i}+1$`,score:5,options:['1','2'],answer:['B'],analysis:'',knowledge:['加法'],difficulty:'easy'}))}]});
-const config=(overrides={})=>({...DEFAULT_EXAM_AI_CONFIG,...overrides});
+const config=(overrides={})=>({...DEFAULT_EXAM_AI_CONFIG,maxQuestionsPerChunk:20,wholePaperSummary:false,...overrides});
 function reply(questions){return {summary:'本卷标注以基础题为主。',recommendations:['复核答案。'],findings:[],questionReviews:questions.map(question=>({questionId:question.id,knowledge:['加法'],estimatedDifficulty:'easy',rationale:'一次加法；定性估计。',answerCheck:'consistent',visualCheck:'checked'}))};}
 function mockResponse(value,status=200,finish='stop'){return {ok:status===200,status,text:async()=>JSON.stringify({choices:[{finish_reason:finish,message:{content:typeof value==='string'?value:JSON.stringify(value)}}]})};}
 function request(examValue,configuration=config(),taskId='task-a'){return {taskId,exam:examValue,config:configuration,expectedFingerprint:examSnapshotFingerprint(examValue)};}
@@ -27,9 +27,10 @@ test('planning validates explicit finite budgets and defaults to no images',()=>
   const source=exam();source.sections[0].questions[0].sourceImage='data:image/png;base64,AAAA';
   const plan=planExamAnalysis(source);assert.equal(plan.images.length,0);assert.equal(plan.questionCount,2);assert.equal(plan.chunkCount,1);assert.ok(!stableStringify(plan.snapshot).includes('base64'));
   assert.equal(planExamAnalysis(source,config({includeImages:true,imageBudget:1})).images.length,1);
-  for(const invalid of [{maxOutputTokens:8193},{maxOutputTokens:Infinity},{maxRequests:17},{maxRequests:0},{imageBudget:9},{includeImages:'yes'}])assert.throws(()=>planExamAnalysis(source,invalid));
+  for(const invalid of [{maxOutputTokens:131073},{maxOutputTokens:Infinity},{maxRequests:65},{maxRequests:0},{maxChunkChars:1000001},{maxQuestionsPerChunk:65},{imageBudget:9},{includeImages:'yes'},{wholePaperSummary:'yes'}])assert.throws(()=>planExamAnalysis(source,invalid));
   const duplicate=exam();duplicate.sections[0].questions[1].id='q1';assert.throws(()=>planExamAnalysis(duplicate),/重复/);
-  const longStem=exam();longStem.sections[0].questions[0].stem='x'.repeat(150000);assert.equal(typeof examSnapshotFingerprint(longStem),'string');assert.throws(()=>planExamAnalysis(longStem),/单次分析上限/);
+  const longStem=exam();longStem.sections[0].questions[0].stem='x'.repeat(150000);assert.equal(typeof examSnapshotFingerprint(longStem),'string');assert.throws(()=>planExamAnalysis(longStem),/单次输入上限/);
+  assert.equal(planExamAnalysis(longStem,{maxChunkChars:200000}).chunks[0][0].stem.length,150000);
 });
 test('structured validation rejects missing, invented and duplicate references; image review cannot be fabricated',()=>{
   const questions=exam().sections[0].questions,value=reply(questions);
@@ -46,7 +47,7 @@ test('saved credentials, global exact statistics, bounded sequential requests, d
   const directory=await temporary(t),source=exam(41);source.sections[0].questions[0].sourceImage='data:image/png;base64,AAAA';let calls=0,active=0;
   const service=createExamAnalysisService({directory,getConfig:async()=>savedModel,fetchImpl:async(url,options)=>{
     calls++;assert.equal(active++,0);assert.equal(options.headers.Authorization,'Bearer fake-test-key');assert.ok(options.signal);assert.equal(url,'https://example.test/v1/chat/completions');
-    const {body,data}=sentData(options);assert.equal(body.model,'saved-model');assert.equal(body.max_tokens,4096);assert.equal(body.response_format,undefined);assert.equal(typeof body.messages[0].content,'string');assert.ok(!options.body.includes('data:image'));
+    const {body,data}=sentData(options);assert.equal(body.model,'saved-model');assert.equal(body.max_tokens,8192);assert.equal(body.response_format,undefined);assert.equal(typeof body.messages[0].content,'string');assert.ok(!options.body.includes('data:image'));
     assert.equal(data.globalStructure.questionCount,41);assert.equal(data.globalStructure.totalScore,205);active--;
     return mockResponse(reply(data.questions));
   }});
@@ -98,4 +99,89 @@ test('invalid persisted JSON is ignored without executing or calling model',asyn
   const directory=await temporary(t);await fs.writeFile(path.join(directory,'exam-ai-reports-v1.json'),'not json');
   const service=createExamAnalysisService({directory,getConfig:async()=>{throw Error('not used');},fetchImpl:async()=>{throw Error('not used');}});
   assert.deepEqual(await service.list(),[]);
+});
+
+test('planned budget counts actual groups plus optional synthesis, not the request ceiling',()=>{
+  const source=exam(19),plan=planExamAnalysis(source);
+  assert.equal(plan.chunkCount,3);assert.equal(plan.summaryRequestCount,1);assert.equal(plan.plannedRequests,4);
+  assert.equal(plan.maxTotalOutputTokens,4*8192);assert.equal(plan.maxRequests,12);assert.equal(plan.exceedsBudget,false);
+  const deep=planExamAnalysis(source,{mode:'deep'});assert.equal(deep.chunkCount,5);assert.equal(deep.plannedRequests,6);
+  assert.equal(planExamAnalysis(source,{maxRequests:3}).exceedsBudget,true);
+  assert.equal(planExamAnalysis(source,{wholePaperSummary:false}).plannedRequests,3);
+});
+
+test('larger explicit output allowances reach the actual provider payload unchanged',async t=>{
+  const budgets=[];
+  const service=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async(_url,options)=>{const {body,data}=sentData(options);budgets.push(body.max_tokens);return mockResponse(reply(data.questions));}});
+  for(const maxOutputTokens of [16384,65536,131072])await service.analyze(request(exam(),config({maxOutputTokens}),`output-${maxOutputTokens}`));
+  assert.deepEqual(budgets,[16384,65536,131072]);
+});
+
+test('full-paper synthesis is one confirmed extra request and preserves every detailed review and finding',async t=>{
+  const source=exam(19),configuration={...DEFAULT_EXAM_AI_CONFIG,maxRequests:4};let calls=0,synthesisCalls=0;
+  const service=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async(_url,options)=>{
+    calls++;const {data}=sentData(options);
+    if(!data.questions){synthesisCalls++;assert.equal(data.groupReports.length,3);assert.equal(data.globalStructure.questionCount,19);return mockResponse({summary:'整卷综合：题型较单一，需要增加推理层次。',recommendations:['结合考试时间增补分层题。']});}
+    const result=reply(data.questions);result.findings=[{kind:'coverage',severity:'info',questionIds:[data.questions[0].id],message:'本组存在重复知识点。',evidence:'组内均标注加法。',suggestion:'结合整卷覆盖复核。'}];return mockResponse(result);
+  }});
+  const result=await service.analyze(request(source,configuration));
+  assert.equal(calls,4);assert.equal(synthesisCalls,1);assert.equal(result.requestCount,4);assert.equal(result.aggregateStatus,'complete');assert.match(result.summary,/整卷综合/);
+  assert.equal(result.questionReviews.length,19);assert.equal(result.findings.length,3);assert.deepEqual(result.questionReviews.map(item=>item.questionId),source.sections[0].questions.map(item=>item.id));
+  const repeated=await service.analyze(request(source,configuration,'cached'));
+  assert.equal(calls,4);assert.equal(repeated.requestCount,0);assert.equal(repeated.cacheHits,4);assert.equal(repeated.aggregateStatus,'complete');
+});
+
+test('failed synthesis preserves complete per-question report and chunks; manual retry only calls synthesis',async t=>{
+  let calls=0,failSummary=true;
+  const source=exam(19),configuration={...DEFAULT_EXAM_AI_CONFIG,maxRequests:4};
+  const service=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async(_url,options)=>{
+    calls++;const {data}=sentData(options);
+    if(data.questions)return mockResponse(reply(data.questions));
+    if(failSummary)return {ok:false,status:500,text:async()=>JSON.stringify({error:{message:`bad summary ${savedModel.key}`}})};
+    return mockResponse({summary:'手动重试的整卷综合。',recommendations:[]});
+  }});
+  const result=await service.analyze(request(source,configuration));
+  assert.equal(calls,4);assert.equal(result.aggregateStatus,'unavailable');assert.equal(result.questionReviews.length,19);assert.match(result.aggregateError,/已隐藏/);assert.ok(!result.aggregateError.includes(savedModel.key));
+  assert.equal((await service.list()).length,1);assert.equal((await service.list())[0].aggregateStatus,'unavailable');
+  failSummary=false;
+  const retried=await service.analyze(request(source,configuration,'manual-retry'));
+  assert.equal(calls,5);assert.equal(retried.requestCount,1);assert.equal(retried.cacheHits,3);assert.equal(retried.aggregateStatus,'complete');
+});
+
+test('known v1 history validates its original configuration hash and normalizes in memory without rewriting disk',async t=>{
+  const directory=await temporary(t),source=exam(),plan=planExamAnalysis(source);
+  const legacyConfig={grade:'',scope:'',purpose:'组卷质量核查',mode:'quick',maxRequests:4,maxOutputTokens:4096,includeImages:false,imageBudget:2};
+  const old={version:1,id:'legacy',examKey:'exam-a',createdAt:'2026-10-27T00:00:00Z',promptVersion:'exam-review-v1',fingerprint:plan.fingerprint,contextHash:contentHash(stableStringify(legacyConfig)),config:legacyConfig,snapshot:plan.snapshot,model:{name:'saved-model',endpoint:savedModel.baseUrl},requestCount:1,cacheHits:0,checkedImageQuestionIds:[],...reply(source.sections[0].questions)};
+  const file=path.join(directory,'exam-ai-reports-v1.json'),bytes=JSON.stringify({version:1,reports:[old,{...old,id:'corrupt',contextHash:'f'.repeat(64)}],cache:[]});await fs.writeFile(file,bytes);
+  const service=createExamAnalysisService({directory,getConfig:async()=>{throw Error('must not read credentials');},fetchImpl:async()=>{throw Error('must not call model');}});
+  const reports=await service.list('exam-a');assert.equal(reports.length,1);assert.equal(reports[0].id,'legacy');assert.equal(reports[0].promptVersion,'exam-review-v1');assert.equal(reports[0].config.maxOutputTokens,4096);assert.equal(reports[0].config.maxQuestionsPerChunk,8);
+  assert.equal(reports[0].contextHash,contentHash(stableStringify(reports[0].config)));assert.equal(await fs.readFile(file,'utf8'),bytes);
+});
+
+test('detailed responses beyond the old 200k JSON ceiling survive; model token-limit failures do not retry',async t=>{
+  const source=exam(20);let calls=0;
+  const service=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async(_url,options)=>{calls++;const result=reply(sentData(options).data.questions);result.questionReviews.forEach(item=>item.rationale='详'.repeat(11000));assert.ok(JSON.stringify(result).length>200000);return mockResponse(result);}});
+  const result=await service.analyze(request(source,config({maxOutputTokens:131072})));assert.equal(result.questionReviews.length,20);assert.equal(result.questionReviews[19].rationale.length,11000);assert.equal(calls,1);
+  const rejected=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async()=>{calls++;return {ok:false,status:400,text:async()=>JSON.stringify({error:{message:'Range of max_tokens should be [1, 8192]'}})};}});
+  await assert.rejects(rejected.analyze(request(exam(),config({maxOutputTokens:65536}))),/降低每次输出tokens.*未自动重试/);
+  assert.equal(calls,2);assert.deepEqual(await rejected.list(),[]);
+});
+
+test('character limit covers the actual prompt including images and never cuts a long question',()=>{
+  const {reviewPrompt}=require('./exam-ai-shared.mjs');
+  const source=exam(8);source.sections[0].questions[0].sourceImage='data:image/png;base64,AAAA';source.sections[0].questions[2].stem='复杂原文🙂'.repeat(3500);
+  const plan=planExamAnalysis(source,{includeImages:true,imageBudget:2,maxChunkChars:30000});
+  for(const chunk of plan.chunks){const ids=plan.images.filter(image=>chunk.some(question=>question.id===image.questionId)).map(image=>image.questionId);assert.ok(reviewPrompt(plan,chunk,ids).length<=30000);}
+  assert.equal(plan.chunks.flat().find(question=>question.id==='q3').stem,source.sections[0].questions[2].stem);
+});
+
+test('raising only request/input insurance limits reuses identical prompts, but changed output allowance invalidates cache',async t=>{
+  let calls=0;
+  const source=exam(19),configuration={...DEFAULT_EXAM_AI_CONFIG,maxRequests:4};
+  const service=createExamAnalysisService({directory:await temporary(t),getConfig:async()=>savedModel,fetchImpl:async(_url,options)=>{calls++;const {data}=sentData(options);return mockResponse(data.questions?reply(data.questions):{summary:'完整综合。',recommendations:[]});}});
+  await service.analyze(request(source,configuration));assert.equal(calls,4);
+  const reused=await service.analyze(request(source,{...configuration,maxRequests:64,maxChunkChars:200000},'larger-insurance'));
+  assert.equal(calls,4);assert.equal(reused.cacheHits,4);assert.equal(reused.requestCount,0);
+  await service.analyze(request(source,{...configuration,maxOutputTokens:16384},'more-output'));
+  assert.equal(calls,8);
 });

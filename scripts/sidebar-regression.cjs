@@ -46,6 +46,7 @@ async function main() {
   const checks = [];
   const screenshots = [];
   const geometries = [];
+  const recentVisuals = [];
   const errors = [];
   let externalRequests = 0;
   const progress = value => { stage = value; console.log(JSON.stringify({ progress: stage })); };
@@ -147,8 +148,9 @@ async function main() {
           if (!['none', 'blur(0px)'].includes(style.filter) || Number(style.opacity) < 0.999) unblurred = false;
         }
         const positions = [c.x, c.width, c.right, p.x, p.width, p.right, textarea?.getBoundingClientRect().x ?? 0].map(n => Math.round(n * 10) / 10);
-        return { unblurred, contained: c.right <= innerWidth + 2 && p.left >= c.left + 6 && p.right <= c.right - 6, positions };
+        return { unblurred, contained: c.right <= innerWidth + 2 && p.left >= c.left + 6 && p.right <= c.right - 6, positions, canvasClient: canvas.clientWidth, canvasScrollHeight: canvas.scrollHeight, canvasClientHeight: canvas.clientHeight };
       });
+      recentVisuals.push(visual); if (recentVisuals.length > 16) recentVisuals.shift();
       if (!visual?.unblurred || !visual.contained) { stable = 0; return false; }
       const signature = JSON.stringify(visual.positions);
       stable = signature === previous ? stable + 1 : 0;
@@ -314,7 +316,13 @@ async function main() {
     checks.push('Legacy glass migrates to Telegram; white paper and opaque native window remain');
     report = { passed: true, packaged, checks, geometries, telegram, native, cloudRequests: 0, screenshots, screenshotsAreIsolatedRendererOnly: true };
   } catch (error) {
-    report = { passed: false, packaged, stage, error: error.message, checks, geometries, screenshots, cloudRequests: 0 };
+    const visualFailure = page ? await page.evaluate(() => {
+      const canvas = document.querySelector('.canvas-dots'), paper = canvas?.querySelector('[data-sheet]'), textarea = document.querySelector('textarea');
+      const ancestors = [];
+      for (let node = textarea; node; node = node.parentElement) { const style = getComputedStyle(node); if (!['none', 'blur(0px)'].includes(style.filter) || Number(style.opacity) < .999) ancestors.push({ tag: node.tagName, className: node.className, question: node.dataset.editorQuestion, filter: style.filter, opacity: style.opacity, inert: node.inert }); }
+      return { canvas: canvas?.getBoundingClientRect().toJSON(), paper: paper?.getBoundingClientRect().toJSON(), textarea: textarea?.getBoundingClientRect().toJSON(), ancestors, editorIds: [...document.querySelectorAll('[data-editor-question]')].map(node => node.dataset.editorQuestion), viewport: [innerWidth, innerHeight] };
+    }).catch(() => null) : null;
+    report = { passed: false, packaged, stage, error: error.message, checks, geometries, screenshots, visualFailure, recentVisuals, cloudRequests: 0 };
     process.exitCode = 1;
   } finally {
     if (app) {

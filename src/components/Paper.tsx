@@ -1,4 +1,4 @@
-import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Exam, Layout, Question, QuestionFigure } from "../types";
 import { CN_NUM, LETTERS, sectionNote } from "../data";
@@ -7,8 +7,9 @@ import { cx } from "../ui";
 import { hasOptions, isLongAnswer, questionFigures } from "../figures";
 import { extractTikzBlocks, stripTikzBlocks } from "../drawing";
 import { TikzDrawing } from "../TikzDrawing";
-import { safePageCut, samePages, type PagePiece, type SplitGuard } from "../pagination-geometry";
+import { samePages, type PagePiece, type SplitGuard } from "../pagination-geometry";
 import { paperGeometry, physicalSheets } from "../paper-geometry";
+import { BlockGeometryCache, paginateMeasuredBlocks, type BlockGeometry } from "../paper-measurements";
 
 /* ---------- 尺寸与变量 ---------- */
 export function pageDims(layout: Layout) {
@@ -57,7 +58,8 @@ export function PlotSvg({ ink = "#222", accent = "#3b5bdb", width = 230 }: { ink
 }
 
 /* ---------- 构建可分页的块 ---------- */
-type Block = { key: string; kind: "head" | "notice" | "sec" | "q" | "space" | "answer"; qid?: string; node: ReactNode; breakBefore?: boolean; breakAfter?: boolean; pageSizedQuestion?: boolean; fillRemaining?: boolean };
+type Block = { key: string; kind: "head" | "notice" | "sec" | "q" | "space" | "answer"; qid?: string; node: ReactNode; measureToken?: unknown; measureStamp?: string; breakBefore?: boolean; breakAfter?: boolean; pageSizedQuestion?: boolean; fillRemaining?: boolean };
+const measurementKey = (block: Block) => `${block.kind}:${block.key}`;
 export function answerCardSpace(q: Question, number: number): Exclude<Question["answerSpace"], "auto" | undefined> {
   return q.answerSpace && q.answerSpace !== "auto" ? q.answerSpace : number >= 17 && number <= 19 ? "full" : "half";
 }
@@ -130,6 +132,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
   blocks.push({
     key: "head",
     kind: "head",
+    measureToken: JSON.stringify([exam.title, exam.subtitle, exam.duration, totalScore, qCount]),
     node: (
       <div className="p-block" style={{ paddingBottom: 14 * gap }}>
         <div className="p-title">{exam.title || "未命名试卷"}</div>
@@ -145,6 +148,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
     blocks.push({
       key: "notice",
       kind: "notice",
+      measureToken: exam.notice,
       node: (
         <div className="p-block p-notice" style={{ paddingBottom: 12 * gap }}>
           <b>注意事项：</b>
@@ -162,6 +166,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
     blocks.push({
       key: s.id,
       kind: "sec",
+      measureToken: JSON.stringify([si, s.title, s.note || sectionNote(s.type, s.questions.map(q => q.score))]),
       breakBefore: s.pageBreakBefore,
       node: (
         <div className="p-block p-sec">
@@ -181,6 +186,8 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
         key: q.id,
         kind: "q",
         qid: q.id,
+        measureToken: q,
+        measureStamp: String(num),
         breakBefore: q.pageBreakBefore,
         pageSizedQuestion: paperSpace?.fillRemaining,
         node: (
@@ -197,6 +204,7 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
           key: q.id + "-space",
           kind: "space",
           qid: q.id,
+          measureToken: `${paperSpace.space}:${paperSpace.height}`,
           fillRemaining: paperSpace.fillRemaining,
           node: <div className="p-space" data-paper-answer-space={paperSpace.space} data-space-for={q.id} style={{ height: paperSpace.height }} />,
         });
@@ -204,19 +212,19 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
   });
   const numbered = exam.sections.flatMap((s) => s.questions).map((q, i) => ({ q, n: i + 1 }));
   if (l.answerMode !== "none" && numbered.some(({ q }) => q.answer.length || (l.answerMode !== "brief" && q.analysis.trim()))) {
-    blocks.push({ key: "answer-title", kind: "head", breakBefore: true, node: <div className="p-block p-title">{l.answerMode === "brief" ? "参考答案" : "参考答案与解析"}</div> });
+    blocks.push({ key: "answer-title", kind: "head", measureToken: l.answerMode, breakBefore: true, node: <div className="p-block p-title">{l.answerMode === "brief" ? "参考答案" : "参考答案与解析"}</div> });
     const quick = l.quickAnswers === false ? [] : numbered.filter(({ q }) => hasOptions(q.type) || q.type === "blank");
     if (quick.length) {
-      blocks.push({ key: "answer-quick-title", kind: "sec", node: <div className="p-block"><b>选择、填空速对</b></div> });
+      blocks.push({ key: "answer-quick-title", kind: "sec", measureToken: 'quick-title', node: <div className="p-block"><b>选择、填空速对</b></div> });
       // Short independent rows paginate without an enormous unbreakable table.
       for (let i = 0; i < quick.length; i += 4) {
-        blocks.push({ key: `quick-${i}`, kind: "answer", node: <div className="p-quick-row" style={{ borderTop: i ? undefined : "1px solid #555", marginBottom: i + 4 >= quick.length ? 12 : 0 }}>{quick.slice(i, i + 4).map(({ q, n }) => <div key={q.id} className="p-quick-cell" data-quick-answer-for={q.id}><b className="p-quick-number">{n}</b><div className="p-quick-value"><MathText text={quickAnswerSummary(q)} /></div></div>)}</div> });
+        blocks.push({ key: `quick-${i}`, kind: "answer", measureToken: JSON.stringify([i + 4 >= quick.length, ...quick.slice(i, i + 4).map(({ q, n }) => [n, quickAnswerSummary(q)])]), node: <div className="p-quick-row" style={{ borderTop: i ? undefined : "1px solid #555", marginBottom: i + 4 >= quick.length ? 12 : 0 }}>{quick.slice(i, i + 4).map(({ q, n }) => <div key={q.id} className="p-quick-cell" data-quick-answer-for={q.id}><b className="p-quick-number">{n}</b><div className="p-quick-value"><MathText text={quickAnswerSummary(q)} /></div></div>)}</div> });
       }
     }
     for (const { q, n } of numbered) {
       if (!q.answer.length && !q.analysis.trim()) continue;
       if (l.answerMode === "brief" && !q.answer.length) continue;
-      blocks.push({ key: `${q.id}-answer`, kind: "answer", node: <div className="p-block" style={{ overflowWrap: "anywhere" }}><b>第 {n} 题　</b><span>答案：</span><MathText text={q.answer.join("；") || "待补充"} />{l.answerMode !== "brief" && q.analysis.trim() && <div style={{ marginTop: 3 }}><b>解析：</b><MathText text={q.analysis} /></div>}</div> });
+      blocks.push({ key: `${q.id}-answer`, kind: "answer", measureToken: q, measureStamp: String(n), node: <div className="p-block" style={{ overflowWrap: "anywhere" }}><b>第 {n} 题　</b><span>答案：</span><MathText text={q.answer.join("；") || "待补充"} />{l.answerMode !== "brief" && q.analysis.trim() && <div style={{ marginTop: 3 }}><b>解析：</b><MathText text={q.analysis} /></div>}</div> });
     }
   }
   return blocks;
@@ -226,91 +234,56 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
 export function usePages(blocks: Block[], contentW: number, avail: number, layout: Layout, columns: 1 | 2 = 1) {
   const ref = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<PagePiece[][]>([]);
-  const [ready, setReady] = useState(false);
+  const cache = useRef(new BlockGeometryCache());
+  const [measurementVersion, setMeasurementVersion] = useState(0);
+  const [fontVersion, setFontVersion] = useState(0);
+  const [readyContext, setReadyContext] = useState<{ blocks: Block[]; context: string }>();
+  const context = JSON.stringify([contentW, avail, columns, layout, fontVersion]);
+  const missing = useMemo(() => blocks.flatMap((block, index) => cache.current.get(measurementKey(block), context, block.measureToken ?? block.node, block.measureStamp) ? [] : [{ block, index }]), [blocks, context, measurementVersion]);
+  const ready = readyContext?.blocks === blocks && readyContext.context === context;
+  useEffect(() => {
+    const invalidateFonts = () => setFontVersion(value => value + 1);
+    document.fonts?.addEventListener('loadingdone', invalidateFonts);
+    return () => document.fonts?.removeEventListener('loadingdone', invalidateFonts);
+  }, []);
   useLayoutEffect(() => {
+    cache.current.retain(new Set(blocks.map(measurementKey)));
+    const publish = () => {
+      const measured = blocks.map(block => cache.current.get(measurementKey(block), context, block.measureToken ?? block.node, block.measureStamp));
+      if (measured.some(value => !value)) return;
+      const next = paginateMeasuredBlocks(blocks, measured as BlockGeometry[], avail, layout.keepTogether, columns);
+      setPages(previous => samePages(previous, next) ? previous : next);
+      setReadyContext(previous => previous?.blocks === blocks && previous.context === context ? previous : { blocks, context });
+    };
+    if (!missing.length) { publish(); return; }
     const el = ref.current;
     if (!el) return;
     let active = true;
     let frame = 0;
     let resourcesReady = false;
-    setReady(false);
     const compute = () => {
-      if (!active) return;
+      if (!active || !resourcesReady || el.querySelector('[data-drawing-status="pending"]')) return;
       const children = Array.from(el.children) as HTMLElement[];
       const rects = children.map((c) => c.getBoundingClientRect());
-      const hs = rects.map(rect => rect.height);
-      if (children.length !== blocks.length || (blocks.length > 0 && hs.every((h) => !h))) return;
+      if (children.length !== missing.length || children.length > 0 && rects.every(rect => !rect.height)) return;
       const capacity = Math.max(30, avail);
-      const out: PagePiece[][] = [];
-      let cur: PagePiece[] = [];
-      let used = 0;
-      const flush = () => { if (cur.length) out.push(cur); cur = []; used = 0; };
-      const physicalBreak = () => { flush(); if (columns === 2 && out.length % 2) out.push([]); };
-      for (let i = 0; i < hs.length; i++) {
-        const block = blocks[i];
-        const height = hs[i];
-        if (block.breakBefore) physicalBreak();
-        const containsQuestion = () => cur.some(piece => blocks[piece.index].kind === "q" || blocks[piece.index].kind === "space");
-        if ((block.pageSizedQuestion || (block.kind === "sec" && blocks[i + 1]?.pageSizedQuestion)) && containsQuestion()) flush();
-        if (block.fillRemaining) {
-          if (capacity - used < Math.min(80, capacity * 0.15) && cur.length) flush();
-          const remaining = capacity - used;
-          cur.push({ index: i, offset: 0, height: remaining, fullHeight: remaining, fillSpace: true });
-          used += remaining;
-          flush();
-          continue;
+      for (let index = 0; index < missing.length; index++) {
+        const { block } = missing[index], child = children[index], rect = rects[index];
+        const guards: SplitGuard[] = [];
+        if (rect.height > capacity && block.kind !== 'space' && !block.fillRemaining) {
+          const add = (box: DOMRect, eligible: boolean) => { if (eligible) guards.push({ top: box.top - rect.top, bottom: box.bottom - rect.top }); };
+          for (const item of child.querySelectorAll('table.math-table, table.math-table tr')) { const box = item.getBoundingClientRect(); add(box, box.height <= capacity); }
+          const walker = document.createTreeWalker(child, NodeFilter.SHOW_TEXT), range = document.createRange();
+          let next: Node | null;
+          while ((next = walker.nextNode())) { if (!next.textContent?.trim()) continue; range.selectNodeContents(next); for (const box of range.getClientRects()) add(box, box.height > 0); }
+          range.detach();
+          for (const image of child.querySelectorAll('img,svg')) { const box = image.getBoundingClientRect(); add(box, box.height <= capacity); }
         }
-        // Keep a section heading with its first question, and optionally keep a question's space.
-        let group = height;
-        if (block.kind === "sec") group += Math.min(hs[i + 1] ?? 0, capacity * 0.35);
-        if (layout.keepTogether && block.kind === "q" && blocks[i + 1]?.kind === "space") group += hs[i + 1];
-        if (cur.length && group <= capacity && used + group > capacity) flush();
-        if (cur.length && height <= capacity && used + height > capacity) flush();
-        let offset = 0;
-        let guards: SplitGuard[] | undefined;
-        // Oversized content continues on another page instead of disappearing behind overflow:hidden.
-        while (offset < height - 0.05) {
-          let room = capacity - used;
-          if (room < 20 && cur.length) { flush(); room = capacity; }
-          let part = Math.min(height - offset, room);
-          if (offset + part < height - 0.05 && block.kind !== "space") {
-            // Move a boundary above any text line it intersects. This avoids bisecting glyphs.
-            if (!guards) {
-              guards = [];
-              const origin = rects[i].top;
-              const add = (rect: DOMRect, eligible: boolean) => { if (eligible) guards!.push({ top: rect.top - origin, bottom: rect.bottom - origin }); };
-              // Preserve the original table → text → image ordering, but read DOM geometry only once.
-              for (const item of children[i].querySelectorAll("table.math-table, table.math-table tr")) {
-                const rect = item.getBoundingClientRect(); add(rect, rect.height <= capacity);
-              }
-              const walker = document.createTreeWalker(children[i], NodeFilter.SHOW_TEXT);
-              const range = document.createRange();
-              let next: Node | null;
-              while ((next = walker.nextNode())) {
-                if (!next.textContent?.trim()) continue;
-                range.selectNodeContents(next);
-                for (const rect of range.getClientRects()) add(rect, rect.height > 0);
-              }
-              range.detach();
-              for (const image of children[i].querySelectorAll("img,svg")) {
-                const rect = image.getBoundingClientRect(); add(rect, rect.height <= capacity);
-              }
-            }
-            const cut = safePageCut(offset, offset + part, guards);
-            if (cut > offset + 1) part = cut - offset;
-          }
-          if (part < 0.05) { flush(); continue; }
-          cur.push({ index: i, offset, height: part, fullHeight: height });
-          used += part;
-          offset += part;
-          if (offset < height - 0.05) flush();
-        }
-        if (block.breakAfter) physicalBreak();
+        cache.current.set(measurementKey(block), context, block.measureToken ?? block.node, block.measureStamp, { height: rect.height, guards });
       }
-      flush();
-      const nextPages = out.length ? out : [[]];
-      setPages((p) => samePages(p, nextPages) ? p : nextPages);
-      setReady(resourcesReady && !el.querySelector('[data-drawing-status="pending"]'));
+      publish();
+      // Drop only the duplicate measuring copy, never visible/print content.
+      setMeasurementVersion(value => value + 1);
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(compute); };
     const ro = new ResizeObserver(schedule);
@@ -326,21 +299,22 @@ export function usePages(blocks: Block[], contentW: number, avail: number, layou
     // Coalesce the initial observer/font/image-ready notifications into one pre-paint measurement.
     schedule();
     return () => { active = false; cancelAnimationFrame(frame); ro.disconnect(); mutations.disconnect(); };
-  }, [blocks, contentW, avail, layout, columns]);
+  }, [blocks, context, missing, avail, layout.keepTogether, columns]);
 
   // Portal measurement outside hidden print-root; display:none ancestors would measure zero.
-  const measurer = useMemo(() => createPortal(
+  const measurer = useMemo(() => !missing.length ? null : createPortal(
     <div
       ref={ref}
+      data-paper-measurer=""
       aria-hidden
       className={cx("paper", layout.style)}
       style={{ position: "fixed", left: -99999, top: 0, width: contentW, visibility: "hidden", pointerEvents: "none", ...paperVars(layout) }}
     >
-      {blocks.map((b) => (
-        <div key={b.key}>{b.node}</div>
+      {missing.map(({ block }) => (
+        <div key={measurementKey(block)}>{block.node}</div>
       ))}
     </div>, document.body,
-  ), [blocks, contentW, layout]);
+  ), [missing, contentW, layout]);
   return { pages, measurer, ready };
 }
 
@@ -432,12 +406,14 @@ export const PageSheet = memo(function PageSheet({
   );
 });
 
+export interface PreviewPageMetadata { questionIds: readonly string[] }
+
 export const PaperPages = memo(function PaperPages(props: {
   exam: Exam;
   layout: Layout;
   totalScore: number;
   qCount: number;
-  render: (page: ReactNode, i: number, total: number) => ReactNode;
+  render: (page: ReactNode, i: number, total: number, metadata?: PreviewPageMetadata) => ReactNode;
   interactive?: boolean;
   activeId?: string | null;
   onPick?: (id: string) => void;
@@ -464,6 +440,7 @@ export const PaperPages = memo(function PaperPages(props: {
             sheet,
             i,
             grouped.length,
+            { questionIds: [...new Set(grouped[i].flatMap(column => column.flatMap(piece => blocks[piece.index]?.kind === "q" && blocks[piece.index]?.qid ? [blocks[piece.index].qid!] : [])))] },
           )}
         </Fragment>
       ))}
@@ -473,36 +450,36 @@ export const PaperPages = memo(function PaperPages(props: {
 });
 
 /* ---------- 答题卡 ---------- */
-export const AnswerCard = memo(function AnswerCard({ exam, layout, print, render }: { exam: Exam; layout: Layout; print?: boolean; render?: (page: ReactNode, i: number, total: number) => ReactNode }) {
+export const AnswerCard = memo(function AnswerCard({ exam, layout, print, render }: { exam: Exam; layout: Layout; print?: boolean; render?: (page: ReactNode, i: number, total: number, metadata?: PreviewPageMetadata) => ReactNode }) {
   // Answer-card "full page" keeps its physical-page meaning, including questions
   // 17–19. Only the question paper uses independently flowing logical columns.
   const { contentWidth, contentHeight: avail } = paperGeometry(layout);
   const blocks = useMemo<Block[]>(() => {
-    const result: Block[] = [{ key: "card-head", kind: "head", node: <div style={{ paddingBottom: 16 }}><div className="p-title" style={{ fontSize: "calc(var(--fs) * 1.35)" }}>{exam.title} · 答题卡</div><div className="card-box" style={{ display: "flex", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", fontSize: "0.9em" }}><span>姓名：____________　班级：____________</span><span>考号：________________</span></div></div> }];
+    const result: Block[] = [{ key: "card-head", kind: "head", measureToken: exam.title, node: <div style={{ paddingBottom: 16 }}><div className="p-title" style={{ fontSize: "calc(var(--fs) * 1.35)" }}>{exam.title} · 答题卡</div><div className="card-box" style={{ display: "flex", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", fontSize: "0.9em" }}><span>姓名：____________　班级：____________</span><span>考号：________________</span></div></div> }];
     const numbered = exam.sections.flatMap((s) => s.questions).map((q, i) => ({ q, n: i + 1 }));
     const choices = numbered.filter(({ q }) => hasOptions(q.type));
     if (choices.length) {
-      result.push({ key: "card-choice-title", kind: "sec", node: <div style={{ padding: "4px 0 8px" }}><b>选择题</b><small>（用 2B 铅笔填涂）</small></div> });
+      result.push({ key: "card-choice-title", kind: "sec", measureToken: 'choice-title', node: <div style={{ padding: "4px 0 8px" }}><b>选择题</b><small>（用 2B 铅笔填涂）</small></div> });
       for (let i = 0; i < choices.length; i += 3) {
-        result.push({ key: `card-choice-${i}`, kind: "answer", node: <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, paddingBottom: 10, fontFamily: "var(--font-sans)", fontSize: "0.9em" }}>{choices.slice(i, i + 3).map(({ q, n }) => <div key={q.id} style={{ display: "flex", alignItems: "center" }}><span style={{ width: 25 }}>{n}.</span>{Array.from({ length: Math.max(2, q.options.length || 4) }, (_, j) => <span key={j} className="bubble">{String.fromCharCode(65 + j)}</span>)}</div>)}</div> });
+        result.push({ key: `card-choice-${i}`, kind: "answer", measureToken: JSON.stringify(choices.slice(i, i + 3).map(({ q, n }) => [n, Math.max(2, q.options.length || 4)])), node: <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, paddingBottom: 10, fontFamily: "var(--font-sans)", fontSize: "0.9em" }}>{choices.slice(i, i + 3).map(({ q, n }) => <div key={q.id} style={{ display: "flex", alignItems: "center" }}><span style={{ width: 25 }}>{n}.</span>{Array.from({ length: Math.max(2, q.options.length || 4) }, (_, j) => <span key={j} className="bubble">{String.fromCharCode(65 + j)}</span>)}</div>)}</div> });
       }
     }
     const blanks = numbered.filter(({ q }) => q.type === "blank");
     if (blanks.length) {
-      result.push({ key: "card-blank-title", kind: "sec", node: <div style={{ padding: "12px 0 4px" }}><b>填空题</b></div> });
-      for (let i = 0; i < blanks.length; i += 2) result.push({ key: `card-blank-${i}`, kind: "answer", node: <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 20, paddingBottom: 12 }}>{blanks.slice(i, i + 2).map(({ q, n }) => <div key={q.id} style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 35 }}><span>{n}.</span><span style={{ flex: 1, borderBottom: "1px solid #333", marginBottom: 4 }} /></div>)}</div> });
+      result.push({ key: "card-blank-title", kind: "sec", measureToken: 'blank-title', node: <div style={{ padding: "12px 0 4px" }}><b>填空题</b></div> });
+      for (let i = 0; i < blanks.length; i += 2) result.push({ key: `card-blank-${i}`, kind: "answer", measureToken: blanks.slice(i, i + 2).map(({ n }) => n).join(','), node: <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 20, paddingBottom: 12 }}>{blanks.slice(i, i + 2).map(({ q, n }) => <div key={q.id} style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 35 }}><span>{n}.</span><span style={{ flex: 1, borderBottom: "1px solid #333", marginBottom: 4 }} /></div>)}</div> });
     }
     for (const { q, n } of numbered.filter(({ q }) => isLongAnswer(q.type))) {
       const space = answerCardSpace(q, n);
       const full = space === "full";
       const height = full ? avail : avail * (space === "quarter" ? 0.25 : 0.5);
-      result.push({ key: `card-essay-${q.id}`, kind: "answer", qid: q.id, breakBefore: full, breakAfter: full, node: <div data-answer-number={n} data-answer-space={space} style={{ height, paddingBottom: full ? 0 : 12, boxSizing: "border-box" }}><div style={{ height: "100%", border: "1px solid #333", padding: "12px 14px", boxSizing: "border-box" }}><div style={{ display: "flex", justifyContent: "space-between", borderBottom: full ? "1px solid #aaa" : undefined, paddingBottom: full ? 8 : 0 }}><b>第 {n} 题（{q.score} 分）</b>{full && <span style={{ fontSize: "0.8em" }}>姓名：____________</span>}</div></div></div> });
+      result.push({ key: `card-essay-${q.id}`, kind: "answer", qid: q.id, measureToken: `${n}:${q.score}:${space}:${height}`, breakBefore: full, breakAfter: full, node: <div data-answer-number={n} data-answer-space={space} style={{ height, paddingBottom: full ? 0 : 12, boxSizing: "border-box" }}><div style={{ height: "100%", border: "1px solid #333", padding: "12px 14px", boxSizing: "border-box" }}><div style={{ display: "flex", justifyContent: "space-between", borderBottom: full ? "1px solid #aaa" : undefined, paddingBottom: full ? 8 : 0 }}><b>第 {n} 题（{q.score} 分）</b>{full && <span style={{ fontSize: "0.8em" }}>姓名：____________</span>}</div></div></div> });
     }
     return result;
   }, [exam, avail]);
   const { pages, measurer, ready } = usePages(blocks, contentWidth, avail, layout);
   const sheets = useMemo(() => pages.map((pieces, i) => <PageSheet key={i} layout={layout} index={i} total={pages.length} print={print}><PageContent pieces={pieces} blocks={blocks} /></PageSheet>), [pages, blocks, layout, print]);
   return <>{measurer}<div data-pagination-ready={ready ? "true" : "false"} data-answer-card="" style={{ display: "contents" }}>{sheets.map((page, i) => {
-    return <Fragment key={i}>{render ? render(page, i, pages.length) : page}</Fragment>;
+    return <Fragment key={i}>{render ? render(page, i, pages.length, { questionIds: [...new Set(pages[i].flatMap(piece => blocks[piece.index]?.qid ? [blocks[piece.index].qid!] : []))] }) : page}</Fragment>;
   })}</div></>;
 });

@@ -99,6 +99,15 @@ async function main() {
     await nav().getByRole('button', { name: '组卷', exact: true }).click();
     await nav().getByRole('button', { name: '试卷分析', exact: true }).click();
     await analyze().getByRole('tab', { name: 'AI 评估', exact: true }).click();
+    await analyze().locator('.exam-ai-advanced > summary').click();
+    const outputBudget = analyze().getByLabel('每次最多输出 tokens', { exact: true });
+    assert.equal(await outputBudget.getAttribute('max'), '131072');
+    await analyze().getByRole('button', { name: '标准 16K', exact: true }).click();
+    assert.equal(await outputBudget.inputValue(), '16384'); assert.equal(calls, 0, 'Budget preset must not send a paid request');
+    assert.equal(await analyze().getByLabel('最多请求次数', { exact: true }).getAttribute('max'), '64');
+    assert.ok(Number(await analyze().getByLabel('每次输入字符上限', { exact: true }).inputValue()) >= 48000);
+    await analyze().getByRole('button', { name: '兼容 8K', exact: true }).click();
+    await analyze().locator('.exam-ai-advanced > summary').click();
     await analyze().getByRole('button', { name: '预览并确认发送', exact: true }).click();
     assert.equal(calls, 0, 'Model called before explicit budget confirmation');
     await analyze().getByRole('button', { name: '确认并开始分析', exact: true }).click();

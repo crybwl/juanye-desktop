@@ -22,6 +22,7 @@ const paperCount = Number(arg('paper-questions', '120'));
 const packaged = process.argv.includes('--packaged');
 const latestExportCheck = process.argv.includes('--latest-export');
 const guardsOnly = process.argv.includes('--guards-only');
+const cpuProfile = process.argv.includes('--cpu-profile');
 const assertParking = process.argv.includes('--assert-parking') || guardsOnly;
 const allAppearances = [{ name: 'dark', mode: 'dark' }, { name: 'light', mode: 'light' }, { name: 'telegram-dark', mode: 'telegram', scheme: 'dark' }, { name: 'telegram-light', mode: 'telegram', scheme: 'light' }];
 const allCases = ['typing', 'question-selection', 'sidebar-roundtrip', 'workspace-to-bank', 'bank-search', 'bank-selection', 'workspace-to-exam', 'dialog-roundtrip'];
@@ -166,11 +167,12 @@ async function main() {
     await page.evaluate(questions => window.juanye.bankSave({ questions, origin: { examTitle: '合成性能题库', examId: 'chrome-fixture' } }), Array.from({ length: bankCount }, (_, index) => question(index + 1)));
     assert.equal((await page.evaluate(() => window.juanye.bankLoad())).entries.length, bankCount);
     const client = await page.context().newCDPSession(page); await client.send('Performance.enable');
+    if (cpuProfile) { await client.send('Profiler.enable'); await client.send('Profiler.setSamplingInterval', { interval: 1000 }); }
     const nav = name => page.getByRole('navigation', { name: '工作区', exact: true }).getByRole('button', { name, exact: true });
     const bank = () => page.getByTestId('bank-workspace');
     const rows = () => bank().getByTestId('bank-entry');
     const sidebar = () => page.getByRole('complementary', { name: '试卷目录', exact: true });
-    const text = () => page.locator('.workspace-editor-stage').getByPlaceholder('输入题干…', { exact: true });
+    const text = () => page.locator('.workspace-editor-stage [data-editor-question]:not([inert])').getByPlaceholder('输入题干…', { exact: true });
     const shot = async name => { const file = `${name}.png`; await page.mouse.move(3, 3); await page.screenshot({ path: path.join(output, file) }); screenshots.push(file); };
     async function measure(variant, name, trial, action, settle = 450) {
       const before = Object.fromEntries((await client.send('Performance.getMetrics')).metrics.map(entry => [entry.name, entry.value]));
@@ -214,7 +216,7 @@ async function main() {
       if (item.scheme) assert.equal(await page.evaluate(() => document.documentElement.dataset.telegramScheme), item.scheme);
     }
     const initial = await page.locator('.workspace-preview-stage').evaluate(el => ({ pages: el.querySelectorAll('[data-page]').length, nodes: el.querySelectorAll('*').length, math: el.querySelectorAll('.katex').length }));
-    assert.ok(initial.pages >= 5 && initial.math > paperCount, 'Heavy paper fixture did not render');
+    assert.ok(initial.pages >= 5 && initial.math > 0, 'Heavy paper fixture did not render visible mathematics');
     progress('warm bank and measure selected appearances');
     await nav('本地题库').click(); await rows().first().waitFor(); await pause(500);
     assert.equal(await rows().count(), 25, '500-question bank must render only one 25-card page');
@@ -226,6 +228,7 @@ async function main() {
     await pause(350);
     for (const item of allAppearances.filter(appearance => selectedAppearances.includes(appearance.name))) {
       progress(item.name); await applyAppearance(item);
+      if (cpuProfile) await client.send('Profiler.start');
       for (let trial = 1; !guardsOnly && trial <= 2; trial++) {
         if (caseSet.has('typing')) await measure(item.name, 'typing', trial, async () => { await text().focus(); await text().press('End'); await text().pressSequentially(` ${trial}ab`, { delay: 25 }); }, 650);
         if (caseSet.has('question-selection')) await measure(item.name, 'question-selection', trial, async () => { await sidebar().getByRole('button', { name: '编辑第 2 题', exact: true }).click(); await pause(100); await sidebar().getByRole('button', { name: '编辑第 1 题', exact: true }).click(); });
@@ -246,12 +249,21 @@ async function main() {
         await shot(`bank-${item.name}`);
         await captureMotion(nav('组卷'), ['[data-workspace-view="exam"]', '[data-workspace-view="bank"]'], `${item.name}-workspace-return`);
       }
+      if (cpuProfile) {
+        const { profile: captured } = await client.send('Profiler.stop');
+        fs.writeFileSync(path.join(output, `${item.name}.cpuprofile`), JSON.stringify(captured));
+        const nodes = new Map(captured.nodes.map(node => [node.id, node]));
+        const times = new Map();
+        captured.samples?.forEach((id, index) => times.set(id, (times.get(id) || 0) + (captured.timeDeltas?.[index] || 0)));
+        const hot = [...times].sort((a, b) => b[1] - a[1]).slice(0, 45).map(([id, us]) => ({ ms: rounded(us / 1000), ...nodes.get(id).callFrame }));
+        fs.writeFileSync(path.join(output, `${item.name}-hot-functions.json`), JSON.stringify(hot, null, 2));
+      }
     }
     if (assertParking) {
       progress('outside timed cases: exiting workspace input/focus and rapid-toggle guards');
       const exiting = await nav('本地题库').evaluate(async button => {
         const exam = document.querySelector('[data-workspace-view="exam"]');
-        const textarea = exam.querySelector('textarea[placeholder="输入题干…"]');
+        const textarea = exam.querySelector('[data-editor-question]:not([inert]) textarea[placeholder="输入题干…"]');
         const original = textarea.value; textarea.focus(); button.click();
         await new Promise(resolve => setTimeout(resolve, 0));
         const bank = document.querySelector('[data-workspace-view="bank"]');
@@ -323,13 +335,32 @@ async function main() {
       workspaceGuards = { exiting, backward, forward, rapid, rapidToggles: 6, inputUnchanged: true, note: 'Actual trusted Tab/Shift+Tab keys; public navigation preserves old textarea focus for switch test; synthetic pointer/click probes exercise inactive capture guards. Excluded from timed cases.' };
     }
     progress('validate and compare');
-    const final = await page.evaluate(() => ({ pages: document.querySelectorAll('.workspace-preview-stage [data-page]').length, questions: new Set([...document.querySelectorAll('.workspace-preview-stage [data-page] [data-qid]')].map(node => node.dataset.qid)).size, formulaErrors: [...document.querySelectorAll('.katex-error')].map(node => node.textContent), paperBackgrounds: [...document.querySelectorAll('.workspace-preview-stage [data-page] .paper')].slice(0, 3).map(node => getComputedStyle(node).backgroundColor), reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches, interfaceMotion: document.querySelector('[data-interface-motion]')?.getAttribute('data-interface-motion'), reactRenderers: window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size, supportedObserverTypes: PerformanceObserver.supportedEntryTypes }));
+    const final = await page.evaluate(() => {
+      const wrappers = [...document.querySelectorAll('.workspace-preview-stage [data-page]')];
+      const ids = wrappers.flatMap(node => node.hasAttribute('data-page-question-ids') ? JSON.parse(node.dataset.pageQuestionIds) : [...node.querySelectorAll('[data-qid]')].map(item => item.dataset.qid));
+      return { pages: wrappers.length, questions: new Set(ids).size, mountedPages: wrappers.filter(node => node.dataset.pageMounted !== 'false').length, mountedQuestions: new Set([...document.querySelectorAll('.workspace-preview-stage [data-page] [data-qid]')].map(node => node.dataset.qid)).size, previewNodes: document.querySelectorAll('.workspace-preview-stage *').length, measurementCopies: document.querySelectorAll('[data-paper-measurer]').length, formulaErrors: [...document.querySelectorAll('.katex-error')].map(node => node.textContent), paperBackgrounds: [...document.querySelectorAll('.workspace-preview-stage [data-page] .paper')].slice(0, 3).map(node => getComputedStyle(node).backgroundColor), reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches, interfaceMotion: document.querySelector('[data-interface-motion]')?.getAttribute('data-interface-motion'), reactRenderers: window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size, supportedObserverTypes: PerformanceObserver.supportedEntryTypes };
+    });
     assert.deepEqual(final.formulaErrors, []); assert.equal(final.questions, paperCount); assert.equal(final.reducedMotion, false); assert.notEqual(final.interfaceMotion, 'reduced');
     assert.ok(final.paperBackgrounds.length > 0, 'No rendered paper surfaces found');
     assert.ok(final.paperBackgrounds.every(value => value === 'rgb(255, 255, 255)'), `Paper is no longer white: ${JSON.stringify(final.paperBackgrounds)}`);
     assert.ok(final.reactRenderers > 0, 'React commit instrumentation was not installed');
     assert.ok(samples.every(sample => sample.frameCount > 0), 'No real rAF samples for an interaction');
     if (!guardsOnly) assert.ok(motion.some(item => item.intermediateMotionCaptured), 'No real intermediate animation frames were captured');
+    if (final.pages > 8 && final.mountedPages < final.pages) {
+      // Correctness of windowed page bodies is not inferred from metadata:
+      // navigate to the last real question, verify it mounts in the viewport,
+      // then verify the top page remounts after returning. Outside timed cases.
+      await sidebar().getByRole('button', { name: `编辑第 ${paperCount} 题`, exact: true }).click();
+      await page.waitForFunction(id => {
+        const node = document.querySelector(`.workspace-preview-stage [data-sheet] [data-qid="${id}"]`), canvas = document.querySelector('.preview-canvas');
+        if (!node || !canvas) return false;
+        const a = node.getBoundingClientRect(), b = canvas.getBoundingClientRect(); return a.top < b.bottom && a.bottom > b.top;
+      }, `chrome-fixture-${paperCount}`, { timeout: 12000 });
+      await sidebar().getByRole('button', { name: '编辑第 1 题', exact: true }).click();
+      await page.waitForFunction(() => { const node = document.querySelector('.workspace-preview-stage [data-sheet] [data-qid="chrome-fixture-1"]'), canvas = document.querySelector('.preview-canvas'); if (!node || !canvas) return false; const a = node.getBoundingClientRect(), b = canvas.getBoundingClientRect(); return a.top < b.bottom && a.bottom > b.top; });
+      await page.waitForFunction(() => document.querySelector('.workspace-editor-stage [data-editor-question="chrome-fixture-1"] textarea[placeholder="输入题干…"]')?.value.startsWith('本地性能样例第 1 题'));
+      final.lastQuestionNavigation = true;
+    }
     const requests = await app.evaluate(() => globalThis.__chromePerf); assert.deepEqual(requests, { network: 0, modelCalls: 0 }); assert.equal(rendererRequests, 0); assert.deepEqual(errors, []);
     let latestExport;
     if (latestExportCheck) {
@@ -339,6 +370,7 @@ async function main() {
         ipcMain.removeHandler('document:pdf');
         ipcMain.handle('document:pdf', async () => {
           globalThis.__chromeLatestExport.pdfText = await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript('document.querySelector("#print-root")?.textContent || ""');
+          globalThis.__chromeLatestExport.pdfQuestions = await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript('new Set([...document.querySelectorAll("#print-root [data-qid]")].map(node => node.dataset.qid)).size');
           return { canceled: true };
         });
         ipcMain.removeHandler('document:text');
@@ -352,6 +384,7 @@ async function main() {
       while (Date.now() < deadline && !await app.evaluate(() => globalThis.__chromeLatestExport.pdfText !== null)) await pause(100);
       const pdfText = await app.evaluate(() => globalThis.__chromeLatestExport.pdfText);
       assert.ok(pdfText?.includes(marker), 'Immediate PDF print DOM omitted the last keystroke');
+      assert.equal(await app.evaluate(() => globalThis.__chromeLatestExport.pdfQuestions), paperCount, 'Windowed preview must not omit any question from full PDF print DOM');
       await page.getByRole('button', { name: '导出中心', exact: true }).click();
       const center = page.getByRole('dialog');
       await center.locator('.export-format-list').getByRole('button', { name: /卷页项目/ }).click();

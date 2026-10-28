@@ -30,6 +30,10 @@ npm start
 - `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
 - `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
 - `node scripts/beta7-regression.cjs [--packaged]`：60px窄栏/220px悬停浮层、原宽栏区域不抢点击、列表不重排；后台分析确认前零请求、请求时仅左下角转圈、编辑/切换/重新查看不重复请求、完成报告过期保护、后台明确取消与普通关闭取消、服务错误脱敏且不自动重试。手动释放本机模型替身响应，不使用真实密钥或付费模型。
+- `node scripts/scene-patterns-regression.cjs [--packaged]`：六套背景在深浅色下的实际已解码图片、大小/密度、偏好持久化、单层漂移、减弱动效与白纸隔离；不调用模型或网络。
+- `node scripts/collection-drop-regression.cjs [--packaged]`：真实 Chromium 原生单题/多选拖入收藏夹、嵌套目标、重复加入、无效载荷及重启持久化；验证题目版本、使用次数和卷内快照不变。
+- `node scripts/editor-selection-regression.cjs [--packaged]`：120题快速往返、末题/首题跳转、进入动画中输入和退出失焦；检查新旧内容都有动画中间态，旧编辑台不可交互且不串写其他题目。
+- `node scripts/paper-measurement-regression.cjs --label=local --baseline=beta7-exact-reference`：同一合成题卷核对逐页题号、文本、续页切割、长表格、TikZ、双栏及答题卡；参考报告需先保存在 `artifacts/qa-paper-measurements/`。打印入口检查包含最后输入及全部题目，不冒充实际PDF写盘。
 - `node scripts/ui-overhaul-regression.cjs [--packaged]`：当前用户补丁的界面与真实动效验收；悬停/真实Tab聚焦/粗指针触屏模式、无框底部统计入口、列表/卡片偏好、题型计数、飞入选题篮、收藏粒子、原生拖放、小数分值、图片键盘操作、编辑分组、20套实际外观及1000/1280/1500px窗口边界，不调用模型或HTTP。报告及截图位于 `artifacts/qa-ui-overhaul/`。
 - `node scripts/integrated-surfaces-regression.cjs [--packaged]`：统一按钮与Telegram背景巡检；通过设置界面切换20种外观，检查单一连续背景、缓存PNG纹理、面板不重复铺图、弹窗根面板纹理、主按钮普通/悬停可读性、次要按钮边框与阴影，遍历设置/编辑/公式/OCR/导入/分析/导出/历史/题库，验证白纸与打印不受影响；不执行模型。报告及截图位于 `artifacts/qa-integrated-surfaces/`。
 - `node scripts/chrome-performance-regression.cjs --label=local --baseline=beta5 --latest-export`：同一500道题库、120道试卷样例，记录四种外观的输入、选择、侧栏、工作区、检索与弹窗共64个样本；区分首帧等待、后续帧分位、脚本/布局/样式耗时和长任务。最新输入的打印DOM、项目与草稿另作正确性验证；原生保存对话框与PDF写盘由替身拦截，不应称为实际PDF文件验收。

@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from "motion/react";
 import { createContext, forwardRef, memo, useCallback, useContext, useDeferredValue, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -44,6 +44,13 @@ import "./editor-workbench.css";
 
 const QuestionDrawingEditor = memo(DrawingEditor);
 
+// New selections publish immediately while the previous body finishes its
+// original exit animation. An exiting body must not accept stale edits/focus.
+const AnimatedEditorBody = forwardRef<HTMLDivElement, HTMLMotionProps<"div">>(function AnimatedEditorBody(props, ref) {
+  const present = useIsPresent();
+  return <motion.div {...props} ref={ref} {...(!present ? { inert: "" } : {})} aria-hidden={present ? undefined : true} />;
+});
+
 /* ---------- 带语法高亮的 LaTeX 编辑器（透明 textarea 叠在高亮层上） ---------- */
 export type TexHandle = { insert: (snippet: string, caretBack?: number) => void };
 export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: string) => void; onCommit?: (v: string) => void; placeholder?: string; minH?: number }>(
@@ -84,7 +91,7 @@ export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: st
           spellCheck={false}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => onCommit?.(e.currentTarget.value)}
+          onBlur={(e) => { if (!e.currentTarget.closest("[inert]")) onCommit?.(e.currentTarget.value); }}
           onPaste={(e) => {
             const text = e.clipboardData.getData("text/plain");
             if (!onCommit || !text) return;
@@ -261,9 +268,10 @@ function OptionCard({
 }
 
 /* ---------- 空状态 ---------- */
-function Empty({ onStart, onOcr }: { onStart: () => void; onOcr: () => void }) {
+const Empty = forwardRef<HTMLDivElement, { onStart: () => void; onOcr: () => void }>(function Empty({ onStart, onOcr }, ref) {
   return (
     <motion.div
+      ref={ref}
       key="empty"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -307,7 +315,7 @@ function Empty({ onStart, onOcr }: { onStart: () => void; onOcr: () => void }) {
       </div>
     </motion.div>
   );
-}
+});
 
 /* ---------- 编辑器主体 ---------- */
 export const Editor = memo(function Editor({
@@ -406,12 +414,12 @@ export const Editor = memo(function Editor({
 
   return (
     <WorkbenchContext.Provider value={workbenchContext}>
-    <div ref={editorRoot} className={cx("h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
-      <AnimatePresence mode="wait" custom={dir} initial={false}>
+    <div ref={editorRoot} className={cx("relative h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
+      <AnimatePresence mode="popLayout" custom={dir} initial={false}>
         {!q || !sec ? (
           <Empty key="empty" onStart={onStart} onOcr={onOcr} />
         ) : (
-          <motion.div
+          <AnimatedEditorBody
             key={q.id}
             data-editor-question={q.id}
             custom={dir}
@@ -680,7 +688,7 @@ export const Editor = memo(function Editor({
                 </motion.button>
               ))}
             </motion.div>
-          </motion.div>
+          </AnimatedEditorBody>
         )}
       </AnimatePresence>
     </div>

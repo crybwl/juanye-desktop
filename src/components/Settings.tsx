@@ -8,6 +8,7 @@ import { AppearancePicker } from "./AppearancePicker";
 import { errorMessage } from "../errors";
 import { useAppearance } from "../appearance";
 import { TelegramThemePicker } from "./TelegramThemePicker";
+import { ScenePatternPicker } from "./ScenePatternPicker";
 import { useExperimentalWorkbench } from "../experimental-workbench";
 import { version as appVersion } from "../../package.json";
 
@@ -219,7 +220,7 @@ function LookTab({ accent, setAccent, motionPref, setMotionPref }: { accent: num
       <Line title="实验性题目编辑台">
         <Switch label="实验性题目编辑台" checked={workbench} onChange={setWorkbench} />
       </Line>
-      {appearance === "telegram" && <div className="mt-6"><TelegramThemePicker /></div>}
+      {appearance === "telegram" && <div className="mt-6"><ScenePatternPicker /><TelegramThemePicker /></div>}
       {appearance !== "telegram" && <><div className="mb-2.5 mt-6 text-[12.5px] font-medium text-muted">强调色</div><div className="flex gap-3">
         {ACCENTS.map((a, i) => (
           <motion.button

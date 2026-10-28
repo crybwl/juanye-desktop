@@ -218,7 +218,12 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   content-visibility: auto;
   contain: layout paint style;
 }
-.preview-canvas { contain: layout paint style; }
+.preview-canvas {
+  contain: layout paint style;
+  /* Fit-to-width must not alternate its scale when one page just crosses the
+     vertical scrollbar threshold during the existing resize spring. */
+  scrollbar-gutter: stable;
+}
 
 .paper {
   --fs: 14px;

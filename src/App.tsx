@@ -97,7 +97,10 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   useEffect(() => {
     if (!examAiTask.background || !["success", "error"].includes(examAiTask.phase) || examAiNotified.current === examAiTask.taskId) return;
     examAiNotified.current = examAiTask.taskId;
-    toast(examAiTask.phase === "success" ? { title: "试卷分析完成", desc: "点击左下角查看报告" } : { title: "试卷分析失败", desc: "点击左下角查看原因", tone: "warn" });
+    toast(examAiTask.phase === "success" ? examAiTask.report?.aggregateStatus === "unavailable"
+      ? { title: "逐题评析完成，整卷综合未完成", desc: "结果已保留，点击左下角查看原因", tone: "warn" }
+      : { title: "试卷分析完成", desc: "点击左下角查看报告" }
+      : { title: "试卷分析失败", desc: "点击左下角查看原因", tone: "warn" });
   }, [examAiTask, toast]);
   const [abPaper, setAbPaper] = useState(false);
   const [aiTask, setAiTask] = useState<{ action: GenerationAction; question: Question }>();
@@ -369,6 +372,10 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         }
         if (canceled) return;
         if (!document.querySelector("#print-root [data-pagination-ready='true']")) throw new Error("分页未完成，请稍后重试");
+        // Final page DOM is mounted after geometry is resolved. A cached TikZ
+        // result still needs its new <img> to decode in that final print tree.
+        await waitForDrawings(document.querySelector("#print-root") ?? document);
+        if (canceled) return;
         await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>("#print-root img")).map(image => image.decode().catch(() => {})));
         if (window.juanye) {
           const result = await window.juanye.exportPdf({ name: `${printName || exam.title}${view === "card" ? "_答题卡" : ""}`, widthMm: pw, heightMm: ph });

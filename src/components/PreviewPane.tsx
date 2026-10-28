@@ -2,26 +2,54 @@ import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useSpring
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FileText, LayoutGrid, Maximize2, Minus, Plus, SlidersHorizontal, FileCode2 } from "lucide-react";
 import type { Exam, Layout, Mode, PreviewView } from "../types";
-import { AnswerCard, PaperPages, pageDims } from "./Paper";
+import { AnswerCard, PaperPages, pageDims, type PreviewPageMetadata } from "./Paper";
 import { IconButton, Segmented, softSpring } from "../ui";
 import { previewPageAt, previewScale } from "../preview-geometry";
 import "./paper-columns.css";
 
-const ScaledPage = memo(function ScaledPage({ s, pw, ph, i, total, onPages, children }: { s: MotionValue<number>; pw: number; ph: number; i: number; total: number; onPages: (total: number) => void; children: ReactNode }) {
+// One native observer per scroll container, not a scroll listener/layout read
+// for every paper. All fixed page shells and their scale/entry animations stay.
+const pageObservers = new WeakMap<Element, { observer: IntersectionObserver; callbacks: Map<Element, (visible: boolean) => void> }>();
+function observePage(node: HTMLElement, change: (visible: boolean) => void) {
+  const root = node.closest(".preview-canvas");
+  if (!root || typeof IntersectionObserver === "undefined") { change(true); return () => {}; }
+  let pool = pageObservers.get(root);
+  if (!pool) {
+    const callbacks = new Map<Element, (visible: boolean) => void>();
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => callbacks.get(entry.target)?.(entry.isIntersecting)), { root, rootMargin: "650px 0px" });
+    pool = { observer, callbacks }; pageObservers.set(root, pool);
+  }
+  pool.callbacks.set(node, change); pool.observer.observe(node);
+  return () => { pool!.observer.unobserve(node); pool!.callbacks.delete(node); if (!pool!.callbacks.size) { pool!.observer.disconnect(); pageObservers.delete(root); } };
+}
+
+const ScaledPage = memo(function ScaledPage({ s, pw, ph, i, total, activeId, metadata, onPages, children }: { s: MotionValue<number>; pw: number; ph: number; i: number; total: number; activeId: string | null; metadata?: PreviewPageMetadata; onPages: (total: number) => void; children: ReactNode }) {
   const w = useTransform(s, (v) => v * pw);
   const h = useTransform(s, (v) => v * ph);
+  const node = useRef<HTMLDivElement>(null);
+  const [nearby, setNearby] = useState(i === 0);
+  const windowed = total > 8;
+  // CSS content-visibility:auto may return skipped descendant geometry at
+  // (0,0). Unskip the selected sheet before auto-scroll measures its question.
+  const selected = !!activeId && !!metadata?.questionIds.includes(activeId);
+  const mounted = !windowed || nearby || selected;
+  useEffect(() => windowed && node.current ? observePage(node.current, setNearby) : undefined, [windowed]);
   useEffect(() => { if (i === 0) onPages(total); }, [i, total, onPages]);
   return (
     <motion.div
+      ref={node}
       data-page={i}
+      data-page-question-ids={JSON.stringify(metadata?.questionIds ?? [])}
+      data-page-mounted={mounted}
+      role="group" aria-label={`第 ${i + 1} 页，共 ${total} 页`}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...softSpring, delay: 0.05 + i * 0.07 }}
       style={{ width: w, height: h }}
-      className="relative shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(255,255,255,.04),0_24px_60px_-18px_rgba(0,0,0,.75),0_8px_20px_-10px_rgba(0,0,0,.5)]"
+      className="relative shrink-0 rounded-[3px] bg-white shadow-[0_0_0_1px_rgba(255,255,255,.04),0_24px_60px_-18px_rgba(0,0,0,.75),0_8px_20px_-10px_rgba(0,0,0,.5)]"
     >
-      <motion.div style={{ scale: s, originX: 0, originY: 0, width: pw, height: ph, containIntrinsicSize: `${pw}px ${ph}px` }} className="preview-page-content absolute left-0 top-0 overflow-hidden rounded-[3px]">
-        {children}
+      <motion.div style={{ scale: s, originX: 0, originY: 0, width: pw, height: ph, containIntrinsicSize: `${pw}px ${ph}px`, contentVisibility: selected ? "visible" : undefined }} className="preview-page-content absolute left-0 top-0 overflow-hidden rounded-[3px]">
+        {mounted ? children : <span className="sr-only">滚动至此页以查看内容</span>}
       </motion.div>
     </motion.div>
   );
@@ -110,14 +138,15 @@ export const PreviewPane = memo(function PreviewPane({
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
   const pick = useCallback((id: string) => pickRef.current(id), []);
-  const renderPage = useCallback((p: ReactNode, i: number, total: number) => <ScaledPage s={s} pw={pw} ph={ph} i={i} total={total} onPages={setPages}>{p}</ScaledPage>, [s, pw, ph]);
+  const renderPage = useCallback((p: ReactNode, i: number, total: number, metadata?: PreviewPageMetadata) => <ScaledPage s={s} pw={pw} ph={ph} i={i} total={total} activeId={activeId} metadata={metadata} onPages={setPages}>{p}</ScaledPage>, [s, pw, ph, activeId]);
 
   // 选中题目后，预览自动滚动到对应位置
   useEffect(() => {
     if (!activeId) return;
     const t = window.setTimeout(() => {
       const c = canvas.current;
-      const el = c?.querySelector<HTMLElement>(`[data-sheet] [data-qid="${CSS.escape(activeId)}"]`);
+      const el = c?.querySelector<HTMLElement>(`[data-sheet] [data-qid="${CSS.escape(activeId)}"]`)
+        ?? [...c?.querySelectorAll<HTMLElement>("[data-page-question-ids]") ?? []].find(node => (JSON.parse(node.dataset.pageQuestionIds || "[]") as string[]).includes(activeId));
       if (!c || !el) return;
       const cr = c.getBoundingClientRect();
       const er = el.getBoundingClientRect();
@@ -125,7 +154,7 @@ export const PreviewPane = memo(function PreviewPane({
         c.scrollTo({ top: c.scrollTop + er.top - cr.top - cr.height * 0.28, behavior: "smooth" });
     }, 80);
     return () => clearTimeout(t);
-  }, [activeId, view]);
+  }, [activeId, view, pages]);
 
   const paperLabel = `${layout.paper} ${layout.orientation === "portrait" ? "纵向" : "横向"}${view === "paper" && layout.columns === 2 ? " · 双栏" : ""}${layout.sealLine ? " · 密封线" : ""}`;
 

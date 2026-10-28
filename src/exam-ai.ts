@@ -1,7 +1,7 @@
 import type { Exam } from './types';
-import { DEFAULT_EXAM_AI_CONFIG, contentHash, examContextHash, examReportKey, examSnapshotFingerprint, normalizeExamAiConfig, planExamAnalysis, snapshotExam, stableStringify, type SharedExamAiConfig, type ExamSnapshot } from '../electron/exam-ai-shared.mjs';
+import { DEFAULT_EXAM_AI_CONFIG, EXAM_AI_LIMITS, contentHash, examContextHash, examReportKey, examSnapshotFingerprint, normalizeExamAiConfig, planExamAnalysis, snapshotExam, stableStringify, type SharedExamAiConfig, type ExamSnapshot } from '../electron/exam-ai-shared.mjs';
 
-export { DEFAULT_EXAM_AI_CONFIG, contentHash, examContextHash, examReportKey, examSnapshotFingerprint, normalizeExamAiConfig, planExamAnalysis, snapshotExam, stableStringify };
+export { DEFAULT_EXAM_AI_CONFIG, EXAM_AI_LIMITS, contentHash, examContextHash, examReportKey, examSnapshotFingerprint, normalizeExamAiConfig, planExamAnalysis, snapshotExam, stableStringify };
 export type ExamAiConfig = SharedExamAiConfig;
 export interface ExamMetadataPatch { id: string; knowledge?: string[]; difficulty?: 'easy' | 'medium' | 'hard' }
 export interface ExamAiFinding { kind: 'answer' | 'ambiguity' | 'coverage' | 'difficulty' | 'other'; severity: 'info' | 'warning' | 'critical'; questionIds: string[]; message: string; evidence: string; suggestion: string }
@@ -11,6 +11,7 @@ export interface ExamAiReport {
   fingerprint: string; contextHash: string; config: ExamAiConfig; snapshot: ExamSnapshot;
   model: {name: string; endpoint: string}; requestCount: number; cacheHits: number; checkedImageQuestionIds: string[];
   summary: string; recommendations: string[]; findings: ExamAiFinding[]; questionReviews: ExamAiQuestionReview[];
+  aggregateStatus?: 'complete' | 'unavailable' | 'not_requested'; aggregateError?: string;
 }
 export interface ExamAiRequest { taskId: string; exam: Exam; config: ExamAiConfig; expectedFingerprint: string; examKey?: string }
 export type ApplyExamMetadata = (patches: ExamMetadataPatch[], expectedFingerprint: string) => boolean | void;

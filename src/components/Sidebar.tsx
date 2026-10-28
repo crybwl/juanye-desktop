@@ -1,5 +1,5 @@
 import { AnimatePresence, Reorder, motion, useDragControls } from "motion/react";
-import { memo, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { AlertTriangle, ChevronDown, GripVertical, Image as ImageIcon, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, ScanText, FolderTree, Undo2, Redo2 } from "lucide-react";
 import type { Exam, QType, Question } from "../types";
 import { TYPE_META } from "../data";
@@ -7,6 +7,7 @@ import { MathText } from "../math";
 import { AnimatedNumber, Button, SharedPill, IconButton, cx, spring, softSpring } from "../ui";
 import { QuestionTypeIcon } from "./QuestionTypeIcon";
 import { CheckboxIndicator } from "./Checkbox";
+import { SidebarRowStore } from "../sidebar-row-store";
 
 const ExamCard = memo(function ExamCard({ exam, score, count, flags, onJump }: { exam: Exam; score: number; count: number; flags: number; onJump: () => void }) {
   return (
@@ -64,27 +65,24 @@ const ExamCard = memo(function ExamCard({ exam, score, count, flags, onJump }: {
 });
 
 const Row = memo(function Row({
-  q,
-  num,
-  active,
-  batch,
-  checked,
+  id,
+  store,
   sectionId,
   onActivate,
 }: {
-  q: Question;
-  num: number;
-  active: boolean;
-  batch: boolean;
-  checked: boolean;
+  id: string;
+  store: SidebarRowStore;
   sectionId: string;
   onActivate: (sectionId: string, id: string) => void;
 }) {
+  const subscribe = useCallback((notify: () => void) => store.subscribe(id, notify), [store, id]);
+  const snapshot = useCallback(() => store.get(id), [store, id]);
+  const { q, num, active, batch, checked } = useSyncExternalStore(subscribe, snapshot, snapshot);
   const controls = useDragControls();
   const onClick = () => onActivate(sectionId, q.id);
   return (
     <Reorder.Item
-      value={q}
+      value={id}
       as="div"
       dragListener={false}
       dragControls={controls}
@@ -174,12 +172,26 @@ const QuestionRows = memo(function QuestionRows({ questions, sectionId, start, a
   selected: Set<string>; onActivate: (sectionId: string, id: string) => void;
   onReorder: (questions: Question[]) => void;
 }) {
-  return <Reorder.Group axis="y" as="div" values={questions} onReorder={onReorder} className="pb-1 pl-1">
+  const rows = questions.map((q, index) => ({ q, num: start + index + 1, active: !batch && q.id === activeId, batch, checked: selected.has(q.id) }));
+  const [store] = useState(() => new SidebarRowStore(rows));
+  store.seed(rows);
+  useLayoutEffect(() => store.update(rows), [store, questions, start, activeId, batch, selected]);
+  const latest = useRef({ questions, onReorder }); latest.current = { questions, onReorder };
+  const signature = JSON.stringify(questions.map(q => q.id));
+  const ids = useMemo<string[]>(() => JSON.parse(signature), [signature]);
+  const reorder = useCallback((ids: string[]) => { const current = latest.current, byId = new Map(current.questions.map(q => [q.id, q])); if (ids.length === byId.size && new Set(ids).size === byId.size && ids.every(id => byId.has(id))) current.onReorder(ids.map(id => byId.get(id)!)); }, []);
+  return <SortableQuestionRows ids={ids} store={store} sectionId={sectionId} onActivate={onActivate} onReorder={reorder} />;
+});
+
+const SortableQuestionRows = memo(function SortableQuestionRows({ ids, store, sectionId, onActivate, onReorder }: {
+  ids: string[]; store: SidebarRowStore; sectionId: string;
+  onActivate: (sectionId: string, id: string) => void; onReorder: (ids: string[]) => void;
+}) {
+  return <Reorder.Group axis="y" as="div" values={ids} onReorder={onReorder} className="pb-1 pl-1">
     <AnimatePresence initial={false}>
-      {questions.map((q, qi) => <Row key={q.id} q={q} num={start + qi + 1} active={!batch && q.id === activeId}
-        batch={batch} checked={selected.has(q.id)} sectionId={sectionId} onActivate={onActivate} />)}
+      {ids.map(id => <Row key={id} id={id} store={store} sectionId={sectionId} onActivate={onActivate} />)}
     </AnimatePresence>
-    {questions.length === 0 && <div className="px-3 py-2 text-[12px] text-faint">暂无题目</div>}
+    {ids.length === 0 && <div className="px-3 py-2 text-[12px] text-faint">暂无题目</div>}
   </Reorder.Group>;
 });
 
