@@ -30,6 +30,7 @@ npm start
 - `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
 - `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
 - `node scripts/beta7-regression.cjs [--packaged]`：60px窄栏/220px悬停浮层、原宽栏区域不抢点击、列表不重排；后台分析确认前零请求、请求时仅左下角转圈、编辑/切换/重新查看不重复请求、完成报告过期保护、后台明确取消与普通关闭取消、服务错误脱敏且不自动重试。手动释放本机模型替身响应，不使用真实密钥或付费模型。
+- `node scripts/ai-metadata-regression.cjs [--packaged]`：AI完成后逐字段补全空缺知识点/难度，前台/后台/有效历史报告一致；实际细目、矩阵、CSV与草稿同步，手改/过期保护、撤销及重启不重复填回，不使用真实密钥。
 - `node scripts/scene-patterns-regression.cjs [--packaged]`：六套背景在深浅色下的实际已解码图片、大小/密度、偏好持久化、单层漂移、减弱动效与白纸隔离；不调用模型或网络。
 - `node scripts/collection-drop-regression.cjs [--packaged]`：真实 Chromium 原生单题/多选拖入收藏夹、嵌套目标、重复加入、无效载荷及重启持久化；验证题目版本、使用次数和卷内快照不变。
 - `node scripts/editor-selection-regression.cjs [--packaged]`：120题快速往返、末题/首题跳转、进入动画中输入和退出失焦；检查新旧内容都有动画中间态，旧编辑台不可交互且不串写其他题目。

@@ -8,7 +8,7 @@ import { MathText } from '../math';
 import { drawingSegments } from '../drawing';
 import { Checkbox } from './Checkbox';
 import { Select } from './Select';
-import { DEFAULT_EXAM_AI_CONFIG, EXAM_AI_LIMITS, examContextHash, examReportKey, examSnapshotFingerprint, invertMetadataPatches, planExamAnalysis, previewMetadataPatches, reportMetadataProposals, type ApplyExamMetadata, type ExamAiConfig, type ExamAiReport, type ExamMetadataPatch } from '../exam-ai';
+import { DEFAULT_EXAM_AI_CONFIG, EXAM_AI_LIMITS, examContextHash, examReportKey, examSnapshotFingerprint, invertMetadataPatches, isExamReportStale, planExamAnalysis, previewMetadataPatches, reportMatchesExam, reportMetadataProposals, type ApplyExamMetadata, type ExamAiConfig, type ExamAiReport, type ExamMetadataPatch } from '../exam-ai';
 import type { ExamAiSession } from '../exam-ai-session';
 import './exam-ai.css';
 
@@ -22,7 +22,7 @@ function Finding({finding,numbers,onLocate}:{finding:ExamAiReport['findings'][nu
   return <article className={`exam-ai-finding exam-ai-finding--${finding.severity}`}><div className="exam-ai-finding-title"><span className="exam-ai-severity"/><span className="exam-ai-tag">{KIND_LABELS[finding.kind]}</span><strong><ReviewText text={finding.message}/></strong></div><div className="exam-ai-finding-toolbar"><Button size="sm" variant="ghost" aria-expanded={expanded} icon={<motion.span animate={{rotate:expanded?180:0}} transition={reduced?{duration:0}:softSpring}><ChevronDown size={13}/></motion.span>} onClick={()=>setExpanded(value=>!value)}>依据与建议</Button><div className="exam-ai-question-links">{finding.questionIds.map(id=><Button key={id} size="sm" variant="ghost" icon={<Crosshair size={12}/>} disabled={!numbers.has(id)||!onLocate} onClick={()=>onLocate?.(id)}>{numbers.has(id)?`定位第 ${numbers.get(id)} 题`:'题目已移除'}</Button>)}</div></div><AnimatePresence initial={false}>{expanded&&<motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={reduced?{duration:0}:softSpring} className="exam-ai-finding-context"><div><span>核查依据</span><ReviewText text={finding.evidence||'需人工复核'}/></div><div><span>改进建议</span><ReviewText text={finding.suggestion}/></div></motion.div>}</AnimatePresence></article>;
 }
 
-export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onApplyMetadata }: {exam:Exam;session:ExamAiSession;onBackgroundStart:()=>void;onLocate?:(id:string)=>void;onApplyMetadata?:ApplyExamMetadata}) {
+export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onApplyMetadata, onReportAvailable }: {exam:Exam;session:ExamAiSession;onBackgroundStart:()=>void;onLocate?:(id:string)=>void;onApplyMetadata?:ApplyExamMetadata;onReportAvailable?:(report:ExamAiReport)=>void}) {
   const task=useSyncExternalStore(session.subscribe,session.getSnapshot,session.getSnapshot);
   const [config,setConfig] = useState<ExamAiConfig>(()=>({... (session.getSnapshot().config??DEFAULT_EXAM_AI_CONFIG)}));
   const [background,setBackground]=useState(()=>session.getSnapshot().background);
@@ -37,7 +37,7 @@ export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onAppl
   const contextHash=useMemo(()=>{try{return examContextHash(config);}catch{return '';}},[config]);
   const planning=useMemo(()=>{try{return {plan:planExamAnalysis(exam,config),error:''};}catch(error){return {plan:null,error:error instanceof Error?error.message:String(error)};}},[exam,config]);
   const report=reports.find(item=>item.id===selectedId)??reports[0];
-  const stale=!!report&&(report.examKey!==key||report.fingerprint!==fingerprint||report.contextHash!==contextHash);
+  const stale=useMemo(()=>!!report&&isExamReportStale(report,exam,config),[report,exam,config]);
   const proposals=useMemo(()=>report?reportMetadataProposals(report,exam):[],[report,exam]);
   const numbers=useMemo(()=>new Map(report&&report.examKey!==key?[]:exam.sections.flatMap(section=>section.questions).map((question,index)=>[question.id,index+1] as const)),[exam,report?.examKey,key]);
   useEffect(()=>{
@@ -52,6 +52,10 @@ export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onAppl
     if(task.phase==='success'&&task.report){setReports(previous=>[task.report!,...previous.filter(item=>item.id!==task.report!.id)].slice(0,30));setSelectedId(task.report.id);setNotice(`报告已在本机保存；实际请求 ${task.report.requestCount} 次，复用 ${task.report.cacheHits} 个未变化题组。`);}
   },[task.report?.id]);
   useEffect(()=>{setSelected(new Set(proposals.map(proposal=>proposal.id)));},[report?.id]); // Review selection is intentionally stable while the exam changes.
+  // A selected saved report owns its captured analysis settings. Do not label a
+  // valid historical report expired merely because a new dialog used defaults.
+  useEffect(()=>{if(report&&!busy)setConfig({...report.config});},[report?.id]);
+  useEffect(()=>{if(report&&!stale)onReportAvailable?.(report);},[report,stale,onReportAvailable]);
   useEffect(()=>{setConfirm(false);},[fingerprint,config]);
   const setField=<K extends keyof ExamAiConfig>(name:K,value:ExamAiConfig[K])=>setConfig(previous=>({...previous,[name]:value}));
   const cancel=()=>{session.cancel();setNotice('整卷分析已取消。');};
@@ -64,7 +68,7 @@ export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onAppl
     if(!report||stale||!onApplyMetadata)return;
     const patches=proposals.filter(patch=>selected.has(patch.id));if(!patches.length)return;
     const reverse=invertMetadataPatches(exam,patches),expected=examSnapshotFingerprint(exam);
-    if(expected!==report.fingerprint){setError('试卷已变化，请重新分析后应用建议。');return;}
+    if(!reportMatchesExam(report,exam)){setError('试卷已变化，请重新分析后应用建议。');return;}
     if(onApplyMetadata(patches,expected)===false){setError('应用时试卷已变化，未修改任何题目。');return;}
     setUndo({patches:reverse,expectedFingerprint:examSnapshotFingerprint(previewMetadataPatches(exam,patches))});
     setNotice(`已应用 ${patches.length} 道题的元数据建议；题干、答案、原题解析未更改。`);

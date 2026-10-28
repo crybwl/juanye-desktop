@@ -42,3 +42,11 @@
 - [Paper.js](https://github.com/paperjs/paper.js)的路径组合启发六套原创原生矢量纹理，不使用外部图床；大小/密度与色盘独立，仍为一个合成背景层和有界缓存，不在每帧生成图像。
 - 模型限制以阿里官方文档核对：[Qwen3-Max](https://help.aliyun.com/zh/model-studio/model-qwen3-max)、[Qwen3.5-Plus](https://www.alibabacloud.com/help/en/model-studio/qwen3-5-plus)。输出上限不能由兼容接口统一推断；评析允许用户按模型配置，OCR维持独立8192限制，不自动改模型或收费重试。
 - 后续完整题库的规划另参考[Moodle题库](https://docs.moodle.org/503/en/Question_bank)、[Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx/blob/dev/docs/usage.md)和[Anki导入去重](https://github.com/ankitects/anki/blob/main/docs-site/manual/importing/text-files.mdx)的分类、版本、审核、检索、批量与可逆导入思路；规划不等于本轮已全部实现。
+
+## 2026-10-28 / beta.9：评估结果写回与手改保护
+
+本轮编辑前重新检索高star的[TanStack Query](https://github.com/TanStack/query)与[React Hook Form](https://github.com/react-hook-form/react-hook-form)，阅读官方[结果不可变写回](https://github.com/TanStack/query/blob/main/docs/framework/react/guides/updates-from-mutation-responses.md)、[keepDirtyValues](https://react-hook-form.com/docs/useform/reset)及MIT许可证。借鉴完成结果同步到真实数据源、按字段保留已有输入的原则，不安装新依赖、不复制整套代码或改界面设计。
+
+- 原问题不是表格不刷新，而是AI报告与真实题目属性之间缺少自动采用：在工作区会话完成时写回空缺知识点/难度，有效旧报告可在打开分析时补全，后台不依赖弹窗生命周期。
+- 先比对原快照，Reducer写入前再比对当前指纹；只允许准确采用本报告的标签差异，不把所有知识点/难度变化一概忽略。原题、答案、顺序、来源或非建议标签变化仍使报告过期。
+- 自动采用记录与弹窗分离，同一报告处理一次，可撤销且重开不填回。处理记录在草稿保存成功后才持久化；保存开始时捕获序号，旧保存完成不得提前消耗之后的采用记录。使用有界200项记录，不更改题库/项目/报告协议。

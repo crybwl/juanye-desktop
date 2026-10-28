@@ -17,7 +17,26 @@ export interface ExamAiRequest { taskId: string; exam: Exam; config: ExamAiConfi
 export type ApplyExamMetadata = (patches: ExamMetadataPatch[], expectedFingerprint: string) => boolean | void;
 
 export function isExamReportStale(report: ExamAiReport, exam: Exam, config: ExamAiConfig): boolean {
-  return report.fingerprint !== examSnapshotFingerprint(exam) || report.contextHash !== examContextHash(config);
+  return !reportMatchesExam(report, exam) || report.contextHash !== examContextHash(config);
+}
+/** Only the report's exact metadata suggestions may differ from its immutable
+ * source. Applying its own labels must not instantly expire it; edits to the
+ * question, answer, order, source or any unrelated label still do. */
+export function reportMatchesExam(report: ExamAiReport, exam: Exam): boolean {
+  if (report.examKey !== examReportKey(exam)) return false;
+  const current = snapshotExam(exam);
+  if (contentHash(stableStringify(current)) === report.fingerprint) return true;
+  const reviews = new Map(report.questionReviews.map(review => [review.questionId, review]));
+  const restored = { ...current, sections: current.sections.map((section, i) => ({ ...section, questions: section.questions.map((question, j) => {
+    const original = report.snapshot.sections[i]?.questions[j], review = reviews.get(question.id);
+    if (!original || original.id !== question.id || !review) return question;
+    const knowledge = [...new Set(review.knowledge.map(value => value.trim()).filter(Boolean))];
+    return { ...question,
+      ...(knowledge.length && stableStringify(question.knowledge) === stableStringify(knowledge) ? { knowledge: original.knowledge } : {}),
+      ...(review.estimatedDifficulty !== 'not_checked' && question.difficulty === review.estimatedDifficulty ? { difficulty: original.difficulty } : {}),
+    };
+  }) })) };
+  return contentHash(stableStringify(restored)) === report.fingerprint;
 }
 export function reportMetadataProposals(report: ExamAiReport, exam: Exam): ExamMetadataPatch[] {
   const questions = new Map(exam.sections.flatMap(section => section.questions).map(question => [question.id, question]));
@@ -30,6 +49,18 @@ export function reportMetadataProposals(report: ExamAiReport, exam: Exam): ExamM
     return patch.knowledge || patch.difficulty ? [patch] : [];
   });
 }
+/** Automatic adoption is fill-only, per field, and never guesses provenance. */
+export function missingReportMetadataPatches(report: ExamAiReport, exam: Exam): ExamMetadataPatch[] {
+  if (!reportMatchesExam(report, exam)) return [];
+  const questions = new Map(exam.sections.flatMap(section => section.questions).map(question => [question.id, question]));
+  return reportMetadataProposals(report, exam).flatMap(proposal => {
+    const question = questions.get(proposal.id)!;
+    const patch: ExamMetadataPatch = { id: proposal.id };
+    if (proposal.knowledge && !question.knowledge?.some(value => value.trim())) patch.knowledge = proposal.knowledge;
+    if (proposal.difficulty && !question.difficulty) patch.difficulty = proposal.difficulty;
+    return patch.knowledge || patch.difficulty ? [patch] : [];
+  });
+}
 // Exact metadata snapshots preserve unset values on undo (undefined explicitly clears).
 export function invertMetadataPatches(exam: Exam, patches: ExamMetadataPatch[]): ExamMetadataPatch[] {
   const questions = new Map(exam.sections.flatMap(section => section.questions).map(question => [question.id, question]));
@@ -37,7 +68,20 @@ export function invertMetadataPatches(exam: Exam, patches: ExamMetadataPatch[]):
 }
 export function previewMetadataPatches(exam: Exam, patches: ExamMetadataPatch[]): Exam {
   const byId = new Map(patches.map(patch => [patch.id,patch]));
-  return {...exam,sections:exam.sections.map(section=>({...section,questions:section.questions.map(question=>{const patch=byId.get(question.id);return patch?{...question,...patch}:question;})}))};
+  let changed = false;
+  const sections = exam.sections.map(section => {
+    let sectionChanged = false;
+    const questions = section.questions.map(question => {
+      const patch = byId.get(question.id); if (!patch) return question;
+      const knowledgeChanged = 'knowledge' in patch && stableStringify(question.knowledge) !== stableStringify(patch.knowledge);
+      const difficultyChanged = 'difficulty' in patch && question.difficulty !== patch.difficulty;
+      if (!knowledgeChanged && !difficultyChanged) return question;
+      sectionChanged = changed = true;
+      return { ...question, ...('knowledge' in patch ? { knowledge: patch.knowledge } : {}), ...('difficulty' in patch ? { difficulty: patch.difficulty } : {}) };
+    });
+    return sectionChanged ? { ...section, questions } : section;
+  });
+  return changed ? { ...exam, sections } : exam;
 }
 
 export function knowledgeDifficultyMatrix(exam: Exam) {

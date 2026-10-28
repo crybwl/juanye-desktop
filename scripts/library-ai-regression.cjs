@@ -17,7 +17,10 @@ async function main() {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'juanye-library-ai-'));
   const env = { ...process.env, JUANYE_TEST_USER_DATA: profile }; delete env.ELECTRON_RUN_AS_NODE;
   const q1 = { id: 'qa-q1', type: 'single', score: 5, stem: '已知 $f(x)=x^2$，则 $f(2)$ 的值为（　）。', options: ['$1$', '$2$', '$3$', '$4$'], answer: ['D'], analysis: '代入可得 $f(2)=4$。', knowledge: ['函数'], difficulty: 'easy' };
-  const q2 = { id: 'qa-q2', type: 'essay', score: 12, stem: '求方程 $x^2-1=0$ 的解。\n\n| 条件 | 数值 |\n| --- | --- |\n| 常数项 | $-1$ |', options: [], answer: ['$x=\\pm1$'], analysis: '因式分解。' };
+  // Pre-labelled on purpose: this existing suite exercises a same-prompt cache
+  // hit and explicit replacement. Missing-field automatic completion has its
+  // own four-question regression and must not make this cache premise change.
+  const q2 = { id: 'qa-q2', type: 'essay', score: 12, stem: '求方程 $x^2-1=0$ 的解。\n\n| 条件 | 数值 |\n| --- | --- |\n| 常数项 | $-1$ |', options: [], answer: ['$x=\\pm1$'], analysis: '因式分解。', knowledge: ['原始知识点'], difficulty: 'easy' };
   const exam = { id: 'qa-stable-exam', title: '题库与 AI · 隔离样卷', subtitle: '', duration: 90, notice: [], sections: [{ id: 's1', title: '单项选择题', type: 'single', note: '', questions: [q1] }, { id: 's2', title: '解答题', type: 'essay', note: '', questions: [q2] }] };
   const layout = { style: 'real', density: 'compact', paper: 'A4', orientation: 'portrait', margin: 11, fontSize: 9.5, lineHeight: 1.42, optionCols: 'auto', pageNumber: true, showScore: true, keepTogether: false, answerSpace: false, paperMode: 'questions', answerMode: 'none' };
   fs.writeFileSync(path.join(profile, 'draft.json'), JSON.stringify({ version: 1, exam, layout, history: [] }));
@@ -120,11 +123,12 @@ async function main() {
     reports = await page.evaluate(() => window.juanye.loadExamReports('qa-stable-exam')); assert.equal(calls, 1); assert.equal(reports[0].cacheHits, 1);
     await analyze().getByRole('button', { name: '应用选中建议', exact: true }).click();
     await until(async () => (await draft()).exam.sections[0].questions[0].knowledge.includes('AI建议知识点'), 'Suggested tags not applied');
-    await analyze().getByText('历史报告：已过期', { exact: true }).waitFor();
+    assert.equal(await analyze().getByText('历史报告：已过期', { exact: true }).count(), 0, 'Applying only the report\'s metadata must not invalidate its original content review');
     assert.equal((await draft()).exam.sections[0].questions[0].analysis, q1.analysis);
     await analyze().getByRole('button', { name: '撤销本次应用', exact: true }).click();
     await until(async () => JSON.stringify((await draft()).exam.sections[0].questions[0].knowledge) === JSON.stringify(q1.knowledge), 'Metadata undo did not restore original');
-    assert.equal((await draft()).exam.sections[1].questions[0].difficulty, undefined);
+    assert.equal((await draft()).exam.sections[1].questions[0].difficulty, q2.difficulty);
+    assert.deepEqual((await draft()).exam.sections[1].questions[0].knowledge, q2.knowledge);
     await analyze().getByRole('button', { name: '定位第 1 题', exact: true }).click();
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor(); assert.equal(await page.getByPlaceholder('输入题干…', { exact: true }).inputValue(), q1.stem);
     checks.push('Real preload/main/service/model HTTP flow, explicit confirmation, persisted reports, zero-request cache repeat, guarded tag apply, stale report and exact undo');

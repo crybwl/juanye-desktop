@@ -36,7 +36,8 @@ import { GenerateQuestionDialog } from "./components/GenerateQuestion";
 import type { GenerationAction } from "./generated-question";
 import { isOcrPasteTarget } from "./ocr-queue";
 import { ExportCenter, type ExportFormat } from "./components/ExportCenter";
-import { examSnapshotFingerprint, type ExamMetadataPatch } from "./exam-ai";
+import { examSnapshotFingerprint, missingReportMetadataPatches, previewMetadataPatches, reportMatchesExam, type ExamAiReport, type ExamMetadataPatch } from "./exam-ai";
+import { ExamMetadataReceipts } from "./exam-ai-autofill";
 import { BankSourceNotice } from "./components/BankSourceNotice";
 import { patchWorkspaceQuestion } from "./workspace-edits";
 import { SceneBackdrop } from "./SceneBackdrop";
@@ -121,6 +122,33 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const lastSaved = useRef("");
   const lastSavedFrame = useRef<{ exam: Exam; layout: typeof layout }>();
   const persistRef = useRef<() => Promise<void>>(async () => {});
+  const [metadataReceipts] = useState(() => { try { return new ExamMetadataReceipts(window.localStorage); } catch { return new ExamMetadataReceipts(); } });
+  const autoMetadataNotice = useRef<{ fingerprint: string; count: number }>();
+  const currentExam = useRef(exam); currentExam.current = exam;
+  const autoFillReportMetadata = useCallback((report: ExamAiReport) => {
+    const current = currentExam.current;
+    if (!ready || metadataReceipts.has(report) || !reportMatchesExam(report, current)) return;
+    const patches = missingReportMetadataPatches(report, current);
+    metadataReceipts.mark(report);
+    if (!patches.length) {
+      if (lastSavedFrame.current?.exam === current) metadataReceipts.flush();
+      return;
+    }
+    const expected = examSnapshotFingerprint(current);
+    autoMetadataNotice.current = { fingerprint: examSnapshotFingerprint(previewMetadataPatches(current, patches)), count: patches.length };
+    // Check again in the reducer, not just in the completion effect: queued
+    // edits must never be overwritten by an older successful request.
+    setExam(previous => examSnapshotFingerprint(previous) === expected ? previewMetadataPatches(previous, patches) : previous);
+  }, [ready, metadataReceipts, setExam]);
+  useEffect(() => {
+    if (examAiTask.phase === "success" && examAiTask.report) autoFillReportMetadata(examAiTask.report);
+  }, [examAiTask.phase, examAiTask.report, autoFillReportMetadata]);
+  useEffect(() => {
+    const notice = autoMetadataNotice.current;
+    if (!notice) return;
+    autoMetadataNotice.current = undefined;
+    if (examSnapshotFingerprint(exam) === notice.fingerprint) toast({ title: `已自动补全 ${notice.count} 道题的属性`, desc: "已有属性保留，可撤销" });
+  }, [exam, toast]);
 
   /* ---------- 派生数据 ---------- */
   const flat = useMemo(() => exam.sections.flatMap((s, si) => s.questions.map((q) => ({ q, s, si }))), [exam.sections]);
@@ -206,8 +234,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
 
   const applyExamMetadata = (patches: ExamMetadataPatch[], expectedFingerprint: string) => {
     if (examSnapshotFingerprint(exam) !== expectedFingerprint) { toast({ title: "试卷已变更，请刷新分析后再采用", tone: "warn" }); return false; }
-    const updates = new Map(patches.map(patch => [patch.id, patch]));
-    setExam(previous => ({ ...previous, sections: previous.sections.map(section => ({ ...section, questions: section.questions.map(question => { const patch = updates.get(question.id); return patch ? { ...question, ...("knowledge" in patch ? { knowledge: patch.knowledge } : {}), ...("difficulty" in patch ? { difficulty: patch.difficulty } : {}) } : question; }) })) }));
+    setExam(previous => examSnapshotFingerprint(previous) === expectedFingerprint ? previewMetadataPatches(previous, patches) : previous);
     toast({ title: `已更新 ${patches.length} 道题的属性`, desc: "可撤销" }); return true;
   };
 
@@ -318,10 +345,12 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     setSaving(true);
     const snapshot: Snapshot = { id: uid(), at: Date.now(), label: `${exam.title} · ${count} 题 · ${score} 分`, exam: structuredClone(exam), layout: { ...layout } };
     const nextHistory = [snapshot, ...snapshots].slice(0, 50);
+    const metadataCheckpoint = metadataReceipts.checkpoint();
     try {
       await saveWorkspace({ version: 1, exam, layout, history: nextHistory });
       lastSaved.current = serialized;
       lastSavedFrame.current = { exam, layout };
+      metadataReceipts.flush(metadataCheckpoint);
       setSnapshots(nextHistory); setSaveError("");
     } catch (error) { setSaveError(error instanceof Error ? error.message : "保存失败"); }
     finally { setSaving(false); }
@@ -746,7 +775,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       {batch && <BatchPanel key="batch-panel" paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
       {structure && <StructurePanel key="structure-panel" exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
       {bank && <QuestionBankDialog key="bank-picker" open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
-      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={closeExamAnalysis} exam={exam} session={examAiSession} initialTab={examAnalysisInitialTab} onLocate={id => { closeExamAnalysis(); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
+      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={closeExamAnalysis} exam={exam} session={examAiSession} initialTab={examAnalysisInitialTab} onLocate={id => { closeExamAnalysis(); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} onReportAvailable={autoFillReportMetadata} />}
       {abPaper && <AbPaperDialog key="ab-paper" open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
       {aiTask && <GenerateQuestionDialog key="generate-question" open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
       {exportCenter && <ExportCenter key="export-center" exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
