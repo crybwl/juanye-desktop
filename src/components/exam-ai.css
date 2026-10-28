@@ -93,6 +93,17 @@
 .exam-ai-proposal > div:last-child > span { display: flex; gap: 3px; align-items: baseline; }
 .exam-ai-empty { color: var(--color-muted); font-size: 12px; padding: 16px 0 3px; }
 .exam-ai-apply { margin-left: auto; }
+.exam-ai-background-toggle { display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 14px; color: var(--color-muted); font-size: 12px; cursor: pointer; }
+.exam-ai-background-toggle > span { display: inline-flex; align-items: center; gap: 6px; }
+.exam-ai-background-toggle small { color: var(--color-faint); font-size: 10px; }
+.exam-ai-task-indicator { position: fixed; z-index: 45; left: 14px; bottom: 16px; display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--color-line); border-radius: 50%; background: var(--color-panel); color: var(--color-accent); box-shadow: 0 3px 10px rgb(0 0 0 / .1); cursor: pointer; }
+.app-bg[data-exam-ai-background="active"] .question-sidebar .sidebar-actions { padding-bottom: 48px; }
+.exam-ai-task-indicator:hover { background: var(--surface-popup,var(--color-panel)); }
+.exam-ai-task-indicator:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.exam-ai-task-indicator[data-phase="error"] { color: var(--color-warn); }
+.exam-ai-task-spinner { animation: exam-ai-task-spin 1s linear infinite; }
+@keyframes exam-ai-task-spin { to { transform: rotate(360deg); } }
+@media print { .exam-ai-task-indicator { display: none !important; } }
 @keyframes exam-ai-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 @media(max-width:850px) { .exam-ai-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } .exam-ai-advanced-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .exam-ai-setup,.exam-ai-summary,.exam-ai-proposals { padding: 16px; } .exam-ai-model { max-width: 100%; margin-left: 0; } .exam-ai-heading > .exam-ai-muted { margin-left: 0; width: 100%; } .exam-ai-finding-title { flex-wrap: wrap; } .exam-ai-finding-title strong { flex-basis: 100%; margin-left: 14px; } .exam-ai-report-metrics { gap: 8px; } .exam-ai-report-metrics strong { display: block; } .exam-ai-proposal { flex-wrap: wrap; } .exam-ai-proposal > div:last-child { flex-basis: 100%; margin-left: 28px; } }

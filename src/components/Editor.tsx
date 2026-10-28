@@ -328,6 +328,7 @@ export const Editor = memo(function Editor({
   onOcr,
   neighbors,
   onDuplicate, onMove, sections,
+  focusTarget,
 }: {
   q: Question | null;
   dataReady?: boolean;
@@ -348,15 +349,48 @@ export const Editor = memo(function Editor({
   onDuplicate?: () => void;
   onMove?: (sectionId: string) => void;
   sections?: Section[];
+  /** Optional entry intent for a newly opened versioned bank draft. */
+  focusTarget?: "question" | "answer" | "analysis";
 }) {
   const stemRef = useRef<TexHandle>(null);
+  const editorRoot = useRef<HTMLDivElement>(null);
   const [workbench] = useExperimentalWorkbench();
-  const [group, setGroup] = useState<WorkbenchGroup>("question");
+  const [group, setGroup] = useState<WorkbenchGroup>(focusTarget && focusTarget !== "question" ? "answers" : "question");
   const workbenchId = useId();
   const groupNav = useRef<HTMLDivElement>(null);
   const [showAnalysis, setShowAnalysis] = useState(true);
   const workbenchContext = useMemo(() => ({ enabled: workbench, group }), [workbench, group]);
   const changeDrawing = useCallback((drawing: string) => onChange({ drawing }), [onChange]);
+  useEffect(() => {
+    if (!focusTarget || !q) return;
+    setGroup(focusTarget === "question" ? "question" : "answers");
+    if (focusTarget === "analysis") setShowAnalysis(true);
+    const root = editorRoot.current;
+    if (!root) return;
+    const questionId = q.id;
+    let observer: MutationObserver | undefined;
+    const focus = () => {
+      const body = [...root.querySelectorAll<HTMLElement>("[data-editor-question]")].find(node => node.dataset.editorQuestion === questionId);
+      if (!body) return;
+      const selectors = focusTarget === "question" ? 'textarea[placeholder="输入题干…"]'
+        : focusTarget === "analysis" ? 'textarea[placeholder="写下解题思路…"]'
+        : '[aria-label^="正确选项 "], [aria-label^="将 "][aria-label$=" 设为正确答案"], textarea[placeholder="输入答案…"]';
+      const target = [...body.querySelectorAll<HTMLElement>(selectors)].find(node => !node.closest("[hidden],[inert]") && node.getClientRects().length > 0);
+      if (!target) return;
+      target.focus({ preventScroll: true });
+      if (document.activeElement !== target) return;
+      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      observer?.disconnect();
+      return true;
+    };
+    // A question transition can still be showing its exiting predecessor. Wait
+    // for the matching body/group rather than querying or clicking global tabs.
+    if (focus()) return;
+    observer = new MutationObserver(focus);
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    const timeout = window.setTimeout(() => observer?.disconnect(), 2000);
+    return () => { window.clearTimeout(timeout); observer?.disconnect(); };
+  }, [focusTarget, q?.id, workbench]);
   const inspectedQuestion = useRef<string | null>(null);
   useEffect(() => {
     if (!dataReady || !q || inspectedQuestion.current === q.id) return;
@@ -372,13 +406,14 @@ export const Editor = memo(function Editor({
 
   return (
     <WorkbenchContext.Provider value={workbenchContext}>
-    <div className={cx("h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
+    <div ref={editorRoot} className={cx("h-full overflow-y-auto overflow-x-hidden", workbench && "experimental-workbench")} data-editor-workbench={workbench ? "experimental" : "classic"}>
       <AnimatePresence mode="wait" custom={dir} initial={false}>
         {!q || !sec ? (
           <Empty key="empty" onStart={onStart} onOcr={onOcr} />
         ) : (
           <motion.div
             key={q.id}
+            data-editor-question={q.id}
             custom={dir}
             variants={{
               enter: (d: number) => ({ opacity: 0, y: d * 18, filter: "blur(3px)" }),

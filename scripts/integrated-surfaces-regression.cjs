@@ -108,7 +108,8 @@ async function main() {
       const nodes = selectors.flatMap(selector => [...document.querySelectorAll(selector)].flatMap(node => {
         const r = node.getBoundingClientRect(), style = getComputedStyle(node);
         if (!r.width || !r.height || style.visibility === 'hidden' || node.closest('[aria-hidden="true"]')) return [];
-        return [{ selector, x: r.x, right: r.right, y: r.y, bottom: r.bottom, width: r.width, client: node.clientWidth, scroll: node.scrollWidth }];
+        const overlay = node.matches('.bank-library-sidebar') ? node.querySelector('.bank-sidebar-panel')?.getBoundingClientRect() : null;
+        return [{ selector, x: r.x, right: r.right, y: r.y, bottom: r.bottom, width: r.width, client: node.clientWidth, scroll: node.scrollWidth, overlay: overlay ? { x: overlay.x, right: overlay.right, width: overlay.width } : null }];
       }));
       return { width: innerWidth, height: innerHeight, documentScroll: document.documentElement.scrollWidth, nodes };
     }, selectors);
@@ -116,7 +117,14 @@ async function main() {
     assert.ok(value.documentScroll <= value.width + 2, `${label}: horizontal document overflow`);
     for (const node of value.nodes) {
       assert.ok(node.x >= -2 && node.right <= value.width + 2 && node.y >= -2 && node.bottom <= value.height + 2, `${label}: ${node.selector} escaped viewport: ${JSON.stringify(node)}`);
-      assert.ok(node.scroll <= node.client + 2, `${label}: ${node.selector} overflows horizontally: ${JSON.stringify(node)}`);
+      if (node.overlay) {
+        // The 60px rail deliberately hosts a 220px overlay, not a wider grid
+        // column. Validate that specific drawer's bounds instead of mistaking
+        // its local scrollWidth for document overflow. Hit testing is covered
+        // by beta7-regression and hover/Tab/touch by ui-overhaul-regression.
+        assert.ok(node.overlay.x >= -2 && node.overlay.right <= value.width + 2 && node.overlay.width <= 222 && node.width <= 62, `${label}: invalid navigation overlay bounds: ${JSON.stringify(node)}`);
+        assert.ok(node.scroll <= node.overlay.width + 2, `${label}: unexpected overflow beyond navigation overlay`);
+      } else assert.ok(node.scroll <= node.client + 2, `${label}: ${node.selector} overflows horizontally: ${JSON.stringify(node)}`);
     }
   }
   async function shot(name) {

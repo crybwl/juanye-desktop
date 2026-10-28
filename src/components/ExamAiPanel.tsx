@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AlertTriangle, Check, ChevronDown, Crosshair, Play, RotateCcw, Settings2, Sparkles, Square, Undo2 } from 'lucide-react';
 import type { Exam } from '../types';
@@ -9,6 +9,7 @@ import { drawingSegments } from '../drawing';
 import { Checkbox } from './Checkbox';
 import { Select } from './Select';
 import { DEFAULT_EXAM_AI_CONFIG, examContextHash, examReportKey, examSnapshotFingerprint, invertMetadataPatches, planExamAnalysis, previewMetadataPatches, reportMetadataProposals, type ApplyExamMetadata, type ExamAiConfig, type ExamAiReport, type ExamMetadataPatch } from '../exam-ai';
+import type { ExamAiSession } from '../exam-ai-session';
 import './exam-ai.css';
 
 const ANSWER_LABELS = {consistent:'文本核查暂未见冲突',suspect:'答案疑点待复核',not_checked:'答案未核实'};
@@ -21,44 +22,43 @@ function Finding({finding,numbers,onLocate}:{finding:ExamAiReport['findings'][nu
   return <article className={`exam-ai-finding exam-ai-finding--${finding.severity}`}><div className="exam-ai-finding-title"><span className="exam-ai-severity"/><span className="exam-ai-tag">{KIND_LABELS[finding.kind]}</span><strong><ReviewText text={finding.message}/></strong></div><div className="exam-ai-finding-toolbar"><Button size="sm" variant="ghost" aria-expanded={expanded} icon={<motion.span animate={{rotate:expanded?180:0}} transition={reduced?{duration:0}:softSpring}><ChevronDown size={13}/></motion.span>} onClick={()=>setExpanded(value=>!value)}>依据与建议</Button><div className="exam-ai-question-links">{finding.questionIds.map(id=><Button key={id} size="sm" variant="ghost" icon={<Crosshair size={12}/>} disabled={!numbers.has(id)||!onLocate} onClick={()=>onLocate?.(id)}>{numbers.has(id)?`定位第 ${numbers.get(id)} 题`:'题目已移除'}</Button>)}</div></div><AnimatePresence initial={false}>{expanded&&<motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={reduced?{duration:0}:softSpring} className="exam-ai-finding-context"><div><span>核查依据</span><ReviewText text={finding.evidence||'需人工复核'}/></div><div><span>改进建议</span><ReviewText text={finding.suggestion}/></div></motion.div>}</AnimatePresence></article>;
 }
 
-export function ExamAiPanel({ exam, onLocate, onApplyMetadata }: {exam:Exam;onLocate?:(id:string)=>void;onApplyMetadata?:ApplyExamMetadata}) {
-  const [config,setConfig] = useState<ExamAiConfig>({...DEFAULT_EXAM_AI_CONFIG});
+export function ExamAiPanel({ exam, session, onBackgroundStart, onLocate, onApplyMetadata }: {exam:Exam;session:ExamAiSession;onBackgroundStart:()=>void;onLocate?:(id:string)=>void;onApplyMetadata?:ApplyExamMetadata}) {
+  const task=useSyncExternalStore(session.subscribe,session.getSnapshot,session.getSnapshot);
+  const [config,setConfig] = useState<ExamAiConfig>(()=>({... (session.getSnapshot().config??DEFAULT_EXAM_AI_CONFIG)}));
+  const [background,setBackground]=useState(()=>session.getSnapshot().background);
   const [reports,setReports]=useState<ExamAiReport[]>([]),[selectedId,setSelectedId]=useState('');
   const [model,setModel]=useState<{model:string;hasKey:boolean}|null>(null);
-  const [busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const [confirm,setConfirm]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [selected,setSelected]=useState<Set<string>>(new Set());
   const [undo,setUndo]=useState<{patches:ExamMetadataPatch[];expectedFingerprint:string}|null>(null);
   const reduced=useReducedMotion();
-  const activeTask=useRef('');
+  const busy=task.phase==='running';
   const key=examReportKey(exam), fingerprint=useMemo(()=>{try{return examSnapshotFingerprint(exam);}catch{return '';}},[exam]);
   const contextHash=useMemo(()=>{try{return examContextHash(config);}catch{return '';}},[config]);
   const planning=useMemo(()=>{try{return {plan:planExamAnalysis(exam,config),error:''};}catch(error){return {plan:null,error:error instanceof Error?error.message:String(error)};}},[exam,config]);
   const report=reports.find(item=>item.id===selectedId)??reports[0];
-  const stale=!!report&&(report.fingerprint!==fingerprint||report.contextHash!==contextHash);
+  const stale=!!report&&(report.examKey!==key||report.fingerprint!==fingerprint||report.contextHash!==contextHash);
   const proposals=useMemo(()=>report?reportMetadataProposals(report,exam):[],[report,exam]);
-  const numbers=useMemo(()=>new Map(exam.sections.flatMap(section=>section.questions).map((question,index)=>[question.id,index+1])),[exam]);
+  const numbers=useMemo(()=>new Map(report&&report.examKey!==key?[]:exam.sections.flatMap(section=>section.questions).map((question,index)=>[question.id,index+1] as const)),[exam,report?.examKey,key]);
   useEffect(()=>{
     let live=true;
-    setReports([]);setSelectedId('');setError('');setUndo(null);
-    window.juanye?.loadExamReports(key).then(items=>{if(live)setReports(items);}).catch(error=>{if(live)setError(String(error));});
+    const recent=session.getSnapshot().report;
+    setReports(recent?[recent]:[]);setSelectedId(recent?.id??'');setError('');setUndo(null);
+    window.juanye?.loadExamReports(key).then(items=>{if(live)setReports(previous=>[...previous,...items.filter(item=>!previous.some(old=>old.id===item.id))].slice(0,30));}).catch(error=>{if(live)setError(String(error));});
     window.juanye?.getModel().then(value=>{if(live)setModel(value);}).catch(()=>{if(live)setModel(null);});
-    return()=>{live=false;const taskId=activeTask.current;activeTask.current='';if(taskId)void window.juanye?.cancelExamAnalysis(taskId).catch(()=>{});};
-  },[key]);
+    return()=>{live=false;session.closeForeground(key);};
+  },[key,session]);
+  useEffect(()=>{
+    if(task.phase==='success'&&task.report){setReports(previous=>[task.report!,...previous.filter(item=>item.id!==task.report!.id)].slice(0,30));setSelectedId(task.report.id);setNotice(`报告已在本机保存；实际请求 ${task.report.requestCount} 次，复用 ${task.report.cacheHits} 个未变化题组。`);}
+  },[task.report?.id]);
   useEffect(()=>{setSelected(new Set(proposals.map(proposal=>proposal.id)));},[report?.id]); // Review selection is intentionally stable while the exam changes.
   useEffect(()=>{setConfirm(false);},[fingerprint,config]);
   const setField=<K extends keyof ExamAiConfig>(name:K,value:ExamAiConfig[K])=>setConfig(previous=>({...previous,[name]:value}));
-  const cancel=()=>{const taskId=activeTask.current;activeTask.current='';setBusy(false);setNotice('整卷分析已取消。');if(taskId)void window.juanye?.cancelExamAnalysis(taskId).catch(error=>setError(String(error)));};
-  const run=async()=>{
+  const cancel=()=>{session.cancel();setNotice('整卷分析已取消。');};
+  const run=()=>{
     const plan=planning.plan,bridge=window.juanye;
     if(!plan||!bridge||plan.exceedsBudget||!plan.questionCount)return;
-    const taskId=`exam-${crypto.randomUUID()}`;activeTask.current=taskId;setBusy(true);setConfirm(false);setError('');setNotice('');
-    try {
-      const result=await bridge.analyzeExam({taskId,exam,config:plan.config,expectedFingerprint:plan.fingerprint,examKey:key});
-      if(activeTask.current!==taskId)return;
-      setReports(previous=>[result,...previous].slice(0,30));setSelectedId(result.id);
-      setNotice(`报告已在本机保存；实际请求 ${result.requestCount} 次，复用 ${result.cacheHits} 个未变化题组。`);
-    }catch(error){if(activeTask.current===taskId)setError(error instanceof Error?error.message:String(error));}
-    finally{if(activeTask.current===taskId){activeTask.current='';setBusy(false);}}
+    if(session.start({exam,config:plan.config,expectedFingerprint:plan.fingerprint,examKey:key},background)){setConfirm(false);setError('');setNotice('');if(background)onBackgroundStart();}
   };
   const apply=()=>{
     if(!report||stale||!onApplyMetadata)return;
@@ -79,6 +79,7 @@ export function ExamAiPanel({ exam, onLocate, onApplyMetadata }: {exam:Exam;onLo
   return <div className="exam-ai-panel">
     {!!reports.length&&<div className="exam-ai-report-picker"><label>本机历史报告<Select aria-label="本机历史报告" value={report?.id??''} onValueChange={value=>{setSelectedId(value);setUndo(null);}} options={reports.map(item=>({value:item.id,label:`${new Date(item.createdAt).toLocaleString()} · ${item.model.name} · ${item.config.mode==='deep'?'深入':'快速'}`}))}/></label><span className="exam-ai-muted">快照 {report?.fingerprint.slice(0,12)} · {report?.requestCount} 次请求 / {report?.cacheHits} 个缓存</span></div>}
     {report&&<>
+      {report.examKey!==key&&<p className="exam-ai-warning" role="status">后台报告来自《{report.snapshot.title}》，当前已切换试卷，仅供查看。</p>}
       {stale&&<div className="exam-ai-stale" role="status"><AlertTriangle size={16}/><div><strong>历史报告：已过期</strong><p>试卷或分析设置已改变，请重新分析后应用建议。</p>{report.contextHash!==contextHash&&<Button size="sm" icon={<RotateCcw size={12}/>} onClick={()=>setConfig({...report.config})}>恢复报告的分析设置</Button>}</div></div>}
       <section className="exam-ai-card exam-ai-summary"><div className="exam-ai-heading"><span className="exam-ai-heading-icon"><Sparkles size={16}/></span><h3>AI 定性结论</h3><span className="exam-ai-muted">{new Date(report.createdAt).toLocaleString()} · {report.model.name}</span></div><div className="exam-ai-prose"><ReviewText text={report.summary}/></div>{report.recommendations.length>0&&<ul>{report.recommendations.map((item,index)=><li key={index}><ReviewText text={item}/></li>)}</ul>}<div className="exam-ai-report-metrics"><span><strong>{report.findings.length}</strong> 条待复核发现</span><span><strong>{report.questionReviews.length}</strong> 道逐题评估</span><span><strong>{proposals.length}</strong> 道标签建议</span></div></section>
     </>}
@@ -94,10 +95,12 @@ export function ExamAiPanel({ exam, onLocate, onApplyMetadata }: {exam:Exam;onLo
       {planning.error&&<p role="alert" className="exam-ai-warning">{planning.error}</p>}
       {planning.plan&&<div className="exam-ai-budget"><span>{planning.plan.questionCount} 题</span><span>{planning.plan.charCount.toLocaleString()} 个快照字符</span><span>{planning.plan.chunkCount} 个顺序题组</span><span>{planning.plan.images.length} 张授权图片</span><span>≤ {planning.plan.maxRequests} 次请求</span><span>≤ {planning.plan.maxTotalOutputTokens.toLocaleString()} 总输出 tokens</span></div>}
       {planning.plan?.exceedsBudget&&<p role="alert" className="exam-ai-warning">题组数超过请求预算，本次不会发送。请增加请求预算或分卷处理。</p>}
-      <div className="exam-ai-actions">{busy?<><span role="status" className="exam-ai-running"><span className="exam-ai-running-dot"/>正在顺序分析题组；不会自动付费重试…</span><Button size="sm" icon={<Square size={13}/>} onClick={cancel}>取消整卷分析</Button></>:<Button size="sm" variant="primary" icon={<Play size={13}/>} disabled={!window.juanye||!model?.hasKey||!planning.plan?.questionCount||planning.plan?.exceedsBudget} onClick={()=>{setConfirm(true);setError('');}}>预览并确认发送</Button>}{!window.juanye&&<span className="exam-ai-muted">AI 分析仅在桌面版可用；本地统计仍可使用。</span>}{model&&!model.hasKey&&<span className="exam-ai-muted">请先在模型设置中保存 API Key。</span>}</div>
+      <label className="exam-ai-background-toggle"><Checkbox aria-label="后台分析（实验性）" checked={background} disabled={busy} onCheckedChange={setBackground}/><span>后台分析 <small>实验性</small></span></label>
+      <div className="exam-ai-actions">{busy?<><span role="status" className="exam-ai-running"><span className="exam-ai-running-dot"/>{task.background?'正在后台分析试卷…':'正在顺序分析题组；不会自动付费重试…'}</span><Button size="sm" icon={<Square size={13}/>} onClick={cancel}>取消整卷分析</Button></>:<Button size="sm" variant="primary" icon={<Play size={13}/>} disabled={!window.juanye||!model?.hasKey||!planning.plan?.questionCount||planning.plan?.exceedsBudget} onClick={()=>{setConfirm(true);setError('');}}>预览并确认发送</Button>}{!window.juanye&&<span className="exam-ai-muted">AI 分析仅在桌面版可用；本地统计仍可使用。</span>}{model&&!model.hasKey&&<span className="exam-ai-muted">请先在模型设置中保存 API Key。</span>}</div>
+      {task.phase==='running'&&task.examKey!==key&&<p className="exam-ai-muted">当前任务来自《{task.examTitle}》；完成报告不会修改当前试卷。</p>}
       <AnimatePresence initial={false}>{confirm&&planning.plan&&<motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={reduced?{duration:0}:softSpring} className="exam-ai-confirm-wrap"><div className="exam-ai-confirm" role="group" aria-label="确认 AI 发送预算"><div className="exam-ai-confirm-title"><AlertTriangle size={16}/><strong>确认向 {model?.model} 发送此快照？</strong></div><p>{planning.plan.questionCount} 题 / {planning.plan.charCount.toLocaleString()} 个字符 / {planning.plan.chunkCount} 个题组 / {planning.plan.images.length} 张图。最多 {config.maxRequests} 次请求，每次最多 {config.maxOutputTokens} 输出 tokens。可能产生费用；缓存命中会减少请求。失败后必须手动重新确认，不自动重试。</p><div className="exam-ai-actions"><Button size="sm" variant="primary" onClick={()=>void run()}>确认并开始分析</Button><Button size="sm" onClick={()=>setConfirm(false)}>返回修改</Button></div></div></motion.div>}</AnimatePresence>
     </section>
-    {error&&<p role="alert" className="exam-ai-warning"><AlertTriangle size={15}/>{error}</p>}{notice&&<p role="status" className="exam-ai-muted">{notice}</p>}
+    {(error||task.phase==='error'&&task.error)&&<p role="alert" className="exam-ai-warning"><AlertTriangle size={15}/>{error||task.error}</p>}{notice&&<p role="status" className="exam-ai-muted">{notice}</p>}
     {report&&<>
       <section className="exam-ai-card exam-ai-findings"><div className="exam-ai-heading"><h3>问题与证据 · {report.findings.length} 条</h3><span className="exam-ai-muted">展开依据后逐项核查</span></div>{!report.findings.length&&<p className="exam-ai-muted">未报告具体疑点。</p>}{report.findings.map((finding,index)=><Finding key={`${report.id}-${index}`} finding={finding} numbers={numbers} onLocate={onLocate?locate:undefined}/>)}</section>
       <section className="exam-ai-card exam-ai-reviews"><div className="exam-ai-heading"><h3>逐题 AI 评估</h3><span className="exam-ai-muted">AI 估计不等于实测数据</span></div><div className="exam-ai-table-scroll"><table className="exam-tools-table"><thead><tr><th>题号</th><th>知识点建议</th><th>估计难度</th><th>核查状态</th><th>依据 / 限制</th></tr></thead><tbody>{report.questionReviews.map(review=><tr key={review.questionId}><td><Button size="sm" variant="ghost" className="exam-ai-link" disabled={!numbers.has(review.questionId)||!onLocate} onClick={()=>locate(review.questionId)}>{numbers.has(review.questionId)?`第 ${numbers.get(review.questionId)} 题`:'已移除'}</Button></td><td><ReviewText text={review.knowledge.join('、')||'未判断'}/></td><td>{review.estimatedDifficulty==='not_checked'?'未判断':DIFFICULTY_LABELS[review.estimatedDifficulty]}（AI 估计）</td><td>{ANSWER_LABELS[review.answerCheck]}<br/>图像：{review.visualCheck==='checked'?'已随图审阅（待复核）':'未检查'}</td><td><ReviewText text={review.rationale}/></td></tr>)}</tbody></table></div></section>

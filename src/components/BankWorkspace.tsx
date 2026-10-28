@@ -1,6 +1,6 @@
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePlus2, Flame, Folder, FolderPlus, GripVertical, HardDrive, History, LayoutGrid, LayoutList, Library, Lightbulb, ListChecks, Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Pencil, Plus, RefreshCw, RotateCcw, ScanText, Search, ShoppingBasket, Sparkles, Star, Tag, Trash2, Upload, X, ZoomIn } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePlus2, Flame, Folder, FolderPlus, GripVertical, HardDrive, History, LayoutGrid, LayoutList, Library, Lightbulb, ListChecks, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, RefreshCw, RotateCcw, ScanText, Search, ShoppingBasket, Sparkles, Star, Tag, Trash2, Upload, X, ZoomIn } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Exam, QType, Question, Section } from "../types";
 import { TYPE_META } from "../data";
@@ -26,7 +26,8 @@ const DIFFICULTY = { easy: "基础", medium: "中等", hard: "较难" } as const
 const EMPTY_BANK: BankDocument = { schema: "juanye-bank/1", revision: 0, entries: [], collections: [] };
 const PAGE_SIZE = 25;
 type LibraryView = "all" | "favorites" | "review" | "trash" | `collection:${string}`;
-type Draft = { question: Question; entry?: BankEntry; original: string };
+type EditTarget = "question" | "answer" | "analysis";
+type Draft = { question: Question; entry?: BankEntry; original: string; focusTarget: EditTarget };
 type Collection = BankDocument["collections"][number];
 type PackageImport = { name: string; bank?: BankDocument; questions?: Question[] };
 type BankCardActions = {
@@ -111,6 +112,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   const [previewId, setPreviewId] = useState("");
   const [rightOpen, setRightOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [target, setTarget] = useState(exam.sections[0]?.id ?? "");
   const [fileImport, setFileImport] = useState(false);
@@ -130,6 +132,10 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   const [bursts, setBursts] = useState<Record<string, number>>({});
   const [zoom, setZoom] = useState<ZoomFigure | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarHovered = useRef(false);
+  const sidebarTouch = useRef(false);
+  const sidebarPanelId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
   const flightSeq = useRef(0);
   const rich = useRichMotion();
@@ -247,6 +253,13 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
     return () => { alive = false; };
   }, [active]);
 
+  useEffect(() => {
+    if (!active) { setSidebarOpen(false); return; }
+    const outside = (event: PointerEvent) => { if (!sidebarRef.current?.contains(event.target as Node)) setSidebarOpen(false); };
+    window.addEventListener("pointerdown", outside);
+    return () => window.removeEventListener("pointerdown", outside);
+  }, [active]);
+
   useEffect(() => { try { localStorage.setItem("juanye.bankDensity", density); } catch { /* preference only */ } }, [density]);
 
   // Keep the patch's native menu appearance and dismiss it on outside clicks.
@@ -321,11 +334,12 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
     acceptBank(result.bank);
     toast({ title: `已保存 ${result.added} 道题`, ...(result.duplicates ? { desc: `${result.duplicates} 道重复题已跳过` } : {}) });
   }
-  function editEntry(entry?: BankEntry) {
+  function editEntry(entry?: BankEntry, target: EditTarget = "question") {
     if (!canLeaveDraft()) return;
     const question = entry ? structuredClone(entry.question) : blankQuestion();
-    setDraft({ question, entry, original: JSON.stringify(question) }); setHistoryOpen(false); setRightOpen(true);
+    setDraft({ question, entry, original: JSON.stringify(question), focusTarget: target }); setHistoryOpen(false); setRightOpen(true);
   }
+  const editPreview = useCallback((target: EditTarget) => { if (preview) editEntry(preview, target); }, [preview, dirty]);
   const saveDraft = () => task(async () => {
     if (!draft) return;
     if (!draft.question.stem.trim() && !questionFigures(draft.question).length && !draft.question.drawing && !draft.question.image) throw Error("请填写题干或添加题图");
@@ -453,7 +467,10 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
 
     <AnimatePresence initial={false}>{error && <motion.div key="error" className="bank-workspace-error" role="alert" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={motionTransition}><span>{error}</span><button aria-label="关闭题库错误" onClick={() => setError("")}><X size={15} /></button></motion.div>}</AnimatePresence>
     <div className="bank-workspace-layout">
-      <aside className="bank-library-sidebar" aria-label="题库导航">
+      <aside ref={sidebarRef} className="bank-library-sidebar" aria-label="题库导航" data-expanded={sidebarOpen} onPointerDown={event => { sidebarTouch.current = event.pointerType === "touch"; }} onPointerEnter={event => { if (event.pointerType === "mouse" && window.matchMedia("(hover: hover) and (pointer: fine)").matches) { sidebarHovered.current = true; setSidebarOpen(true); } }} onPointerLeave={() => { sidebarHovered.current = false; if (!sidebarRef.current?.contains(document.activeElement)) setSidebarOpen(false); }} onFocusCapture={event => { if (!sidebarTouch.current || event.target.matches(":focus-visible")) setSidebarOpen(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !sidebarHovered.current) setSidebarOpen(false); }} onKeyDown={event => { if (event.key === "Escape" && sidebarOpen) { event.preventDefault(); event.stopPropagation(); sidebarRef.current?.querySelector<HTMLButtonElement>("[data-testid='bank-sidebar-toggle']")?.focus(); setSidebarOpen(false); } }}>
+        <div className="bank-sidebar-surface" aria-hidden="true" />
+        <button type="button" className="bank-sidebar-toggle" data-testid="bank-sidebar-toggle" aria-label={sidebarOpen ? "收起题库导航" : "展开题库导航"} title={sidebarOpen ? "收起题库导航" : "展开题库导航"} aria-expanded={sidebarOpen} aria-controls={sidebarPanelId} onClick={() => setSidebarOpen(value => !value)}>{sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>
+        <div className="bank-sidebar-panel" id={sidebarPanelId}>
         <nav className="bank-nav">{nav("all", "全部题目", <Library size={16} />, live.length, "all")}{nav("trash", "回收站", <Trash2 size={16} />, trashCount, "trash")}</nav>
         <div className="bank-sidebar-label bank-collection-heading"><span>收藏夹</span><IconButton label="新建收藏夹" className="bank-collection-add" disabled={busy} onClick={() => setCollectionEdit({ id: crypto.randomUUID(), name: "", ...(collectionId ? { parentId: collectionId } : {}) })}><FolderPlus size={15} /></IconButton></div>
         <div className="bank-collection-tree" data-testid="bank-collection-tree">{tree.map(({ collection, depth }, index) => <div key={collection.id} className="bank-collection-row" data-depth={Math.min(depth, 5)} style={{ paddingLeft: Math.min(depth, 5) * 14, "--i": index, "--depth": Math.min(depth, 5) } as CSSProperties}>
@@ -470,6 +487,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
             <button type="button" className="bank-sidebar-stat" data-tone="review" data-bank-view="review" aria-label="待核对" title="待核对" aria-pressed={view === "review"} onClick={() => changeView("review")}><Lightbulb size={16} aria-hidden="true" /><b><AnimatedNumber value={reviewCount} /></b></button>
           </div>
           <div className="bank-sidebar-footer"><div><span className="bank-local-dot" /><HardDrive size={13} />仅保存在本机</div><small>每次修改都会保留历史版本</small></div>
+        </div>
         </div>
       </aside>
 
@@ -521,13 +539,13 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={detailKey} className="bank-detail-body" initial={{ opacity: 0, x: 26 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18, transition: { duration: 0.11 } }} transition={motionTransition}>
           {draft ? <>
-            <div className="bank-question-editor" data-testid="bank-question-editor">{active && <Editor q={draft.question} sec={draftSection} secIndex={0} num={1} total={1} dir={0} neighbors={{}} onChange={patch => setDraft(value => value ? { ...value, question: { ...value.question, ...patch } } : value)} onPrev={() => {}} onNext={() => {}} onConvert={() => setDraft(value => value ? { ...value, question: changeQuestionType(value.question, "essay") } : value)} onDelete={() => { if (canLeaveDraft()) setDraft(null); }} onStart={() => {}} onOcr={() => setOcrOpen(true)} />}</div>
+            <div className="bank-question-editor" data-testid="bank-question-editor">{active && <Editor q={draft.question} focusTarget={draft.focusTarget} sec={draftSection} secIndex={0} num={1} total={1} dir={0} neighbors={{}} onChange={patch => setDraft(value => value ? { ...value, question: { ...value.question, ...patch } } : value)} onPrev={() => {}} onNext={() => {}} onConvert={() => setDraft(value => value ? { ...value, question: changeQuestionType(value.question, "essay") } : value)} onDelete={() => { if (canLeaveDraft()) setDraft(null); }} onStart={() => {}} onOcr={() => setOcrOpen(true)} />}</div>
             <div className="bank-edit-footer"><span>{draft.entry ? `保存为版本 ${draft.entry.version + 1}` : "仅保存到题库"}</span><Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (canLeaveDraft()) setDraft(null); }}>取消</Button><Button size="sm" variant="primary" disabled={busy || (!!draft.entry && !dirty)} icon={busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} onClick={() => void saveDraft()}>保存</Button></div>
           </> : preview ? <>
-            <div className="bank-detail-tools" style={hueStyle(preview.question.type)}><span className="bank-type-tag"><QuestionTypeIcon type={preview.question.type} width={13} height={13} />{TYPE_META[preview.question.type].short}</span><span className="bank-detail-meta">{TYPE_META[preview.question.type].label} · {preview.question.score} 分{preview.version > 1 ? ` · v${preview.version}` : ""}</span><IconButton label="版本历史" className="bank-detail-action" active={historyOpen} onClick={() => setHistoryOpen(value => !value)}><History size={15} /></IconButton><Button className="bank-detail-action" size="sm" variant="outline" disabled={busy || !!preview.trashedAt || preview.id !== newest?.id} onClick={() => editEntry(preview)} icon={<Pencil size={12} />}>编辑</Button></div>
+            <div className="bank-detail-tools" style={hueStyle(preview.question.type)}><span className="bank-type-tag"><QuestionTypeIcon type={preview.question.type} width={13} height={13} />{TYPE_META[preview.question.type].short}</span><span className="bank-detail-meta">{TYPE_META[preview.question.type].label} · {preview.question.score} 分{preview.version > 1 ? ` · v${preview.version}` : ""}</span><IconButton label="版本历史" className="bank-detail-action" active={historyOpen} onClick={() => setHistoryOpen(value => !value)}><History size={15} /></IconButton><Button className="bank-edit-main" size="sm" variant="outline" disabled={busy || !!preview.trashedAt || preview.id !== newest?.id} onClick={() => editEntry(preview)} icon={<Pencil size={12} />}>编辑题目</Button></div>
             <Reveal open={historyOpen} className="bank-version-reveal"><div className="bank-version-history" data-testid="bank-version-history"><h3><Clock3 size={12} />版本历史 · {versions.length}</h3>{versions.map((entry, index) => <motion.div key={entry.id} className="bank-version-row" data-current={entry.id === newest?.id || undefined} initial={rich ? { opacity: 0, x: -10 } : false} animate={{ opacity: 1, x: 0 }} transition={{ ...cardSpring, delay: index * 0.04 }}><i aria-hidden="true" /><button data-active={entry.id === preview.id} onClick={() => setPreviewId(entry.id)}><span>版本 {entry.version}{entry.id === newest?.id ? " · 当前" : ""}</span><small>{dateText(entry.createdAt)}</small></button>{entry.id !== newest?.id && !entry.trashedAt && <button className="bank-version-restore" aria-label={`恢复版本 ${entry.version} 为新版本`} disabled={busy} onClick={() => void task(async () => { if (!newest || !window.confirm(`将版本 ${entry.version} 的内容保存为新版本？所有历史版本均保留。`)) return; const result = await bankBridge().bankRevise({ id: newest.id, question: entry.question, expectedContentKey: newest.contentKey }); acceptBank(result.bank); setPreviewId(result.entry.id); toast({ title: "已保存为新版本" }); })}><RotateCcw size={13} /></button>}</motion.div>)}</div></Reveal>
             <div className="bank-preview-scroll" data-testid="bank-question-preview">
-              <div className="bank-preview-paper" style={hueStyle(preview.question.type)}><BankQuestionPreview question={preview.question} onZoom={setZoom} /></div>
+              <div className="bank-preview-paper" style={hueStyle(preview.question.type)}><BankQuestionPreview question={preview.question} onZoom={setZoom} onEdit={editPreview} editable={!busy && !preview.trashedAt && preview.id === newest?.id} /></div>
               <div className="bank-preview-metadata">
                 <div className="bank-meta-tile"><span>难度</span>{preview.question.difficulty ? <DifficultyMeter level={preview.question.difficulty} label={DIFFICULTY[preview.question.difficulty]} /> : <b>未设置</b>}</div>
                 <div className="bank-meta-tile"><span>使用记录</span><b>{preview.usageCount} 次</b><small>{dateText(preview.lastUsedAt)}</small></div>
@@ -588,17 +606,17 @@ const BankQuestionCard = memo(function BankQuestionCard({ entry, active, inBaske
   </motion.div>;
 });
 
-const BankQuestionPreview = memo(function BankQuestionPreview({ question: q, onZoom }: { question: Question; onZoom: (figure: ZoomFigure) => void }) {
+const BankQuestionPreview = memo(function BankQuestionPreview({ question: q, onZoom, onEdit, editable }: { question: Question; onZoom: (figure: ZoomFigure) => void; onEdit: (target: EditTarget) => void; editable: boolean }) {
   const rich = useRichMotion();
   const drawings = [...extractTikzBlocks(q.stem), ...(q.drawing?.trim() ? [q.drawing] : [])];
   return <div className="bank-complete-preview">
-    <div className="bank-complete-stem"><MathText text={stripTikzBlocks(q.stem)} placeholder="（空题干）" /></div>
-    {q.options.length > 0 && <div className="bank-complete-options">{q.options.map((option, index) => { const correct = q.answer.includes(String.fromCharCode(65 + index)); return <motion.div key={index} data-correct={correct} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={rich ? { ...cardSpring, delay: 0.06 + index * 0.045 } : { duration: 0 }}><b>{String.fromCharCode(65 + index)}</b><MathText text={option} placeholder="（空选项）" />{correct && <Check className="bank-option-check" size={14} aria-label="正确答案" />}</motion.div>; })}</div>}
+    <div className="bank-complete-stem" title={editable ? "双击编辑题干" : undefined} onDoubleClick={() => editable && onEdit("question")}><MathText text={stripTikzBlocks(q.stem)} placeholder="（空题干）" /></div>
+    {q.options.length > 0 && <div className="bank-complete-options">{q.options.map((option, index) => { const correct = q.answer.includes(String.fromCharCode(65 + index)); return <motion.div key={index} data-correct={correct} title={editable ? "双击编辑选项" : undefined} onDoubleClick={() => editable && onEdit("question")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={rich ? { ...cardSpring, delay: 0.06 + index * 0.045 } : { duration: 0 }}><b>{String.fromCharCode(65 + index)}</b><MathText text={option} placeholder="（空选项）" />{correct && <Check className="bank-option-check" size={14} aria-label="正确答案" />}</motion.div>; })}</div>}
     {questionFigures(q).map(figure => <figure key={figure.id}><button type="button" className="bank-figure-zoom" aria-label="放大题图" onClick={() => onZoom({ id: figure.id, src: figure.src, caption: figure.caption })}><img src={figure.src} alt={figure.caption || "题图"} /><span aria-hidden="true"><ZoomIn size={14} /></span></button>{figure.caption && <figcaption><MathText text={figure.caption} /></figcaption>}</figure>)}
     {q.image === "plot" && <div className="bank-preview-drawing"><PlotSvg ink="var(--color-fg)" accent="var(--color-accent)" width={260} /></div>}
     {drawings.map((code, index) => <div key={index} className="bank-preview-drawing bank-preview-tikz"><TikzDrawing code={code} /></div>)}
-    <section className="bank-answer-block" data-kind="answer"><h3><Check size={12} />参考答案</h3><MathText text={q.answer.join("；")} placeholder="未设置答案" /></section>
-    <section className="bank-answer-block" data-kind="analysis"><h3><Lightbulb size={12} />解析</h3><MathText text={q.analysis} placeholder="未设置解析" /></section>
+    <section className="bank-answer-block" data-kind="answer"><h3><Check size={12} />参考答案<button type="button" disabled={!editable} onClick={() => onEdit("answer")}><Pencil size={11} />编辑答案</button></h3><MathText text={q.answer.join("；")} placeholder="未设置答案" /></section>
+    <section className="bank-answer-block" data-kind="analysis"><h3><Lightbulb size={12} />解析<button type="button" disabled={!editable} onClick={() => onEdit("analysis")}><Pencil size={11} />编辑解析</button></h3><MathText text={q.analysis} placeholder="未设置解析" /></section>
     {q.sourceImage && <details className="bank-source-image"><summary>查看题目原图</summary><img src={q.sourceImage} alt="题目原图" /></details>}
   </div>;
 });

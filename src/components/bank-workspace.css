@@ -89,17 +89,30 @@
 .bank-workspace-error button { flex-shrink: 0; }
 
 /* ---------- layout ---------- */
-.bank-workspace-layout { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: 200px minmax(300px, 1fr) minmax(365px, 440px); }
-.bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 200px minmax(300px, 1fr) 48px; }
+.bank-workspace-layout { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: 60px minmax(300px, 1fr) minmax(365px, 440px); }
+.bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 60px minmax(300px, 1fr) 48px; }
 
 /* ---------- sidebar ---------- */
-.bank-library-sidebar { display: flex; min-height: 0; flex-direction: column; overflow-y: auto; padding: 20px 11px 12px; border-right: 1px solid var(--color-line); background: color-mix(in srgb, var(--color-panel) 90%, transparent); animation: bank-slide-in .6s var(--bank-ease) .04s backwards; scrollbar-width: thin; }
+.bank-library-sidebar { position: relative; z-index: 12; min-width: 0; min-height: 0; background: transparent; animation: bank-slide-in .6s var(--bank-ease) .04s backwards; }
+.bank-sidebar-surface { position: absolute; inset: 0 auto 0 0; width: 220px; border-right: 1px solid var(--color-line); background: var(--color-panel); transform: translateX(-160px); transition: transform .26s var(--bank-ease), box-shadow .26s var(--bank-ease); pointer-events: none; }
+.bank-library-sidebar[data-expanded="true"] .bank-sidebar-surface { transform: translateX(0); box-shadow: 16px 0 38px -28px rgb(0 0 0 / .5); }
+.bank-sidebar-panel { position: absolute; inset: 0 auto 0 0; display: flex; width: 220px; min-height: 0; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding: 54px 11px 12px; scrollbar-width: thin; pointer-events: none; }
+[data-exam-ai-background="active"] .bank-sidebar-panel { padding-bottom: 52px; }
+.bank-library-sidebar[data-expanded="true"] .bank-sidebar-panel { pointer-events: auto; }
+.bank-sidebar-toggle { position: absolute; top: 11px; left: 12px; z-index: 2; display: grid; width: 36px; height: 32px; place-items: center; border-radius: 9px; color: var(--color-muted); transition: color .18s, background .18s; }
+.bank-sidebar-toggle:hover { color: var(--color-accent); background: var(--bank-hover); }
+.bank-library-sidebar[data-expanded="false"] .bank-nav-item { clip-path: inset(0 calc(100% - 38px) 0 0); pointer-events: auto; }
+.bank-nav-icon { pointer-events: auto; }
+.bank-library-sidebar[data-expanded="false"] :is(.bank-nav-label, .bank-nav-item > small, .bank-collection-tree, .bank-collection-heading > span:first-child, .bank-library-summary, .bank-sidebar-footer, .bank-sidebar-stat > span, .bank-sidebar-stat > b) { opacity: 0; pointer-events: none; }
+.bank-library-sidebar[data-expanded="false"] .bank-collection-tree * { pointer-events: none; }
+.bank-library-sidebar :is(.bank-nav-label, .bank-nav-item > small, .bank-collection-tree, .bank-collection-heading > span:first-child, .bank-library-summary, .bank-sidebar-footer, .bank-sidebar-stat > span, .bank-sidebar-stat > b) { transition: opacity .16s ease-out; }
 .bank-sidebar-label { padding: 0 10px 10px; color: var(--color-faint); font-size: 10.5px; font-weight: 650; letter-spacing: .08em; }
 .bank-nav { display: flex; flex-direction: column; gap: 2px; }
 .bank-nav-item { position: relative; isolation: isolate; display: flex; width: 100%; min-width: 0; min-height: 38px; align-items: center; gap: 9px; padding: 6px 9px 6px 7px; border-radius: 11px; color: var(--color-muted); text-align: left; font-size: 12px; transition: color .2s, background .2s; }
 .bank-nav-item:hover:not([data-active="true"]) { color: var(--color-fg); background: var(--bank-hover); }
 .bank-nav-item[data-active="true"] { color: var(--color-fg); font-weight: 650; }
-.bank-nav-pill { position: absolute; inset: 0; z-index: -1; border-radius: 11px; background: linear-gradient(100deg, color-mix(in srgb, var(--color-accent) 17%, transparent), color-mix(in srgb, var(--color-accent) 6%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 24%, transparent); }
+.bank-nav-pill { position: absolute; inset: 0; z-index: -1; border-radius: 11px; background: linear-gradient(100deg, color-mix(in srgb, var(--color-accent) 17%, transparent), color-mix(in srgb, var(--color-accent) 6%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 24%, transparent); transform: scaleX(.192); transform-origin: left; transition: transform .26s var(--bank-ease); }
+.bank-library-sidebar[data-expanded="true"] .bank-nav-pill { transform: scaleX(1); }
 .bank-nav-pill::before { position: absolute; top: 10px; bottom: 10px; left: -1px; width: 3px; border-radius: 0 3px 3px 0; background: var(--color-accent); box-shadow: 0 0 12px var(--color-accent); content: ""; }
 .bank-nav-icon { display: grid; width: 26px; height: 26px; flex-shrink: 0; place-items: center; border-radius: 8px; color: var(--color-muted); background: var(--bank-inset); transition: scale .35s var(--bank-pop), rotate .35s var(--bank-pop), color .2s, background .2s; }
 .bank-nav-item:hover .bank-nav-icon { scale: 1.1; rotate: -7deg; }
@@ -110,7 +123,9 @@
 .bank-nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bank-nav-item small { min-width: 22px; margin-left: auto; padding: 1px 6px; border-radius: 99px; color: var(--color-faint); background: var(--bank-inset); text-align: center; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; transition: color .2s, background .2s; }
 .bank-nav-item[data-active="true"] small { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
-.bank-collection-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 0 2px 4px 10px; }
+.bank-collection-heading { position: relative; display: flex; min-height: 34px; align-items: center; margin-top: 18px; padding: 0 8px 0 46px; }
+.bank-collection-heading > span:last-child { position: absolute; left: 1px; }
+.bank-collection-add { opacity: 1; pointer-events: auto; }
 .bank-collection-tree { display: flex; flex-direction: column; gap: 1px; }
 .bank-collection-row { position: relative; animation: bank-rise .45s var(--bank-ease) backwards; animation-delay: calc(var(--i, 0) * 45ms + .15s); }
 .bank-collection-row:not([data-depth="0"])::before { position: absolute; top: 4px; bottom: 50%; left: calc(var(--depth) * 14px - 1px); width: 8px; border-bottom: 1px solid var(--color-line-strong); border-left: 1px solid var(--color-line-strong); border-bottom-left-radius: 6px; content: ""; }
@@ -129,8 +144,11 @@
 .bank-library-usage > b { margin-left: auto; color: var(--color-muted); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .bank-library-distribution { display: flex; flex-direction: column; gap: 6px; }
 .bank-library-distribution .bank-type-spectrum { height: 3px; opacity: .55; }
-.bank-sidebar-stats { display: flex; align-items: center; gap: 24px; padding: 0 12px; }
-.bank-sidebar-stat { display: inline-flex; min-width: 44px; min-height: 32px; align-items: center; justify-content: flex-start; gap: 8px; padding: 3px 0; border: 0; background: transparent; box-shadow: none; color: var(--color-muted); transition: color .16s; }
+.bank-sidebar-stats { display: flex; flex-direction: column; gap: 2px; padding: 0; }
+.bank-sidebar-stat { display: flex; width: 100%; min-height: 34px; align-items: center; justify-content: flex-start; gap: 12px; padding: 3px 12px; border: 0; background: transparent; box-shadow: none; color: var(--color-muted); font-size: 11px; pointer-events: auto; transition: color .16s; }
+.bank-library-sidebar[data-expanded="false"] .bank-sidebar-stat { clip-path: inset(0 calc(100% - 38px) 0 0); }
+.bank-sidebar-stat > svg { flex-shrink: 0; pointer-events: auto; }
+.bank-sidebar-stat > b { margin-left: 0; }
 .bank-sidebar-stat > b { color: var(--color-fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .bank-sidebar-stat[data-tone="favorite"] > svg { color: var(--bank-star); }
 .bank-sidebar-stat[data-tone="review"] > svg { color: var(--color-warn); }
@@ -312,6 +330,7 @@
 .bank-detail-tools { display: flex; min-height: 50px; flex-shrink: 0; align-items: center; gap: 8px; padding: 10px 16px 6px 18px; }
 .bank-detail-meta { min-width: 0; flex: 1; overflow: hidden; color: var(--color-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .bank-detail-tools > .btn { height: 28px; padding: 0 10px; font-size: 11px; }
+.bank-edit-main { flex-shrink: 0; }
 .bank-version-reveal { flex-shrink: 0; }
 .bank-version-history { max-height: 190px; overflow-y: auto; margin: 2px 16px 10px; padding: 10px 8px 6px; border: 1px solid var(--color-line); border-radius: 13px; background: var(--bank-inset); }
 .bank-version-history h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px 6px; color: var(--color-faint); font-size: 10px; font-weight: 650; }
@@ -333,6 +352,7 @@
 .bank-complete-preview { color: var(--color-fg); font-size: 13.5px; line-height: 1.95; overflow-wrap: anywhere; }
 .bank-complete-preview .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .bank-complete-stem { white-space: pre-wrap; }
+.bank-complete-stem[title], .bank-complete-options > div[title] { cursor: text; }
 .bank-complete-options { display: grid; gap: 7px; margin-top: 14px; }
 .bank-complete-options > div { position: relative; display: flex; align-items: baseline; gap: 10px; padding: 7px 34px 7px 9px; border: 1px solid var(--color-line); border-radius: 11px; background: color-mix(in srgb, var(--color-panel) 70%, transparent); transition: border-color .2s, background .2s, translate .25s var(--bank-ease); }
 .bank-complete-options > div:hover { translate: 3px 0; border-color: var(--color-line-strong); }
@@ -352,6 +372,9 @@
 .bank-answer-block { margin-top: 14px; padding: 11px 14px 12px; border-radius: 12px; background: var(--bank-inset); white-space: pre-wrap; font-size: 13px; animation: bank-rise .5s var(--bank-ease) .18s backwards; }
 .bank-answer-block + .bank-answer-block { animation-delay: .26s; }
 .bank-answer-block h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 5px; color: var(--color-accent); font-family: inherit; font-size: 10.5px; font-weight: 750; letter-spacing: .04em; }
+.bank-answer-block h3 > button { display: inline-flex; min-height: 26px; align-items: center; gap: 4px; margin-left: auto; padding: 0 5px; border-radius: 6px; color: var(--color-muted); font-size: 10.5px; font-weight: 500; letter-spacing: 0; }
+.bank-answer-block h3 > button:hover:not(:disabled) { color: var(--color-accent); background: var(--bank-hover); }
+.bank-answer-block h3 > button:disabled { opacity: .45; }
 .bank-answer-block[data-kind="answer"] h3 { color: var(--color-ok); }
 .bank-answer-block[data-kind="analysis"] h3 { color: var(--bank-star); }
 .bank-source-image { margin-top: 18px; color: var(--color-muted); font-size: 11px; }
@@ -488,13 +511,12 @@
 @keyframes bank-bounce { to { translate: 0 -4px; } }
 
 /* ---------- responsive ---------- */
-@media (min-width: 1500px) { .bank-workspace-layout { grid-template-columns: 220px minmax(350px, 1fr) minmax(430px, 500px); } .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 220px minmax(350px, 1fr) 48px; } }
+@media (min-width: 1500px) { .bank-workspace-layout { grid-template-columns: 60px minmax(350px, 1fr) minmax(430px, 500px); } .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 60px minmax(350px, 1fr) 48px; } }
 @media (max-width: 1360px) { .bank-hero-spectrum { display: none; } }
 @media (max-width: 1250px) { .bank-hero-stats { display: none; } .bank-result-hint { display: none; } .bank-result-toolbar > .bank-sort { margin-left: auto !important; } }
 @media (max-width: 1190px) {
-  .bank-workspace-layout { grid-template-columns: 172px minmax(285px, 1fr) minmax(330px, 385px); }
-  .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 172px minmax(285px, 1fr) 44px; }
-  .bank-library-sidebar { padding-right: 8px; padding-left: 8px; }
+  .bank-workspace-layout { grid-template-columns: 60px minmax(285px, 1fr) minmax(330px, 385px); }
+  .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 60px minmax(285px, 1fr) 44px; }
   .bank-workspace-header { padding-right: 16px; }
   .bank-catalog-heading, .bank-type-rail, .bank-filter-grid, .bank-active-filters > div { padding-right: 16px; padding-left: 16px; }
   .bank-search-toolbar { margin-right: 16px; margin-left: 16px; }
@@ -508,8 +530,8 @@
 }
 @media (max-height: 800px) { .bank-basket-list { max-height: 104px; } .bank-catalog-heading { padding-top: 7px; padding-bottom: 3px; } .bank-search-toolbar { margin-bottom: 10px; } .bank-search .bank-search-input { height: 38px; } }
 @media (max-width: 920px) {
-  .bank-workspace-layout { grid-template-columns: 140px minmax(240px, 1fr) minmax(300px, 330px); }
-  .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 140px minmax(240px, 1fr) 38px; }
+  .bank-workspace-layout { grid-template-columns: 60px minmax(240px, 1fr) minmax(300px, 330px); }
+  .bank-workspace[data-right-open="false"] .bank-workspace-layout { grid-template-columns: 60px minmax(240px, 1fr) 38px; }
   .bank-brand-orb { display: none !important; }
   .bank-workspace-header { gap: 8px; padding-right: 9px; padding-left: 9px; }
   .bank-workspace-actions { gap: 4px; }
@@ -526,14 +548,9 @@
    They remain focusable, so keyboard focus reveals the same controls. Touch
    and pen/coarse-pointer devices keep every action visible. */
 @media (hover: hover) and (pointer: fine) {
-  .bank-nav-pill { right: auto; width: 38px; transition: width .24s var(--bank-ease); }
-  .bank-library-sidebar:is(:hover, :focus-within) .bank-nav-pill { width: 100%; }
   .bank-context-action,
   .bank-catalog-context,
-  .bank-nav-label,
-  .bank-nav-item > small,
   .bank-catalog-tools,
-  .bank-collection-add,
   .bank-detail-action,
   .bank-detail-collapse,
   .bank-entry-top > .checkbox-control,
@@ -549,9 +566,7 @@
   .bank-search-toolbar:is(:hover, :focus-within) .bank-context-action,
   .bank-search-toolbar:has(.bank-more[open]) .bank-context-action,
   .bank-catalog-heading:is(:hover, :focus-within) .bank-catalog-context,
-  .bank-library-sidebar:is(:hover, :focus-within) :is(.bank-nav-label, .bank-nav-item > small),
   .bank-catalog-heading:is(:hover, :focus-within) .bank-catalog-tools,
-  .bank-collection-heading:is(:hover, :focus-within) .bank-collection-add,
   .bank-detail-tools:is(:hover, :focus-within) .bank-detail-action,
   .bank-detail-heading:is(:hover, :focus-within) .bank-detail-collapse,
   .bank-entry:is(:hover, :focus-within) :is(.checkbox-control, .bank-entry-grip, .bank-favorite, .bank-pick, .bank-restore),
@@ -564,17 +579,16 @@
 }
 @media (hover: none), (pointer: coarse) {
   .bank-collection-tools { opacity: 1; translate: 0 0; pointer-events: auto; }
-  .bank-collection-row .bank-nav-item > small { visibility: hidden; }
 }
 
 /* ---------- reduced motion ---------- */
 .app-bg[data-interface-motion="reduced"] :is(.bank-workspace, .bank-workspace *, .bank-dialog *, .bank-lightbox, .bank-lightbox *) { animation: none !important; }
 .app-bg[data-interface-motion="reduced"] :is(.bank-entry, .bank-entry *, .bank-type-rail button, .bank-hero-stat, .bank-complete-options > div, .bank-nav-icon) { translate: none !important; scale: none !important; rotate: none !important; }
-.app-bg[data-interface-motion="reduced"] .bank-nav-pill { transition: none; }
+.app-bg[data-interface-motion="reduced"] :is(.bank-nav-pill, .bank-sidebar-surface) { transition: none; }
 /* Body portals must honor the interface preference outside the app subtree. */
 :root:has(.app-bg[data-interface-motion="reduced"]) :is(.bank-dialog, .bank-dialog *, .bank-lightbox, .bank-lightbox *) { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .bank-nav-pill { transition: none; }
+  :is(.bank-nav-pill, .bank-sidebar-surface) { transition: none; }
   :is(.bank-workspace, .bank-workspace *, .bank-dialog *, .bank-lightbox *) { animation: none !important; }
   :is(.bank-entry, .bank-entry *, .bank-type-rail button, .bank-hero-stat, .bank-complete-options > div, .bank-nav-icon) { translate: none !important; scale: none !important; rotate: none !important; }
 }

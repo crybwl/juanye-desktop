@@ -19,3 +19,11 @@
 - 不因性能数据删除动效、降低题目完整度、覆盖本地编辑或更换导出实现；测量使用相同的合成题库与试卷，不读取私人资料或调用真实模型。
 
 验证结果应以 `artifacts/qa-chrome-performance/` 中同一脚本、同一窗口/题量的前后报告为准，不能把离屏测试的帧时间写成真实显示器帧率承诺。
+
+## beta.7：窄栏与后台任务参考
+
+本轮编辑前重新检索并阅读 [shadcn/ui](https://github.com/shadcn-ui/ui)（约126.7k star，MIT）的[侧栏源码](https://github.com/shadcn-ui/ui/blob/main/apps/v4/registry/new-york-v4/ui/sidebar.tsx)，以及 [TanStack Query](https://github.com/TanStack/query)（约50.5k star，MIT）的[mutationObserver](https://github.com/TanStack/query/blob/main/packages/query-core/src/mutationObserver.ts)与任务状态实现。借鉴图标栏/展开内容分层和观察者与任务生命周期分离，不安装整套依赖，也不复制整套样式。
+
+- 左栏收窄后由浮层展开，给列表实际腾出空间，避免仅把文字藏掉但继续保留宽栏；键盘与触屏有可用入口。
+- 详情不把只读预览伪装成编辑器，明确进入完整题干/选项/答案/解析编辑台，并保留版本、保存及取消语义。
+- 后台模式仅在用户选择并确认预算后启动，UI关闭不等于任务取消；任务与面板分离，避免隐藏面板每次输入还计算整卷分析。实验功能不自动发送或收费重试，结果仍受快照过期保护。

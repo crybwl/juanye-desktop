@@ -203,7 +203,7 @@ async function main() {
         const rect = node.getBoundingClientRect(); if (!rect.width || !rect.height) return [];
         return [{ selector, client: node.clientWidth, scroll: node.scrollWidth, left: rect.left, right: rect.right }];
       }))];
-      const overflow = nodes.filter(node => node.scroll > node.client + 2 || node.left < -1 || node.right > innerWidth + 1);
+      const overflow = nodes.filter(node => node.selector !== '.bank-library-sidebar' && node.scroll > node.client + 2 || node.left < -1 || node.right > innerWidth + 1);
       return { width: innerWidth, height: innerHeight, document: document.documentElement.scrollWidth, nodes, overflow };
     });
 
@@ -252,11 +252,22 @@ async function main() {
     await exposed(permanentToolbarControls(), true, 'More/new icon anchors remain visible at rest');
     await hoverTextAndFocus(catalogHeading(), catalogContext(), bank().getByRole('button', { name: '列表视图', exact: true }), 'Catalog view label');
     const sidebarGeometry = () => bank().evaluate(element => ['.bank-library-sidebar', '.bank-catalog', '.bank-nav-icon'].map(selector => { const rect = element.querySelector(selector).getBoundingClientRect(); return { selector, left: rect.left, width: rect.width }; }));
-    const selectedPillGeometry = () => sidebar().locator('.bank-nav-item[data-active="true"]').evaluate(node => ({ item: node.getBoundingClientRect().width, pill: node.querySelector('.bank-nav-pill').getBoundingClientRect().width }));
+    const selectedPillGeometry = () => sidebar().locator('.bank-nav-item[data-active="true"]').evaluate(node => {
+      const item = node.getBoundingClientRect().width, pill = node.querySelector('.bank-nav-pill').getBoundingClientRect().width;
+      const clipped = node.closest('.bank-library-sidebar').dataset.expanded === 'false';
+      return { item, pill: Math.min(pill, clipped ? 38 : item), clipped };
+    });
+    const rail = await sidebar().boundingBox(), catalogAtRest = await bank().locator('.bank-catalog').boundingBox();
+    assert.ok(Math.abs(rail.width - 60) < .5 && Math.abs(catalogAtRest.x - rail.x - 60) < .5, 'Collapsed navigation must reserve only a 60px rail');
+    await page.mouse.move(rail.x + 180, rail.y + Math.min(350, rail.height / 2));
+    assert.equal(await sidebar().getAttribute('data-expanded'), 'false', 'Invisible drawer must not steal catalog hover');
+    assert.equal(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.bank-catalog'), { x: rail.x + 180, y: rail.y + Math.min(350, rail.height / 2) }), true, 'Collapsed overlay must not block catalog hit testing');
     await until(async () => Math.abs((await selectedPillGeometry()).pill - 38) < .5, 'Idle navigation pill must be icon-width rather than an empty full-width bar');
     const idleSidebarGeometry = await sidebarGeometry();
     await hoverTextAndFocus(sidebar(), navigationLabels(), sidebar().locator('[data-bank-view="all"]'), 'Sidebar navigation labels and counts');
     await sidebar().hover(); await exposed(navigationLabels(), true, 'Sidebar hover reveals all navigation text');
+    assert.equal(await sidebar().getAttribute('data-expanded'), 'true');
+    assert.ok(Math.abs((await sidebar().locator('.bank-sidebar-panel').boundingBox()).width - 220) < .5, 'Expanded drawer must be 220px');
     await until(async () => { const geometry = await selectedPillGeometry(); return Math.abs(geometry.item - geometry.pill) < .5; }, 'Revealed navigation pill must expand with its label');
     const revealedSidebarGeometry = await sidebarGeometry();
     assert.deepEqual(revealedSidebarGeometry, idleSidebarGeometry, 'Contextual navigation text must not move the sidebar, icons or catalog');
@@ -264,18 +275,26 @@ async function main() {
       assert.ok(await node.getAttribute('aria-label'), 'Icon-only navigation needs an accessible name');
       assert.ok(await node.getAttribute('title'), 'Icon-only navigation needs a native hover hint');
     }
-    hoverControls.push({ label: 'Stable icon-only sidebar geometry before/after reveal', idleSidebarGeometry, revealedSidebarGeometry });
+    await sidebar().getByTestId('bank-sidebar-toggle').focus(); await page.keyboard.press('Escape');
+    assert.equal(await sidebar().getAttribute('data-expanded'), 'false', 'Escape must close the navigation drawer');
+    assert.equal(await sidebar().getByTestId('bank-sidebar-toggle').evaluate(node => node === document.activeElement), true, 'Escape must restore the permanent rail toggle');
+    await idlePointer();
+    motion.drawer = await motionFrames(sidebar().getByTestId('bank-sidebar-toggle'), { surface: '.bank-sidebar-surface' }, 650);
+    motion.drawerEvidence = renderedMotion(motion.drawer, 'surface', 'Rail drawer transform');
+    await idlePointer();
+    hoverControls.push({ label: '60px rail, 220px overlay drawer, catalog hit testing and stable geometry before/after reveal', idleSidebarGeometry, revealedSidebarGeometry });
     await hoverAndFocus(catalogHeading(), bank().locator('.bank-catalog-tools button'), 'Catalog display tools');
-    await hoverAndFocus(bank().locator('.bank-collection-heading'), bank().locator('.bank-collection-heading button'), 'New collection action');
+    await exposed(bank().locator('.bank-collection-heading button'), true, 'New collection rail action remains discoverable');
     await hoverAndFocus(rows().first(), cardControls(rows().first()), 'Question favorite/selection/checkbox');
-    await hoverAndFocus(detailTools(), detailTools().locator('button'), 'Detail history/edit actions');
+    await hoverAndFocus(detailTools(), detailTools().locator('button.bank-detail-action'), 'Detail history action');
+    await exposed(detailTools().getByRole('button', { name: '编辑题目', exact: true }), true, 'Main edit-question action is permanent');
     await hoverAndFocus(detailHeading(), detailHeading().locator('button'), 'Detail collapse action');
     await hoverAndFocus(bank().locator('.bank-preview-scroll'), bank().locator('.bank-preview-bottom-actions button'), 'Detail preview actions');
     await exposed(sidebarStats.locator('button'), true, 'Footer favorite/review navigation remains visible');
     await exposed(bank().locator('.bank-type-rail > button'), true, 'Type filters remain visible');
     await shot('bank-quiet-default-dark');
     await shot('bank-question-hover-dark', rows().first());
-    checks.push('No standalone local-bank hero/title; compact search toolbar; more/new icons permanent; import/OCR, catalog label, and icon-only navigation labels/counts reveal on hover/Tab without layout shift; muted usage/distribution above favorite/review footer');
+    checks.push('No repeated bank hero/title; actual 60px rail expands a transform-animated 220px overlay on hover/Tab without catalog relayout or invisible hit targets; Escape restores toggle; main edit action permanent; muted usage/distribution above icon+number favorites/footer');
 
     progress('type filters preserve contextual counts; selection and keyboard navigation');
     await bank().locator('.bank-type-rail > button').filter({ hasText: '单选' }).click(); await settled(12);
@@ -320,8 +339,8 @@ async function main() {
     assert.equal((await page.evaluate(() => window.juanye.bankLoad())).entries.find(entry => entry.id === favoriteId).favorite, true);
     assert.equal((await bank().locator('.bank-sidebar-stats [data-tone="favorite"] b [aria-hidden="true"]').innerText()).trim(), '1');
     await idlePointer(); await exposed(rows().first().locator('.bank-favorite[data-favorite="true"]'), true, 'Favorited question star remains visible without hover');
-    await bank().locator('[data-bank-view="favorites"]').click(); await settled(1);
-    await bank().locator('[data-bank-view="all"]').click(); await settled(25);
+    await sidebar().hover(); await bank().locator('[data-bank-view="favorites"]').click(); await settled(1);
+    await sidebar().hover(); await bank().locator('[data-bank-view="all"]').click(); await settled(25);
     checks.push('Rendered favorite particles, persisted favorite, live sidebar count, favorite view and always-visible favorited star');
 
     progress('fly-to-basket, native drop, reordering, removal, clear and workspace persistence');
@@ -349,6 +368,12 @@ async function main() {
       await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
       await until(() => page.evaluate(() => matchMedia('(hover: none) and (pointer: coarse)').matches), 'Chromium did not expose a real coarse/no-hover pointer');
       await idlePointer();
+      await exposed(navigationLabels(), false, 'Touch keeps the rail compact until explicitly expanded');
+      const touchToggle = await sidebar().getByTestId('bank-sidebar-toggle').boundingBox();
+      const touchPoint = { x: touchToggle.x + touchToggle.width / 2, y: touchToggle.y + touchToggle.height / 2 };
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await until(async () => await sidebar().getAttribute('data-expanded') === 'true', 'Touch toggle did not expand navigation');
       for (const [label, controls] of [
         ['Touch search toolbar actions', allToolbarControls()],
         ['Touch sidebar navigation labels/counts', navigationLabels()],
@@ -361,6 +386,8 @@ async function main() {
         ['Touch detail preview actions', bank().locator('.bank-preview-bottom-actions button')],
         ['Touch basket row actions', basketTools(basket().locator('.bank-basket-item').nth(1))],
       ]) await exposed(controls, true, label);
+      const touchCatalog = await bank().locator('.bank-catalog').boundingBox();
+      assert.ok(Math.abs(touchCatalog.x - catalogAtRest.x) < .5, 'Touch drawer must overlay rather than resize the catalog');
       hoverControls.push({ label: 'Native no-hover media verified', media: await page.evaluate(() => ({ hoverNone: matchMedia('(hover: none)').matches, coarse: matchMedia('(pointer: coarse)').matches, maxTouchPoints: navigator.maxTouchPoints })) });
     } finally {
       await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false }); await cdp.detach();
@@ -426,8 +453,20 @@ async function main() {
 
     progress('new-editor sections, keyboard tabs and independent unsaved bank draft');
     await settings(async dialog => { const toggle = dialog.getByRole('switch', { name: '实验性题目编辑台', exact: true }); if (await toggle.getAttribute('aria-checked') !== 'true') await toggle.click(); });
+    const editor = bank().getByTestId('bank-question-editor');
+    await bank().locator('.bank-type-rail > button').filter({ hasText: '单选' }).click(); await settled(12);
+    await rows().first().getByRole('button', { name: /^预览题目/ }).click();
+    await bank().getByRole('button', { name: '编辑答案', exact: true }).click(); await editor.waitFor();
+    assert.equal(await editor.getByRole('tab', { name: '答案解析', exact: true }).getAttribute('aria-selected'), 'true', 'Answer entry must open the existing answers editor group');
+    await until(async () => await editor.getByRole('group', { name: '本题正确选项', exact: true }).evaluate(node => node.contains(document.activeElement)), 'Answer entry must focus an existing correct-choice control');
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '取消', exact: true }).click();
+    await bank().getByRole('button', { name: '编辑解析', exact: true }).click(); await editor.waitFor();
+    assert.equal(await editor.getByRole('tab', { name: '答案解析', exact: true }).getAttribute('aria-selected'), 'true');
+    await until(async () => await editor.getByPlaceholder('写下解题思路…').evaluate(node => node === document.activeElement), 'Analysis entry must focus the editable analysis textarea');
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '取消', exact: true }).click();
+    await bank().locator('.bank-type-rail > button').first().click(); await settled(25);
     await searchToolbar().hover(); await bank().getByRole('button', { name: '新建题目', exact: true }).click();
-    const editor = bank().getByTestId('bank-question-editor'); await editor.waitFor();
+    await editor.waitFor();
     const tablist = editor.getByRole('tablist', { name: '题目编辑分组', exact: true }); assert.equal(await tablist.getByRole('tab').count(), 4);
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('本地题库独立草稿：$x+1=3$');
     for (const [name, group] of [['答案解析', 'answers'], ['题图与绘图', 'figures'], ['属性', 'properties'], ['题目', 'question']]) {
@@ -442,7 +481,7 @@ async function main() {
     assert.equal(await editor.getByPlaceholder('输入题干…', { exact: true }).inputValue(), '本地题库独立草稿：$x+1=3$');
     await shot('bank-new-editor-question');
     await bank().locator('.bank-edit-footer').getByRole('button', { name: '取消', exact: true }).click(); await pause(450);
-    checks.push('Four editor sections, correct hidden groups, roving keyboard tabs and unsaved bank draft survive workspace switches');
+    checks.push('Answer/analysis preview actions open and focus their real editor controls; four editor sections, correct hidden groups, roving keyboard tabs and unsaved bank draft survive workspace switches');
 
     progress('OS and explicit reduced motion preserve function without decorative flight/burst');
     for (const preference of ['system', 'setting']) {

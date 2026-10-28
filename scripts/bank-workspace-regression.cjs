@@ -45,6 +45,11 @@ async function main() {
     assert.equal(await searchToolbar().getByRole('textbox', { name: '搜索题库', exact: true }).count(), 1);
     assert.equal(await searchToolbar().getByRole('button', { name: '新建题目', exact: true }).count(), 1);
     assert.equal(await searchToolbar().getByLabel('更多题库操作', { exact: true }).count(), 1);
+    const sidebar = bank().locator('.bank-library-sidebar');
+    assert.ok(Math.abs((await sidebar.boundingBox()).width - 60) < .5, 'Bank navigation must reserve a true 60px rail');
+    await sidebar.hover();
+    await until(async () => await sidebar.getAttribute('data-expanded') === 'true', 'Hover did not expand bank navigation');
+    assert.ok(Math.abs((await sidebar.locator('.bank-sidebar-panel').boundingBox()).width - 220) < .5);
     const footerOrder = await bank().locator('.bank-sidebar-bottom').evaluate(node => {
       const summary = node.querySelector('.bank-library-summary').getBoundingClientRect(), favorites = node.querySelector('.bank-sidebar-stats').getBoundingClientRect(), footer = node.querySelector('.bank-sidebar-footer').getBoundingClientRect();
       return { summaryBottom: summary.bottom, favoriteTop: favorites.top, favoriteBottom: favorites.bottom, footerTop: footer.top };
@@ -80,7 +85,7 @@ async function main() {
     progress('favorite and collection create / assign / rename');
     await rows().first().hover();
     await rows().first().getByRole('button', { name: '收藏题目', exact: true }).click();
-    await bank().locator('[data-bank-view="favorites"]').click();
+    await sidebar.hover(); await bank().locator('[data-bank-view="favorites"]').click();
     await until(async () => await rows().count() === 1, 'Favorite not visible');
     await bank().locator('.bank-collection-heading').hover();
     await bank().locator('.bank-collection-heading').getByRole('button', { name: '新建收藏夹', exact: true }).click();
@@ -93,7 +98,7 @@ async function main() {
     await select(bank(), '批量加入收藏夹', '测试收藏夹');
     await bank().getByRole('button', { name: '确定', exact: true }).click();
     await until(async () => (await loadBank()).entries[0].collectionIds.length === 1, 'Collection assignment failed');
-    await bank().locator('.bank-collection-row').hover();
+    await sidebar.hover(); await bank().locator('.bank-collection-row').hover();
     await bank().getByRole('button', { name: '重命名收藏夹 测试收藏夹', exact: true }).click();
     dialog = page.getByRole('dialog', { name: '编辑收藏夹', exact: true });
     await dialog.getByRole('textbox', { name: '收藏夹名称', exact: true }).fill('方程题集');
@@ -102,8 +107,7 @@ async function main() {
     checks.push('Favorite, collection create/assignment/rename persisted');
 
     progress('edit revision history and batch metadata');
-    await bank().locator('.bank-detail-tools').hover();
-    await bank().getByRole('button', { name: '编辑', exact: true }).click();
+    await bank().getByRole('button', { name: '编辑题目', exact: true }).click();
     await editor.getByPlaceholder('输入题干…', { exact: true }).fill('修订题库题：若 $x+1=3$，则 $x=$');
     await bank().locator('.bank-edit-footer').getByRole('button', { name: '保存', exact: true }).click();
     await until(async () => (await loadBank()).entries.length === 2, 'Question revision did not preserve the original');
@@ -123,14 +127,40 @@ async function main() {
     progress('trash and restore retain versions, collection and favorite');
     await bank().getByTestId('bank-batch-toolbar').getByRole('button', { name: '移入回收站', exact: true }).click();
     await until(async () => (await loadBank()).entries.every(item => item.trashedAt), 'Trash did not preserve all versions');
-    await bank().locator('[data-bank-view="trash"]').click();
+    await sidebar.hover(); await bank().locator('[data-bank-view="trash"]').click();
     await until(async () => await rows().count() === 1, 'Trash should show one logical question');
     await rows().first().hover();
     await rows().first().getByRole('button', { name: '恢复', exact: true }).click();
     await until(async () => (await loadBank()).entries.every(item => !item.trashedAt), 'Restore failed');
     stored = await loadBank(); assert.equal(stored.entries.length, 3); assert.equal(stored.entries.at(-1).favorite, true); assert.equal(stored.entries.at(-1).collectionIds.length, 1);
-    await bank().locator('[data-bank-view="all"]').click();
+    await sidebar.hover(); await bank().locator('[data-bank-view="all"]').click();
     checks.push('Trash/restore recovers all revisions and metadata');
+
+    progress('discoverable preview editing changes stem/options, clears correct choice and saves answer/analysis versions');
+    await rows().first().getByRole('button', { name: /^预览题目/ }).click();
+    await bank().locator('.bank-complete-stem').dblclick();
+    await editor.getByPlaceholder('输入题干…', { exact: true }).fill('修订题库题：若 $x+1=3$，则 $x=$（可直接编辑）');
+    await editor.locator('.workbench-option-text').first().click();
+    await editor.getByRole('textbox', { name: '选项 A', exact: true }).fill('$2$（已校对）');
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '保存', exact: true }).click();
+    await until(async () => (await loadBank()).entries.length === 4, 'Stem/option direct edit did not save a new version');
+    await bank().getByRole('button', { name: '编辑答案', exact: true }).click();
+    await editor.getByRole('button', { name: '将 A 设为正确答案', exact: true }).click();
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '保存', exact: true }).click();
+    await until(async () => (await loadBank()).entries.length === 5, 'Answer edit did not save a new version');
+    assert.deepEqual((await loadBank()).entries.at(-1).question.answer, [], 'A correct choice must be clearable');
+    await bank().getByRole('button', { name: '编辑解析', exact: true }).click();
+    await until(async () => await editor.getByPlaceholder('写下解题思路…').evaluate(node => node === document.activeElement), 'Analysis edit entry point did not focus the existing editor');
+    await editor.getByPlaceholder('写下解题思路…').fill('重新校对：从等式两边同时减去 1，得到 x=2。');
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '保存', exact: true }).click();
+    await until(async () => (await loadBank()).entries.length === 6, 'Analysis direct edit did not preserve version history');
+    const editSnapshot = (await loadBank()).entries.at(-1).question;
+    assert.match(editSnapshot.stem, /可直接编辑/); assert.match(editSnapshot.options[0], /已校对/); assert.match(editSnapshot.analysis, /重新校对/);
+    assert.deepEqual((await loadDraft()).exam, exam, 'Library editing must not mutate the current paper');
+    await bank().locator('.bank-complete-options > div').first().dblclick();
+    await editor.waitFor();
+    await bank().locator('.bank-edit-footer').getByRole('button', { name: '取消', exact: true }).click();
+    checks.push('Permanent edit action, stem/option double-click and answer/analysis actions open the full versioned editor; correct choices clear; current paper remains unchanged');
 
     progress('ordered basket survives workspace switch and narrow collapse');
     await searchToolbar().hover();

@@ -85,7 +85,7 @@ async function main() {
     progress('bank-only edits survive workspace switching and do not change paper');
     const bank = page.getByTestId('bank-workspace');
     await bank.locator('.bank-detail-tools').hover();
-    await bank.getByRole('button', { name: '编辑', exact: true }).click();
+    await bank.getByRole('button', { name: '编辑题目', exact: true }).click();
     const bankEditor = page.getByTestId('bank-question-editor');
     await bankEditor.getByPlaceholder('输入题干…', { exact: true }).fill('未保存的题库草稿 $x+1$');
     await nav().getByRole('button', { name: '组卷', exact: true }).click();

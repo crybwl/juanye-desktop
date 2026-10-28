@@ -1,7 +1,7 @@
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/react";
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
+import { AlertTriangle, Check, Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, LoaderCircle, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
@@ -41,6 +41,7 @@ import { BankSourceNotice } from "./components/BankSourceNotice";
 import { patchWorkspaceQuestion } from "./workspace-edits";
 import { SceneBackdrop } from "./SceneBackdrop";
 import { WorkspaceView } from "./components/WorkspaceView";
+import { ExamAiSession } from "./exam-ai-session";
 import "./workspace-motion.css";
 
 const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
@@ -85,6 +86,19 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const [structure, setStructure] = useState(false);
   const [bank, setBank] = useState(false);
   const [examAnalysis, setExamAnalysis] = useState(false);
+  const [examAnalysisInitialTab, setExamAnalysisInitialTab] = useState<"overview" | "ai">("overview");
+  const [examAiSession] = useState(() => new ExamAiSession(() => window.juanye));
+  const examAiTask = useSyncExternalStore(examAiSession.subscribe, examAiSession.getSnapshot, examAiSession.getSnapshot);
+  const examAiIndicatorVisible = examAiTask.background && (examAiTask.phase === "running" || !examAiTask.viewed && ["success", "error"].includes(examAiTask.phase));
+  const examAiNotified = useRef("");
+  const openExamAnalysis = useCallback(() => { setExamAnalysisInitialTab("overview"); setExamAnalysis(true); }, []);
+  const closeExamAnalysis = useCallback(() => { if (!examAiSession.getSnapshot().background) examAiSession.cancel(); examAiSession.acknowledge(); setExamAnalysis(false); }, [examAiSession]);
+  useEffect(() => () => examAiSession.cancel(), [examAiSession]);
+  useEffect(() => {
+    if (!examAiTask.background || !["success", "error"].includes(examAiTask.phase) || examAiNotified.current === examAiTask.taskId) return;
+    examAiNotified.current = examAiTask.taskId;
+    toast(examAiTask.phase === "success" ? { title: "试卷分析完成", desc: "点击左下角查看报告" } : { title: "试卷分析失败", desc: "点击左下角查看原因", tone: "warn" });
+  }, [examAiTask, toast]);
   const [abPaper, setAbPaper] = useState(false);
   const [aiTask, setAiTask] = useState<{ action: GenerationAction; question: Question }>();
   const [incomingPaste, setIncomingPaste] = useState<{ id: string; files: File[] }>();
@@ -482,7 +496,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "structure", group: "功能", title: "管理大题", icon: <FolderTree size={15} />, run: () => { setSidebarExpanded(true); setStructure(true); } },
       { id: "bank", group: "功能", title: "本地题库", icon: <BookOpen size={15} />, run: () => setWorkArea("bank") },
       { id: "bank-picker", group: "功能", title: "从题库选题", icon: <BookOpen size={15} />, run: () => { setWorkArea("exam"); setBank(true); } },
-      { id: "exam-analysis", group: "功能", title: "试卷分析与双向细目表", icon: <BarChart3 size={15} />, run: () => setExamAnalysis(true) },
+      { id: "exam-analysis", group: "功能", title: "试卷分析与双向细目表", icon: <BarChart3 size={15} />, run: openExamAnalysis },
       { id: "ab-paper", group: "功能", title: "生成 B 卷（选项乱序）", icon: <Shuffle size={15} />, run: () => setAbPaper(true) },
       ...(cur ? [
         { id: "generate-variant", group: "当前题目", title: "生成变式题", icon: <Sparkles size={15} />, run: () => setAiTask({ action: "variant", question: structuredClone(cur.q) }) },
@@ -568,7 +582,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   }, [flat, select]);
 
   return (
-    <div className="app-bg flex h-full min-w-[960px] flex-col" data-interface-motion={motionPref}
+    <div className="app-bg flex h-full min-w-[960px] flex-col" data-interface-motion={motionPref} data-exam-ai-background={examAiIndicatorVisible ? "active" : undefined}
       onDragOverCapture={event => { if (event.dataTransfer.types.includes(BANK_DRAG_MIME) && event.target instanceof Element && event.target.closest("[data-section-id],[data-section-target],.workspace-editor-stage,.workspace-preview-stage")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
       onDropCapture={event => {
         if (!event.dataTransfer.types.includes(BANK_DRAG_MIME) || !(event.target instanceof Element)) return;
@@ -600,7 +614,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "bank" ? "page" : undefined} icon={<>{workArea === "bank" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("bank")}>本地题库</Button>
         <div key={workArea} className="workspace-nav-tools ml-auto flex items-center gap-1">{workArea === "exam" ? <>
           <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
-          <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={() => setExamAnalysis(true)}>试卷分析</Button>
+          <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={openExamAnalysis}>试卷分析</Button>
           <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
         </> : <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span>}</div>
       </nav>
@@ -725,13 +739,20 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       {batch && <BatchPanel key="batch-panel" paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
       {structure && <StructurePanel key="structure-panel" exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
       {bank && <QuestionBankDialog key="bank-picker" open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
-      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={() => setExamAnalysis(false)} exam={exam} onLocate={id => { setExamAnalysis(false); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
+      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={closeExamAnalysis} exam={exam} session={examAiSession} initialTab={examAnalysisInitialTab} onLocate={id => { closeExamAnalysis(); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} />}
       {abPaper && <AbPaperDialog key="ab-paper" open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
       {aiTask && <GenerateQuestionDialog key="generate-question" open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
       {exportCenter && <ExportCenter key="export-center" exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
       </AnimatePresence>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      <AnimatePresence>{examAiIndicatorVisible && <motion.button
+        key="exam-ai-background-task" type="button" data-testid="exam-ai-background-task" data-phase={examAiTask.phase} data-ui-button="icon" className="exam-ai-task-indicator"
+        aria-label={examAiTask.phase === "running" ? "查看后台试卷分析" : examAiTask.phase === "success" ? "查看试卷分析报告" : "查看试卷分析失败原因"}
+        title={examAiTask.phase === "running" ? "正在后台分析试卷" : examAiTask.phase === "success" ? "试卷分析完成" : "试卷分析失败"}
+        initial={reducedMotion ? false : { opacity: 0, transform: "translateY(6px) scale(.9)" }} animate={{ opacity: 1, transform: "translateY(0px) scale(1)" }} exit={{ opacity: 0, transform: "translateY(4px) scale(.9)" }} transition={reducedMotion ? { duration: 0 } : softSpring}
+        onClick={() => { setExamAnalysisInitialTab("ai"); setExamAnalysis(true); examAiSession.acknowledge(); }}
+      >{examAiTask.phase === "running" ? <LoaderCircle size={17} className="exam-ai-task-spinner" /> : examAiTask.phase === "success" ? <Check size={17} /> : <AlertTriangle size={17} />}</motion.button>}</AnimatePresence>
       {importKind && <ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} />}
       <SettingsDialog open={settings} onClose={() => setSettings(false)} accent={accent} setAccent={setAccent} motionPref={motionPref} setMotionPref={setMotionPref} />
       <OcrDialog
