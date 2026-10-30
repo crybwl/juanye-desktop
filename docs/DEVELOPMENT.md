@@ -24,6 +24,7 @@ npm start
 - `npm test`：文本解析、导入匹配、公式、分页几何、缓存和 Electron 服务单测；不调用真实模型服务。
 - `node scripts/book-workspace-regression.cjs [--packaged] --pdf`：独立教辅的实际编辑、题库快照、章节重排、版本恢复、项目往返及真实 PDF；40 章 1,000 题容量样稿，记录真实页数，不删内容来满足页数上限。所有资料为合成隔离数据。
 - `node scripts/book-editor-regression.cjs [--packaged]`：连续正文、键盘公式输入（含无遗留美元符号）、可编辑表格、局部排版、ABCD 填入、立即切章不丢输入、题目粘贴新 ID。
+- `node scripts/book-motion-regression.cjs [--packaged] --label=local`：千题书稿下采样实际中间帧，检查侧栏宽度、章节进退场、折叠展开、原 iframe/纸页保留、未变输入零重复分页、快速往返的焦点与最后保存、两编辑器上限、系统减弱偏好及四类外观。`--record-only` 可在旧版保留相同样本；数据含屏幕外自动化与几何探针开销，不当作用户 FPS。
 - `node scripts/book-pagination-regression.cjs [--pdf]`：真实内置分页引擎、80 行长表格重复表头、超页题干及解析、重复句子的逐段完整性、目录真实页码、局部预览和公式失败。
 - `node scripts/book-completeness-regression.cjs`：真实分页中逐项核对 100 题与 100 份答案，不只判断渲染调用是否成功。
 - `node scripts/book-pdf-safety-regression.cjs [--packaged]`：保存框前并发锁、请求中取消、公式错误不覆盖旧文件、清理与重试，走真实主进程和 PDF 写盘。

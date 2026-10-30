@@ -39,3 +39,24 @@
 .book-math-dialog { width:520px; max-width:90vw; padding:22px; }.book-math-dialog-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; font-size:15px; font-weight:600; }.book-math-dialog-header button { font-size:22px; color:var(--color-muted); }.book-math-dialog textarea { font-family:monospace; padding:10px; resize:vertical; }.book-math-preview { padding:20px 5px; min-height:60px; overflow:auto; }.book-math-actions { display:flex; justify-content:flex-end; gap:8px; }
 @media(max-width:1150px) { .book-editor-scroll { padding:20px 24px 80px; }.book-editor-toolbar { padding:8px 10px; }.book-editor-tool { width:27px; }.book-question-option-fields { grid-template-columns:1fr; } }
 @media(hover:none) { .book-question-actions { opacity:1; } }
+.book-editor-scroll{overflow-anchor:none}
+.book-content-swap{position:relative;min-width:0}
+.book-content-swap>[data-book-swap-value]{position:relative;width:100%}
+.book-content-swap>[aria-hidden=true]{pointer-events:none}
+.book-editor-tool{position:relative;isolation:isolate;transition:background .15s,color .15s}
+.book-editor-tool:active{transform:none}
+.book-editor-tool[aria-pressed=true]{background:transparent}
+.book-editor-tool>svg{position:relative;z-index:1}
+.book-tool-selection{position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:color-mix(in srgb,var(--color-accent) 12%,transparent)}
+.book-disclosure>summary span{display:flex;align-items:center}
+.book-question-fields .book-disclosure[open]>summary{margin-bottom:0}
+.book-disclosure-content{padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.book-question-actions{transform:translateY(2px);transition:opacity .15s,transform .2s cubic-bezier(.2,.8,.2,1)}
+.book-question-node:hover .book-question-actions,.book-question-node:focus-within .book-question-actions,.book-question-node.is-selected .book-question-actions{transform:none}
+.book-question-fields textarea,.book-question-fields input{transition:border-color .16s,box-shadow .16s}
+.book-question-fields textarea:focus,.book-question-fields input:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--color-accent) 10%,transparent)}
+.book-workspace[data-book-motion=reduced] .book-editor-tool,.book-workspace[data-book-motion=reduced] .book-question-actions{transition:none}
+/* Keep every editable node, but do not repaint offscreen formula subtrees as
+   a nearby disclosure changes height. Selected questions are never skipped. */
+.book-question-node{content-visibility:auto;contain-intrinsic-size:auto 250px}
+.book-question-node.is-selected{content-visibility:visible}

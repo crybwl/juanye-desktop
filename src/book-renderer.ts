@@ -141,6 +141,7 @@ window.addEventListener('message', event => {
   if (event.source !== window.parent || window.parent === window) return;
   const value = event.data;
   if (value?.type === 'juanye-book-handshake') { window.parent.postMessage({ type: 'juanye-book-ready' }, '*'); return; }
+  if (value?.type === 'juanye-book-motion') { document.body.dataset.bookMotion = value.rich === true ? 'full' : 'reduced'; return; }
   if (value?.type === 'juanye-book-drawing-result' && typeof value.id === 'string') {
     const pending = drawingRequests.get(value.id); if (!pending) return;
     clearTimeout(pending.timer); drawingRequests.delete(value.id);

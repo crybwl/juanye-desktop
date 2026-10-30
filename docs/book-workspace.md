@@ -1,4 +1,4 @@
-# 教辅编辑台（0.5.0-beta.1）
+# 教辅编辑台（0.5.0-beta.2）
 
 顶部“教辅编辑台”进入独立书稿。采用连续文档流，不是任意绝对定位的画布；修改一处后后文自然续排，适合讲义、题册与章节练习。
 
@@ -30,5 +30,6 @@
 - [Paged.js](https://github.com/pagedjs/pagedjs)：采用 MIT 的细分排版实现（本轮约 1,500 star），复用打印 CSS、目录 target-counter 和分页钩子。锁定 0.4.3 并进行实际长书稿验收，不把上游库“返回成功”等同于完整排版。
 - [重复文字的上游问题 #208](https://github.com/pagedjs/pagedjs/issues/208) 与本地 `createBreakToken/indexOfTextNode` 源码：重复兄弟文本和续页字符串首匹配会回跳。本项目不改 `node_modules`，在自己的投影/分页钩子中隔离文本身份、按后缀位置续接，并加完整性门槛。
 - [Electron webContents 文档](https://www.electronjs.org/docs/latest/api/web-contents)：按 Electron 45 的实际接口，以英寸提供自定义打印尺寸；文件采用临时写入后替换，错误和取消保护既有文件。
+- [Motion](https://github.com/motiondivision/motion)（本轮查询约 34,700 star，MIT）与其官方 [AnimatePresence](https://motion.dev/docs/react-animate-presence)、[layout 动画文档](https://motion.dev/docs/react-layout-animations)：复用项目原有弹簧、SharedPill 和实时减弱偏好，不引入新动画依赖。只给章节行做有条件的位置投影，不给整棵文档/纸页树做缩放；切章只保留一个旧编辑器完成退出，内容伸缩缓存自然尺寸而不逐帧更新 React。预览实例及分页缓存跨页签保留。
 
 详见 `THIRD_PARTY_NOTICES.md` 和 `docs/teacher-workflows-validation.md`。千题样稿的实际页数、资源和检查结果以回归报告为准，不承诺任意内容都落在固定页数，也不把屏幕外自动化耗时当作用户机器 FPS。

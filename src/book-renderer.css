@@ -3,3 +3,10 @@ body:not([data-book-ready=true]) .pagedjs_page{content-visibility:visible}
 body:not([data-book-ready=true]) .pagedjs_pages{zoom:1}
 .pagedjs_pages{zoom:var(--book-preview-scale,.65)}
 @media print {html,body{background:white!important}.pagedjs_pages{display:block!important;padding:0!important;zoom:1!important}.pagedjs_page{margin:0!important;box-shadow:none!important;content-visibility:visible!important}.book-render-status{display:none!important}}
+@media screen and (prefers-reduced-motion:no-preference){
+  body[data-book-motion=full][data-book-ready=true] .pagedjs_page:nth-child(-n+3){animation:book-sheet-enter .32s cubic-bezier(.2,.8,.2,1) both}
+  body[data-book-motion=full][data-book-ready=true] .pagedjs_page:nth-child(2){animation-delay:.035s}
+  body[data-book-motion=full][data-book-ready=true] .pagedjs_page:nth-child(3){animation-delay:.07s}
+}
+@keyframes book-sheet-enter{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:translateY(0px)}}
+@media print{.pagedjs_page{animation:none!important;opacity:1!important;transform:none!important}}
