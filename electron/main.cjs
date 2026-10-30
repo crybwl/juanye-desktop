@@ -11,12 +11,16 @@ const { requestGeneration } = require('./generation.cjs');
 const { createQuestionBankStore } = require('./question-bank.cjs');
 const { buildDocx } = require('./docx-export.cjs');
 const { createExamAnalysisService } = require('./exam-ai.cjs');
+const { installBookHandlers, validateStoredBook } = require('./book-store.cjs');
 
 app.setName('Juanye');
 if (process.env.JUANYE_TEST_USER_DATA && path.isAbsolute(process.env.JUANYE_TEST_USER_DATA)) app.setPath('userData', process.env.JUANYE_TEST_USER_DATA);
 let mainWindow;
 let recognition;
 let examAnalysisService;
+let bookStore;
+let bookPdfJob;
+const bookRenderWindows = new Set();
 let writeQueue = Promise.resolve();
 let baselineDraftPreserved = false;
 const indexPath = path.join(__dirname, '../dist/index.html');
@@ -57,7 +61,11 @@ function trusted(event) {
   if (event.senderFrame.url !== pathToFileURL(indexPath).toString()) throw new Error('仅允许本地应用访问');
 }
 function handle(channel, callback) {
-  ipcMain.handle(channel, async (event, ...args) => { trusted(event); return callback(...args); });
+  ipcMain.handle(channel, async (event, ...args) => {
+    const bookRenderer = channel === 'diagram:render' && [...bookRenderWindows].some(win => !win.isDestroyed() && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame && event.senderFrame.url === pathToFileURL(path.join(__dirname,'../dist/book-renderer.html')).toString());
+    if (!bookRenderer) trusted(event);
+    return callback(...args);
+  });
 }
 const modelStore = createModelStore({ safeStorage, read: () => readJson('model.json', DEFAULT_MODEL), write: value => writeJson('model.json', value) });
 async function modelWithKey(override) {
@@ -67,6 +75,37 @@ function cleanName(value, suffix) {
   return String(value || '未命名试卷').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100).replace(/[. ]+$/, '') + suffix;
 }
 function installHandlers() {
+  bookStore = installBookHandlers({ handle, dialog, getWindow: () => mainWindow, directory: app.getPath('userData') });
+  handle('book:pdf-cancel', () => { if (bookPdfJob) { bookPdfJob.cancelled = true; if (bookPdfJob.window && !bookPdfJob.window.isDestroyed()) bookPdfJob.window.destroy(); } });
+  handle('book:pdf', async input => {
+    const book = validateStoredBook(input);
+    if (bookPdfJob) throw Error('教辅PDF仍在导出，请稍后或取消');
+    const job = { cancelled:false, timedOut:false, window:undefined }; bookPdfJob = job;
+    let timer, temporary;
+    try {
+      const target = await dialog.showSaveDialog(mainWindow,{defaultPath:cleanName(book.title,'.pdf'),filters:[{name:'教辅PDF',extensions:['pdf']}]});
+      if (target.canceled || !target.filePath || job.cancelled) return { canceled: true };
+      const win = new BrowserWindow({width:1100,height:900,show:false,skipTaskbar:true,backgroundColor:'#ffffff',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,backgroundThrottling:false}});
+      job.window=win; bookRenderWindows.add(win);
+      win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());
+      win.setPosition(-16000,-16000);win.showInactive();
+      timer=setTimeout(()=>{job.timedOut=true;if(!win.isDestroyed())win.destroy();},180000);
+      await win.loadFile(path.join(__dirname,'../dist/book-renderer.html'));
+      const result = await win.webContents.executeJavaScript(`window.renderJuanyeBook(${JSON.stringify(book)})`);
+      if(job.cancelled)return{canceled:true};
+      if(result.errors?.length)throw Error(`请先修复书稿：${result.errors.slice(0,5).join('；')}`);
+      if(!Number.isInteger(result.pages)||result.pages<1||result.pages>1500)throw Error('教辅分页结果无效或超过1500页');
+      const sizes={A4:[210,297],A5:[148,210],B5:[176,250]},[width,height]=sizes[book.settings.paper];
+      const bytes=await win.webContents.printToPDF({printBackground:true,preferCSSPageSize:true,displayHeaderFooter:false,margins:{top:0,bottom:0,left:0,right:0},pageSize:{width:width/25.4,height:height/25.4}});
+      if(job.cancelled)return{canceled:true};
+      temporary=`${target.filePath}.${require('node:crypto').randomUUID()}.tmp`;
+      await fs.writeFile(temporary,bytes,{flag:'wx'});
+      if(job.cancelled)return{canceled:true};
+      await fs.rename(temporary,target.filePath);temporary=undefined;
+      return{canceled:false,path:target.filePath,pages:result.pages,warnings:result.warnings||[]};
+    } catch(error) { if(job.timedOut)throw Error('教辅分页或导出超过3分钟，请分章检查或减少过大的图片后重试');if(job.cancelled)return{canceled:true};throw error; }
+    finally { clearTimeout(timer);if(temporary)await fs.unlink(temporary).catch(()=>{});if(job.window){bookRenderWindows.delete(job.window);if(!job.window.isDestroyed())job.window.destroy();}if(bookPdfJob===job)bookPdfJob=undefined; }
+  });
   const bank = createQuestionBankStore({ directory: app.getPath('userData') });
   handle('bank:load', () => bank.load());
   handle('bank:save', input => bank.save(input));
@@ -166,9 +205,15 @@ async function createWindow() {
     if (closing) return;
     event.preventDefault();
     closing = true;
-    mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("juanye:flush")); true').catch(() => {});
+    const bookFlush = mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("juanye:flush")); window.flushJuanyeBook ? window.flushJuanyeBook() : true');
+    void bookFlush.catch(()=>{});
     setTimeout(async () => {
+      try { await bookFlush; } catch {
+        const decision = await dialog.showMessageBox(mainWindow,{type:'warning',message:'教辅书稿尚未保存，是否仍要退出？',detail:'返回编辑后可重试保存或导出项目，避免丢失最后的修改。',buttons:['返回编辑','仍然退出'],defaultId:0,cancelId:0});
+        if(decision.response===0){closing=false;return;}
+      }
       await writeQueue;
+      await bookStore?.flush();
       mainWindow?.destroy();
       app.quit();
     }, 900);

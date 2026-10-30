@@ -13,6 +13,8 @@ import "./question-bank.css";
 const DIFFICULTY = { easy: "基础", medium: "中等", hard: "较难" } as const;
 const empty: BankDocument = { schema: "juanye-bank/1", revision: 0, entries: [], collections: [] };
 export interface QuestionBankProps {
+  destination?: "exam" | "book";
+  initialTargetId?: string;
   open: boolean;
   onClose: () => void;
   exam: Exam;
@@ -25,14 +27,14 @@ export function QuestionBankDialog(props: QuestionBankProps) {
   return props.open ? <BankPanel {...props} /> : null;
 }
 
-function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: QuestionBankProps) {
+function BankPanel({ onClose, exam, sections, currentQuestion, onInsert, destination = "exam", initialTargetId }: QuestionBankProps) {
   const toast = useToast();
   const [bank, setBank] = useState(empty);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState<BankFilters>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [target, setTarget] = useState(sections[0]?.id ?? "");
+  const [target, setTarget] = useState(initialTargetId ?? sections[0]?.id ?? "");
   const [page, setPage] = useState(0);
   const [undoAvailable, setUndoAvailable] = useState(false);
   useEffect(() => {
@@ -122,7 +124,7 @@ function BankPanel({ onClose, exam, sections, currentQuestion, onInsert }: Quest
         })}
       </div>
       {pages > 1 && <div className="flex items-center justify-center gap-3"><Button size="sm" variant="ghost" disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>上一页</Button><span className="text-[12px] text-muted">{currentPage + 1} / {pages}</span><Button size="sm" variant="ghost" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)}>下一页</Button></div>}
-      <div className="question-bank-insert"><Field label="目标大题"><Select aria-label="题库目标大题" value={targetId} disabled={!sections.length} onValueChange={setTarget} options={sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title}` }))} /></Field><Button variant="primary" className="w-full" disabled={busy || !selectedEntries.length || !targetId} onClick={() => void insert(selectedEntries)} icon={<Check size={14} />}>加入所选 {selectedEntries.length} 道题</Button></div>
+      <div className="question-bank-insert"><Field label={destination === "book" ? "目标章节" : "目标大题"}><Select aria-label={destination === "book" ? "题库目标章节" : "题库目标大题"} value={targetId} disabled={!sections.length} onValueChange={setTarget} options={sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title}` }))} /></Field><Button variant="primary" className="w-full" disabled={busy || !selectedEntries.length || !targetId} onClick={() => void insert(selectedEntries)} icon={<Check size={14} />}>加入所选 {selectedEntries.length} 道题</Button></div>
     </div>
   </WorkspaceSheet>;
 }

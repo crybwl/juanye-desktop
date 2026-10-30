@@ -44,8 +44,10 @@ import { SceneBackdrop } from "./SceneBackdrop";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { ExamAiSession } from "./exam-ai-session";
 import "./workspace-motion.css";
+import type { BookWorkspaceHandle } from "./components/BookWorkspace";
 
 const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
+const BookWorkspace = lazy(() => import("./components/BookWorkspace").then(module => ({ default: module.BookWorkspace })));
 const WorkspaceSidebar = memo(Sidebar);
 const WorkspaceLayoutPanel = memo(LayoutPanel);
 const EMPTY_COMMANDS: Command[] = [];
@@ -67,7 +69,11 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const reducedMotion = motionPref === "reduced" || !!systemReducedMotion;
   const [initialExam] = useState(() => ({ ...sampleExam, id: uid() }));
   const { exam, layout, setExam, setLayout, reset: resetWorkspace, undo, redo, canUndo, canRedo } = useWorkspaceUndo(initialExam, defaultLayout);
-  const [workArea, setWorkArea] = useState<"exam" | "bank">("exam");
+  const [workArea, setWorkArea] = useState<"exam" | "bank" | "book">("exam");
+  const [bookVisited, setBookVisited] = useState(false);
+  const bookWorkspace = useRef<BookWorkspaceHandle>(null);
+  const [bookStatus, setBookStatus] = useState({ title: "教辅编辑台", saving: false, error: "" });
+  useEffect(() => { if (workArea === "book") setBookVisited(true); }, [workArea]);
   const [bankVisited, setBankVisited] = useState(false);
   useEffect(() => { if (workArea === "bank") setBankVisited(true); }, [workArea]);
   const [exportCenter, setExportCenter] = useState(false);
@@ -477,7 +483,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       const editing = e.target instanceof HTMLElement && Boolean(e.target.closest("input,textarea,[contenteditable='true']"));
       if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), setPalette((v) => !v));
       else if (mod && e.key === ",") (e.preventDefault(), setSettings(true));
-      else if (workArea === "bank") return;
+      else if (workArea !== "exam") return;
       else if (mod && e.key === "1") (e.preventDefault(), setMode("edit"));
       else if (mod && e.key === "2") (e.preventDefault(), setMode("preview"));
       else if (mod && e.key.toLowerCase() === "e") (e.preventDefault(), exportPdf());
@@ -632,27 +638,28 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       }}>
       <SceneBackdrop />
       <TitleBar
-        title={exam.title}
+        title={workArea === "book" ? bookStatus.title : exam.title}
         mode={mode}
         setMode={setMode}
-        saving={saving || !ready}
-        saveError={saveError}
+        saving={workArea === "book" ? bookStatus.saving : saving || !ready}
+        saveError={workArea === "book" ? bookStatus.error : saveError}
         onPalette={() => setPalette(true)}
-        onHistory={() => setHistory(true)}
+        onHistory={() => workArea === "book" ? bookWorkspace.current?.openHistory() : setHistory(true)}
         onSettings={() => setSettings(true)}
-        onExport={() => exportPdf()}
-        onExportMore={() => setExportCenter(true)}
+        onExport={() => workArea === "book" ? bookWorkspace.current?.exportPdf() : exportPdf()}
+        onExportMore={() => workArea === "book" ? bookWorkspace.current?.exportProject() : setExportCenter(true)}
         workspace={workArea}
       />
 
       <nav aria-label="工作区" className="workspace-nav relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line px-4">
         <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "exam" ? "page" : undefined} icon={<>{workArea === "exam" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<PenLine size={15} /></>} onClick={() => setWorkArea("exam")}>组卷</Button>
         <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "bank" ? "page" : undefined} icon={<>{workArea === "bank" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("bank")}>本地题库</Button>
+        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "book" ? "page" : undefined} icon={<>{workArea === "book" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("book")}>教辅编辑台</Button>
         <div key={workArea} className="workspace-nav-tools ml-auto flex items-center gap-1">{workArea === "exam" ? <>
           <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
           <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={openExamAnalysis}>试卷分析</Button>
           <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
-        </> : <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span>}</div>
+        </> : workArea === "bank" ? <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span> : <span className="px-2 text-[12px] text-muted">书稿与试卷独立保存</span>}</div>
       </nav>
 
       <div ref={main} className="workspace-stage relative flex min-h-0 flex-1 overflow-hidden">
@@ -769,6 +776,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         </motion.div>
         </WorkspaceView>
         {bankVisited && <WorkspaceView name="bank" active={workArea === "bank"} offset={16} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={bankSelection} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} /></Suspense></WorkspaceView>}
+        {bookVisited && <WorkspaceView name="book" active={workArea === "book"} offset={16} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开教辅编辑台…</div>}><BookWorkspace ref={bookWorkspace} active={workArea === "book"} exam={exam} onStatus={setBookStatus}/></Suspense></WorkspaceView>}
       </div>
 
       <AnimatePresence initial={false}>

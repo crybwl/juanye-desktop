@@ -63,7 +63,7 @@ export function TitleBar({
   onSettings: () => void;
   onExport: () => void;
   onExportMore?: () => void;
-  workspace?: "exam" | "bank";
+  workspace?: "exam" | "bank" | "book";
 }) {
   return (
     <header data-tauri-drag-region className="relative z-30 flex h-[52px] shrink-0 items-center border-b border-line pl-4">

@@ -22,6 +22,12 @@ npm start
 ## 测试
 
 - `npm test`：文本解析、导入匹配、公式、分页几何、缓存和 Electron 服务单测；不调用真实模型服务。
+- `node scripts/book-workspace-regression.cjs [--packaged] --pdf`：独立教辅的实际编辑、题库快照、章节重排、版本恢复、项目往返及真实 PDF；40 章 1,000 题容量样稿，记录真实页数，不删内容来满足页数上限。所有资料为合成隔离数据。
+- `node scripts/book-editor-regression.cjs [--packaged]`：连续正文、键盘公式输入（含无遗留美元符号）、可编辑表格、局部排版、ABCD 填入、立即切章不丢输入、题目粘贴新 ID。
+- `node scripts/book-pagination-regression.cjs [--pdf]`：真实内置分页引擎、80 行长表格重复表头、超页题干及解析、重复句子的逐段完整性、目录真实页码、局部预览和公式失败。
+- `node scripts/book-completeness-regression.cjs`：真实分页中逐项核对 100 题与 100 份答案，不只判断渲染调用是否成功。
+- `node scripts/book-pdf-safety-regression.cjs [--packaged]`：保存框前并发锁、请求中取消、公式错误不覆盖旧文件、清理与重试，走真实主进程和 PDF 写盘。
+- `python scripts/audit-book-pdf.py 路径 --output artifacts/审计目录 --questions 1000`：Poppler/pypdf 校验实际 PDF 题号顺序、答案数量、页面边界、空页，并栅格化全部页面。需人工检查联系表及代表页；不可用 DOM 验收冒充 PDF 验收。
 - `npm run test:ui`：侧栏展开、目标大题、编辑、拖动和布局回归。
 - `node scripts/import-fix-regression.cjs`：合成 DOCX、GBK、UTF-16 的实际导入与字段编辑回归。
 - `node scripts/import-workflow-regression.cjs --imports-only`：三种导入及 Markdown 导出。

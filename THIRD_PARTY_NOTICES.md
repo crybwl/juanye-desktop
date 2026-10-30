@@ -8,6 +8,8 @@
 | --- | --- | --- |
 | Electron | MIT；随包 Chromium/Node.js 等另有许可 | 桌面宿主与 PDF 输出 |
 | React / React DOM | MIT | 编辑界面 |
+| Tiptap 开源核心与扩展 / ProseMirror | MIT | 教辅文档流编辑、表格与结构化内容块；不含付费扩展 |
+| Paged.js | MIT；传递依赖以包内许可为准 | 教辅章节预览和整本 PDF 分页 |
 | Motion | MIT | 动画 |
 | KaTeX | MIT；字体及附带资源以包内说明为准 | 数学公式 |
 | markdown-it | MIT | Markdown 表格及文字 |

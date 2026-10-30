@@ -30,7 +30,7 @@ function redirectFocus(source: HTMLElement, backwards: boolean) {
 
 export function WorkspaceView({ active, name, offset, reducedMotion, className = "", children }: {
   active: boolean;
-  name: "exam" | "bank";
+  name: "exam" | "bank" | "book";
   offset: number;
   reducedMotion: boolean;
   className?: string;
