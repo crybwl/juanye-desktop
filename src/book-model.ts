@@ -1,4 +1,6 @@
 import type { Exam, Question, QType } from './types';
+import { BOOK_STYLE_ICONS, DEFAULT_BOOK_BLOCK_STYLES, isBookOptionColumnsValue, validBookAnswerAreaAttrs, type BookBlockStyle, type BookOptionColumns } from './book-blocks';
+export type { BookBlockStyle, BookCounter, BookAnswerAreaAttrs } from './book-blocks';
 
 export interface BookNode {
   type: string;
@@ -13,15 +15,17 @@ export interface BookSettings {
   fontFamily: string; fontSize: number; lineHeight: number; paragraphGap: number; questionGap: number;
   numbering: 'chapter' | 'book'; answers: 'book' | 'chapter' | 'inline' | 'none';
   toc: boolean; pageNumbers: boolean; header: string; footer: string; chapterNewPage: boolean;
+  optionColumns: BookOptionColumns;
 }
 export interface BookProject {
-  version: 1; kind: 'juanye-book'; id: string; title: string; author: string;
+  version: 1 | 2; kind: 'juanye-book'; id: string; title: string; author: string;
   chapters: BookChapter[]; questions: Record<string, Question>; settings: BookSettings;
+  styles?: BookBlockStyle[];
 }
 export const DEFAULT_BOOK_SETTINGS: Readonly<BookSettings> = Object.freeze({
   paper: 'B5', marginTop: 17, marginBottom: 17, marginInner: 20, marginOuter: 16,
   fontFamily: 'Noto Serif SC, SimSun, serif', fontSize: 10.5, lineHeight: 1.65, paragraphGap: 2, questionGap: 3,
-  numbering: 'chapter', answers: 'book', toc: true, pageNumbers: true, header: '', footer: '', chapterNewPage: true,
+  numbering: 'chapter', answers: 'book', toc: true, pageNumbers: true, header: '', footer: '', chapterNewPage: true, optionColumns: 'auto',
 });
 export const BOOK_PAPER_MM = { A4: [210, 297], A5: [148, 210], B5: [176, 250] } as const;
 export const newBookId = () => crypto.randomUUID();
@@ -100,37 +104,77 @@ function checkedQuestion(raw: unknown, key: string): Question {
   return result;
 }
 
-const NODE_TYPES = new Set(['doc','paragraph','text','heading','bulletList','orderedList','listItem','blockquote','hardBreak','horizontalRule','table','tableRow','tableCell','tableHeader','image','inlineMath','blockMath','bookQuestion','callout','pageBreak']);
+const NODE_TYPES = new Set(['doc','paragraph','text','heading','bulletList','orderedList','listItem','blockquote','hardBreak','horizontalRule','table','tableRow','tableCell','tableHeader','image','inlineMath','blockMath','bookQuestion','callout','pageBreak','columnSet','columnBreak','answerArea']);
 const MARK_TYPES = new Set(['bold','italic','strike','underline','code','textStyle']);
-const BLOCK_TYPES = new Set(['paragraph','heading','bulletList','orderedList','blockquote','horizontalRule','table','image','blockMath','bookQuestion','callout','pageBreak']);
+const BLOCK_TYPES = new Set(['paragraph','heading','bulletList','orderedList','blockquote','horizontalRule','table','image','blockMath','bookQuestion','callout','pageBreak','answerArea']);
 const INLINE_TYPES = new Set(['text','inlineMath','hardBreak']);
+function hasBookLayoutV2(book: Pick<BookProject, 'chapters' | 'settings' | 'styles'>): boolean {
+  if (book.styles !== undefined || book.settings.optionColumns !== undefined && book.settings.optionColumns !== 'auto') return true;
+  const visit = (node: BookNode): boolean => ['columnSet','columnBreak','answerArea'].includes(node.type)
+    || node.attrs?.styleId != null || node.attrs?.columnSpan != null && node.attrs.columnSpan !== 'none'
+    || node.type === 'bookQuestion' && node.attrs?.optionColumns != null
+    || !!node.content?.some(visit);
+  return book.chapters.some(chapter => visit(chapter.content));
+}
+/** Call on explicit editor changes, not untrusted imports. Validation never silently upgrades a file. */
+export function upgradeBookLayoutVersion(book: BookProject): BookProject {
+  return book.version === 1 && hasBookLayoutV2(book) ? { ...book, version: 2 } : book;
+}
+function checkedStyles(raw: unknown): BookBlockStyle[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || raw.length > 100) throw Error('块样式表最多100项');
+  const ids = new Set<string>();
+  const color = (value: unknown, label: string) => { const result = text(value, label, 9); if (!/^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i.test(result)) throw Error(`${label}必须是十六进制颜色`); return result; };
+  return raw.map(value => {
+    const style = record(value, '块样式');
+    const allowed = new Set(['id','name','title','background','borderColor','borderWidth','titleBackground','icon','counter']);
+    if (Object.keys(style).some(key => !allowed.has(key))) throw Error('块样式含未知属性');
+    const key = id(style.id, '块样式ID'); if (ids.has(key)) throw Error('块样式ID重复'); ids.add(key);
+    const result: BookBlockStyle = { id: key, name: text(style.name, '样式名称', 100), title: text(style.title, '标题条', 200), background: color(style.background, '底色'), borderColor: color(style.borderColor, '边框颜色'), borderWidth: numeric(style.borderWidth, '边框宽度', 0, 3), titleBackground: color(style.titleBackground, '标题底色'), icon: choice(style.icon, BOOK_STYLE_ICONS, '块图标') };
+    if (!result.name.trim()) throw Error('样式名称不能为空');
+    if (style.counter !== undefined) {
+      const counter = record(style.counter, '计数器');
+      if (Object.keys(counter).some(key => !['format','reset','start'].includes(key))) throw Error('计数器含未知属性');
+      const format = text(counter.format, '编号格式', 100);
+      if (!format.includes('{n}') || /[{}]/u.test(format.replace(/\{(?:章|节|n)\}/gu, ''))) throw Error('编号格式需要{n}，仅支持{章}、{节}、{n}');
+      const start = numeric(counter.start, '计数起始值', 1, 100000); if (!Number.isInteger(start)) throw Error('计数起始值必须是整数');
+      result.counter = { format, reset: choice(counter.reset, ['book','chapter','section'], '计数器重置范围'), start };
+    }
+    return result;
+  });
+}
 /** Reject active HTML/style/resource payloads; renderer uses this structured
  * model only, never arbitrary imported HTML. */
 export function validateBookProject(raw: unknown): BookProject {
   const input = record(raw, '书稿');
-  if (input.version !== 1 || input.kind !== 'juanye-book') throw Error('不是受支持的卷页教辅项目');
+  if (![1, 2].includes(input.version as number) || input.kind !== 'juanye-book') throw Error('不是受支持的卷页教辅项目');
   const settings = record(input.settings, '排版');
   const checkedSettings: BookSettings = {
     paper: choice(settings.paper, ['A4','A5','B5'], '纸张'),
     marginTop: numeric(settings.marginTop, '上边距', 5, 45), marginBottom: numeric(settings.marginBottom, '下边距', 5, 45), marginInner: numeric(settings.marginInner, '装订侧边距', 5, 45), marginOuter: numeric(settings.marginOuter, '外侧边距', 5, 45),
     fontFamily: text(settings.fontFamily, '字体', 200), fontSize: numeric(settings.fontSize, '字号', 7, 30), lineHeight: numeric(settings.lineHeight, '行距', 1, 3), paragraphGap: numeric(settings.paragraphGap, '段距', 0, 30), questionGap: numeric(settings.questionGap, '题距', 0, 30),
     numbering: choice(settings.numbering, ['chapter','book'], '编号'), answers: choice(settings.answers, ['book','chapter','inline','none'], '答案位置'), toc: bool(settings.toc, '目录'), pageNumbers: bool(settings.pageNumbers, '页码'), header: text(settings.header, '页眉', 500), footer: text(settings.footer, '页脚', 500), chapterNewPage: bool(settings.chapterNewPage, '章节另起页'),
+    optionColumns: settings.optionColumns === undefined ? 'auto' : isBookOptionColumnsValue(settings.optionColumns) ? settings.optionColumns : (() => { throw Error('选项排列无效'); })(),
   };
+  const styles = checkedStyles(input.styles), styleIds = new Set((styles ?? DEFAULT_BOOK_BLOCK_STYLES).map(style => style.id));
   if (!/^[\p{L}\p{N}\s,.'"_-]+$/u.test(checkedSettings.fontFamily)) throw Error('字体名称包含不支持的字符');
   const questionsRaw = record(input.questions, '题目表');
   if (Object.keys(questionsRaw).length > 10000) throw Error('单册最多10000道题');
   const questions = Object.fromEntries(Object.entries(questionsRaw).map(([key, value]) => [id(key, '题目ID'), checkedQuestion(value, key)]));
   if (!Array.isArray(input.chapters) || input.chapters.length < 1 || input.chapters.length > 1000) throw Error('书稿需要1至1000个章节');
   const chapterIds = new Set<string>(), references = new Set<string>(); let nodeCount = 0;
-  const node = (rawNode: unknown, depth: number): BookNode => {
+  const node = (rawNode: unknown, depth: number, parent?: string, inColumns = false): BookNode => {
     if (depth > 40 || ++nodeCount > 300000) throw Error('书稿结构过深或内容过多');
     const source = record(rawNode, '内容块'), type = text(source.type, '块类型', 100);
     if (!NODE_TYPES.has(type)) throw Error(`不支持的内容块：${type}`);
+    if (type === 'doc' && depth !== 0 || type === 'columnSet' && (parent !== 'doc' || depth !== 1) || type === 'columnBreak' && parent !== 'columnSet') throw Error('分栏与文档层级无效');
     const result: BookNode = { type };
     if (source.text !== undefined) { if (type !== 'text') throw Error('文本节点格式无效'); result.text = text(source.text, '段落'); }
     if (source.attrs !== undefined) {
       const attrs = record(source.attrs, '内容属性'), out: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(attrs)) {
+        if (['columnSet','columnBreak','answerArea'].includes(type) && !({ columnSet: ['count','gap','rule'], columnBreak: [], answerArea: ['kind','unit','size','lineHeight','gridSize','spaceBefore','spaceAfter','keepTogether','pageBreakBefore'] }[type] as string[]).includes(key)) throw Error(`不支持的内容属性：${key}`);
+        if ((type === 'columnSet' || type === 'columnBreak' || type === 'answerArea' && ['kind','unit','size','lineHeight','gridSize'].includes(key)) && value == null) throw Error(`内容属性不可为空：${key}`);
         if (value === undefined || value === null) { out[key] = null; continue; }
         if (key === 'questionId' && type === 'bookQuestion') { const qid = id(value, '引用题目'); if (!questions[qid] || references.has(qid)) throw Error('引用题目缺失或重复，请使用插入题目重新复制'); references.add(qid); out[key] = qid; }
         else if (key === 'latex' && ['inlineMath','blockMath'].includes(type)) out[key] = text(value, '公式', 32768);
@@ -140,6 +184,17 @@ export function validateBookProject(raw: unknown): BookProject {
         else if (key === 'width' && type === 'image') out[key] = numeric(value, '图片宽度百分比', 15, 100);
         else if (key === 'height' && type === 'image') out[key] = numeric(value, '图片高度', 10, 2000);
         else if (key === 'kind' && type === 'callout') out[key] = choice(value, ['lesson','example','practice','hint'], '教辅块');
+        else if (key === 'styleId' && type === 'callout') { const styleId = id(value, '块样式引用'); if (!styleIds.has(styleId)) throw Error('块样式引用缺失'); out[key] = styleId; }
+        else if (key === 'count' && type === 'columnSet') { if (value !== 2 && value !== 3) throw Error('栏数必须为2或3'); out[key] = value; }
+        else if (key === 'gap' && type === 'columnSet') out[key] = numeric(value, '栏间距', 2, 20);
+        else if (key === 'rule' && type === 'columnSet') out[key] = bool(value, '栏间分隔线');
+        else if (key === 'columnSpan' && type === 'heading') { if (parent !== 'columnSet' && value !== 'none') throw Error('跨栏标题只能是分栏区的直接子块'); out[key] = choice(value, ['none','all'], '标题跨栏'); }
+        else if (key === 'optionColumns' && type === 'bookQuestion') { if (!isBookOptionColumnsValue(value)) throw Error('单题选项排列无效'); out[key] = value; }
+        else if (key === 'kind' && type === 'answerArea') out[key] = choice(value, ['blank','lines','grid','coordinate'], '作答区类型');
+        else if (key === 'unit' && type === 'answerArea') out[key] = choice(value, ['lines','mm'], '作答区单位');
+        else if (key === 'size' && type === 'answerArea') out[key] = numeric(value, '作答区高度', 1, 300);
+        else if (key === 'lineHeight' && type === 'answerArea') out[key] = numeric(value, '作答区行高', 3, 15);
+        else if (key === 'gridSize' && type === 'answerArea') out[key] = numeric(value, '作答区网格', 2, 15);
         else if (key === 'level' && type === 'heading') out[key] = numeric(value, '标题层级', 1, 6);
         else if (key === 'start' && type === 'orderedList') out[key] = numeric(value, '列表起始值', 1, 100000);
         else if (['spaceBefore','spaceAfter'].includes(key)) out[key] = numeric(value, '块间距', 0, 80);
@@ -154,16 +209,23 @@ export function validateBookProject(raw: unknown): BookProject {
     if (type === 'bookQuestion' && typeof result.attrs?.questionId !== 'string') throw Error('题目引用缺少ID');
     if (type === 'image' && !isBookImage(result.attrs?.src)) throw Error('图片内容无效');
     if (['inlineMath','blockMath'].includes(type) && typeof result.attrs?.latex !== 'string') throw Error('公式缺少LaTeX');
-    if (source.content !== undefined) { if (!Array.isArray(source.content)) throw Error('内容列表无效'); result.content = source.content.map(child => node(child, depth + 1)); }
+    if (type === 'columnSet' && (result.attrs?.count == null || result.attrs.gap == null || result.attrs.rule == null)) throw Error('分栏区参数不完整');
+    if (type === 'answerArea') {
+      const a = result.attrs; if (!a || ['kind','unit','size','lineHeight','gridSize'].some(key => a[key] == null)) throw Error('作答区参数不完整');
+      if (!validBookAnswerAreaAttrs(a)) throw Error('作答区高度超出300毫米或行数无效');
+    }
+    if (source.content !== undefined) { if (!Array.isArray(source.content)) throw Error('内容列表无效'); result.content = source.content.map(child => node(child, depth + 1, type, inColumns || type === 'columnSet')); }
     const children = result.content ?? [];
     if (['paragraph','heading'].includes(type) && children.some(child => !INLINE_TYPES.has(child.type))) throw Error('段落或标题只能包含文字与行内公式');
-    if (['doc','blockquote','callout','tableCell','tableHeader','listItem'].includes(type) && children.some(child => !BLOCK_TYPES.has(child.type))) throw Error('正文块层级无效，请检查导入内容');
+    if (type === 'doc' && children.some(child => !BLOCK_TYPES.has(child.type) && child.type !== 'columnSet')) throw Error('正文块层级无效，请检查导入内容');
+    if (type === 'columnSet' && (!children.length || children.some(child => !BLOCK_TYPES.has(child.type) && child.type !== 'columnBreak'))) throw Error('分栏区必须包含正文块或换栏');
+    if (['blockquote','callout','tableCell','tableHeader','listItem'].includes(type) && children.some(child => !BLOCK_TYPES.has(child.type))) throw Error('正文块层级无效，请检查导入内容');
     if (['bulletList','orderedList'].includes(type) && (!children.length || children.some(child => child.type !== 'listItem'))) throw Error('列表必须包含列表项');
     if (type === 'listItem' && children[0]?.type !== 'paragraph') throw Error('列表项必须从段落开始');
     if (type === 'table' && (!children.length || children.some(child => child.type !== 'tableRow'))) throw Error('表格必须包含有效表格行');
     if (type === 'tableRow' && (!children.length || children.some(child => !['tableCell','tableHeader'].includes(child.type)))) throw Error('表格行必须包含单元格');
     if (['tableCell','tableHeader','callout','blockquote'].includes(type) && !children.length) throw Error('容器内容不能为空');
-    if (['text','inlineMath','blockMath','hardBreak','horizontalRule','image','bookQuestion','pageBreak'].includes(type) && children.length) throw Error('独立内容节点不能包含子内容');
+    if (['text','inlineMath','blockMath','hardBreak','horizontalRule','image','bookQuestion','pageBreak','columnBreak','answerArea'].includes(type) && children.length) throw Error('独立内容节点不能包含子内容');
     if (type === 'text' && (typeof result.text !== 'string' || !result.text.length)) throw Error('文字节点缺少文本');
     for (const key of ['level','start','colspan','rowspan']) if (result.attrs?.[key] != null && !Number.isInteger(result.attrs[key])) throw Error('标题、列表与表格的序号必须是整数');
     if (source.marks !== undefined) {
@@ -192,5 +254,7 @@ export function validateBookProject(raw: unknown): BookProject {
     const content = node(chapter.content, 0); if (content.type !== 'doc') throw Error('章节内容必须是文档');
     return { id: chapterId, title: text(chapter.title, '章节标题', 1000), kind: choice(chapter.kind, ['cover','preface','chapter'], '章节类型'), content };
   });
-  return { version: 1, kind: 'juanye-book', id: id(input.id, '书稿ID'), title: text(input.title, '书名', 1000), author: text(input.author, '作者', 1000), settings: checkedSettings, questions, chapters };
+  const checked: BookProject = { version: input.version as 1 | 2, kind: 'juanye-book', id: id(input.id, '书稿ID'), title: text(input.title, '书名', 1000), author: text(input.author, '作者', 1000), settings: checkedSettings, questions, chapters, ...(styles === undefined ? {} : { styles }) };
+  if (checked.version === 1 && hasBookLayoutV2(checked)) throw Error('书稿使用v2版式，请另存为新版教辅项目');
+  return checked;
 }

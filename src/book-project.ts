@@ -33,7 +33,7 @@ export async function exportBookProject(input: BookProject): Promise<Uint8Array>
   const encoded = JSON.stringify(await visit(project));
   if (encoded.length > 50 * 1024 * 1024) throw Error('书稿正文超过50MB，请分册导出');
   const projectSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(encoded)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  archive.file('manifest.json', JSON.stringify({ schema: 'juanye-book/1', project: 'project.json', projectSha256, createdAt: new Date().toISOString() }));
+  archive.file('manifest.json', JSON.stringify({ schema: `juanye-book/${project.version}`, project: 'project.json', projectSha256, createdAt: new Date().toISOString() }));
   archive.file('project.json', encoded);
   const bytes = await archive.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 5 } });
   if (bytes.length > MAX_BYTES) throw Error('项目超过250MB，请分册导出');
@@ -58,7 +58,8 @@ export async function importBookProject(input: ArrayBuffer | Uint8Array): Promis
   if (!manifestFile || !projectFile) throw Error('教辅项目缺少清单或书稿');
   let manifest: unknown, project: unknown; const encoded = await projectFile.async('string');
   try { manifest = JSON.parse(await manifestFile.async('string')); project = JSON.parse(encoded); } catch { throw Error('教辅项目JSON损坏'); }
-  if (!manifest || typeof manifest !== 'object' || (manifest as { schema?: string }).schema !== 'juanye-book/1' || (manifest as { project?: string }).project !== 'project.json') throw Error('教辅项目版本不受支持');
+  if (!manifest || typeof manifest !== 'object' || !['juanye-book/1', 'juanye-book/2'].includes((manifest as { schema?: string }).schema || '') || (manifest as { project?: string }).project !== 'project.json') throw Error('教辅项目版本不受支持');
+  if (!project || typeof project !== 'object' || (manifest as { schema?: string }).schema !== `juanye-book/${(project as {version?: unknown}).version}`) throw Error('教辅项目清单与书稿版本不一致');
   const expectedHash = (manifest as { projectSha256?: unknown }).projectSha256;
   const actualHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(encoded)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
   if (typeof expectedHash !== 'string' || !/^[a-f0-9]{64}$/.test(expectedHash) || expectedHash !== actualHash) throw Error('教辅书稿完整性校验失败');

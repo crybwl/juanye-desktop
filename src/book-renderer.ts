@@ -5,6 +5,8 @@ import { buildBookDocument, BOOK_PAPER_MM } from './book-render';
 import type { BookProject } from './book-model';
 import type { DrawingResult } from './drawing';
 import { continuedBookTextOffset, missingBookTextRuns } from './book-pagination-integrity';
+import { materializeBookColumns, bookColumnFirstHeights } from './book-column-pagination';
+import { measureBookOptions } from './book-option-measure';
 
 export interface BookRenderResult { pages: number; warnings: string[]; errors: string[] }
 declare global { interface Window { renderJuanyeBook: (book: BookProject, chapterId?: string) => Promise<BookRenderResult> } }
@@ -36,7 +38,7 @@ async function draw(code: string): Promise<DrawingResult> {
 }
 
 async function render(book: BookProject, chapterId?: string): Promise<BookRenderResult> {
-  if (!book || book.kind !== 'juanye-book' || book.version !== 1 || !Array.isArray(book.chapters)) throw Error('书稿数据无效');
+  if (!book || book.kind !== 'juanye-book' || ![1, 2].includes(book.version) || !Array.isArray(book.chapters)) throw Error('书稿数据无效');
   status.textContent = '正在分页…'; document.body.dataset.bookReady = 'false';
   previewer?.chunker.destroy(); previewer?.polisher.destroy(); previewer = undefined;
   pagesRoot.replaceChildren();
@@ -69,6 +71,10 @@ async function render(book: BookProject, chapterId?: string): Promise<BookRender
       if (!available.some(Boolean)) warnings.push(`当前电脑缺少所选字体 ${book.settings.fontFamily}，已使用本机后备字体。`);
     }
     await Promise.all([...source.querySelectorAll('img')].map(async img => { try { await img.decode(); } catch { errors.push(`图片无法解码：${img.alt || '未命名图片'}`); } }));
+    await measureBookOptions(source);
+    for (const node of source.querySelectorAll<HTMLElement>('.book-answer-area')) {
+      if (node.getBoundingClientRect().height > usableHeight + 1) errors.push('作答区高于整页版心，请减小高度后导出。');
+    }
     for (const node of source.querySelectorAll<HTMLElement>('.book-question,.book-solution,[style*="break-inside:avoid"]')) {
       if (node.getBoundingClientRect().height > usableHeight) node.style.breakInside = 'auto';
     }
@@ -85,7 +91,22 @@ async function render(book: BookProject, chapterId?: string): Promise<BookRender
       wrapper.dataset.bookTextRun = id; textRuns.set(id, node.textContent || '');
       node.replaceWith(wrapper); wrapper.append(node);
     }
+    const originalContent = source.innerHTML;
+    const hasColumns = !!source.querySelector('.book-columns');
+    let firstHeights: Map<string, number> | undefined;
+    let totalPages = 0;
+    const columnTimings: { materializeMs: number; paginateMs: number; changed: number; maxDrift: number }[] = [];
+    // The first pass locates each region's insertion point in real Paged.js
+    // pages. A bounded follow-up reclaims space after single-column content.
+    for (let pass = 0; pass < (hasColumns ? 5 : 1); pass++) {
+    const materializeStarted = performance.now();
+    source.innerHTML = originalContent;
+    if (!source.isConnected) document.body.append(source);
+    if (!sourceStyle.isConnected) document.head.append(sourceStyle);
+    if (hasColumns) materializeBookColumns(source, { usableHeight, firstHeights });
     const content = source.innerHTML; source.remove(); sourceStyle.remove();
+    const materializeMs = performance.now() - materializeStarted;
+    previewer?.chunker.destroy(); previewer?.polisher.destroy(); pagesRoot.replaceChildren();
     previewer = new Previewer();
     previewer.chunker.hooks.onBreakToken.register((token, overflow) => {
       const renderedText = overflow?.startContainer;
@@ -110,19 +131,43 @@ async function render(book: BookProject, chapterId?: string): Promise<BookRender
       repeated.removeAttribute('id'); repeated.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
       table.prepend(repeated);
     });
+    const paginateStarted = performance.now();
     const flow = await previewer.preview(content, [{ [location.href]: documentData.css }], pagesRoot);
+    totalPages = flow.total;
     await document.fonts.ready;
     await Promise.all([...pagesRoot.querySelectorAll('img')].map(img => img.decode().catch(() => undefined)));
+    if (!hasColumns) break;
+    const nextHeights = bookColumnFirstHeights(pagesRoot, usableHeight);
+    const drifts = [...nextHeights].map(([key, value]) => Math.abs(value - (firstHeights?.get(key) ?? usableHeight - 2)));
+    const changed = drifts.some(value => value > 1);
+    columnTimings.push({ materializeMs, paginateMs: performance.now() - paginateStarted, changed: drifts.filter(value => value > 1).length, maxDrift: Math.max(0, ...drifts) });
+    if (!changed) break;
+    if (pass === 4) { errors.push('分栏与通栏交接处未能稳定分页，请增加换页或调整块高度。'); break; }
+    firstHeights = nextHeights;
+    }
+    // Local diagnostic only: no telemetry/network and no React frame updates.
+    document.body.dataset.bookColumnPasses = String(columnTimings.length);
+    document.body.dataset.bookColumnTimings = JSON.stringify(columnTimings);
     const missing = missingBookTextRuns(textRuns, [...pagesRoot.querySelectorAll<HTMLElement>('.pagedjs_page_content [data-book-text-run]')]
       .filter(node => !node.closest('[data-book-repeated-header]'))
       .map(node => [node.dataset.bookTextRun!, node.textContent || ''] as const));
     if (missing.length) errors.push(`分页内容完整性检查失败：${missing.length}处文字缺失或重复，请检查长段落或表格；未导出不完整文件。`);
     const bodyWidth = (width - book.settings.marginInner - book.settings.marginOuter) * 96 / 25.4;
     for (const node of pagesRoot.querySelectorAll<HTMLElement>('.katex-display,.book-table,.math-table')) {
-      if (node.scrollWidth > bodyWidth + 4) { errors.push('存在宽于版心的公式或表格，请缩小字号或调整内容。'); break; }
+      const cell = node.closest<HTMLElement>('.book-column-cell');
+      const available = cell ? cell.clientWidth : bodyWidth;
+      if (node.scrollWidth > available + 4) { errors.push('存在宽于所在栏或版心的公式或表格，请缩小字号或调整内容。'); break; }
     }
-    document.body.dataset.bookReady = 'true'; document.body.dataset.bookPages = String(flow.total);
-    status.textContent = ''; return { pages: flow.total, warnings: [...new Set(warnings)], errors: [...new Set(errors)] };
+    for (const row of pagesRoot.querySelectorAll<HTMLElement>('.book-column-row')) {
+      const page = row.closest<HTMLElement>('.pagedjs_page_content');
+      if (!page) continue;
+      const box = page.getBoundingClientRect(), rect = row.getBoundingClientRect();
+      if (rect.left < box.left - 2 || rect.right > box.right + 2 || rect.bottom > box.bottom + 2) {
+        errors.push('分栏内容越出版心，未导出裁切文件。'); break;
+      }
+    }
+    document.body.dataset.bookReady = 'true'; document.body.dataset.bookPages = String(totalPages);
+    status.textContent = ''; return { pages: totalPages, warnings: [...new Set(warnings)], errors: [...new Set(errors)] };
   } finally { source.remove(); document.querySelector('[data-book-source-style]')?.remove(); }
 }
 

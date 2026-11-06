@@ -1,0 +1,40 @@
+/* 分栏区：正文按印刷栏宽排布，右侧占位栏提示内容会自动续排。
+   --book-col-em / --book-gap-em / --book-total-em 由 ColumnSetView 按纸张、页边距、字号换算。 */
+.book-column-set { --book-col-live:var(--book-col-em); --book-gap-live:var(--book-gap-em); position:relative; clear:both; margin:22px 0; border:1px solid var(--color-line); border-radius:10px; background:color-mix(in srgb,var(--surface-inset,var(--color-panel)) 55%,transparent); transition:border-color .15s; }
+.book-column-set:hover,.book-column-set:focus-within { border-color:color-mix(in srgb,var(--color-accent) 32%,var(--color-line)); }
+.book-column-set.is-selected { border-color:color-mix(in srgb,var(--color-accent) 60%,transparent); }
+
+.book-column-bar { position:sticky; top:0; z-index:3; display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; padding:7px 10px; border-bottom:1px dashed var(--color-line); border-radius:10px 10px 0 0; background:var(--surface-raised,var(--color-panel)); font-size:11px; line-height:1.4; color:var(--color-muted); user-select:none; }
+.book-column-badge { display:inline-flex; align-items:center; gap:5px; font-weight:650; color:var(--color-accent); }
+.book-column-segment { display:inline-flex; padding:2px; border-radius:7px; background:var(--surface-inset,color-mix(in srgb,var(--color-fg) 6%,transparent)); }
+.book-column-segment button { padding:2px 9px; border-radius:5px; color:var(--color-muted); transition:background .15s,color .15s; }
+.book-column-segment button[aria-checked=true] { color:var(--color-accent); background:var(--surface-raised,var(--color-panel)); box-shadow:0 0 0 1px color-mix(in srgb,var(--color-accent) 30%,transparent); }
+.book-column-field { display:inline-flex; align-items:center; gap:4px; }
+.book-column-field input[type=number] { width:48px; padding:2px 5px; border:1px solid var(--color-line); border-radius:5px; background:transparent; color:inherit; font-size:11px; }
+.book-column-measure { color:var(--color-faint); font-variant-numeric:tabular-nums; }
+.book-column-spacer { flex:1; }
+.book-column-action { display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border-radius:6px; color:var(--color-muted); transition:background .15s,color .15s; }
+.book-column-action:hover:not(:disabled),.book-column-action[aria-pressed=true] { color:var(--color-accent); background:color-mix(in srgb,var(--color-accent) 11%,transparent); }
+.book-column-bar button:focus-visible,.book-column-bar input:focus-visible { outline:2px solid var(--color-accent); outline-offset:1px; }
+.book-column-bar button:disabled { opacity:.4; cursor:default; }
+
+.book-column-body { display:flex; align-items:stretch; gap:calc(var(--book-gap-live) * 1em); width:min(100%, calc(var(--book-total-em) * 1em)); margin:0 auto; padding:14px 14px 16px; box-sizing:border-box; }
+.book-column-flow { flex:0 1 calc(var(--book-col-live) * 1em); min-width:0; }
+.book-column-flow > :first-child { margin-top:0; }.book-column-flow > :last-child { margin-bottom:0; }
+.book-column-ghost { position:relative; flex:0 1 calc(var(--book-col-live) * 1em); min-width:0; display:flex; justify-content:center; border-radius:6px; background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--color-line) 70%,transparent) 0 1px,transparent 1px 10px); opacity:.85; }
+.book-column-ghost > span { position:sticky; top:44px; align-self:flex-start; margin-top:8px; padding:2px 9px; border:1px solid var(--color-line); border-radius:999px; background:var(--surface-raised,var(--color-panel)); font-size:10.5px; color:var(--color-faint); white-space:nowrap; }
+.book-column-set[data-rule] .book-column-ghost::before { content:''; position:absolute; top:0; bottom:0; left:calc(var(--book-gap-live) * -.5em); border-left:1px solid var(--color-line-strong); }
+
+/* 展开编辑：手动切换，或正在编辑分栏区内的题目时，临时使用全宽。 */
+.book-column-set[data-expanded] .book-column-body,.book-column-set:has(.book-question-node.is-selected) .book-column-body { width:100%; gap:0; }
+.book-column-set[data-expanded] .book-column-flow,.book-column-set:has(.book-question-node.is-selected) .book-column-flow { flex-basis:100%; }
+.book-column-set[data-expanded] .book-column-ghost,.book-column-set:has(.book-question-node.is-selected) .book-column-ghost { flex-basis:0; opacity:0; overflow:hidden; }
+[data-book-motion=full] .book-column-body { transition:width .32s cubic-bezier(.2,.8,.2,1),gap .32s cubic-bezier(.2,.8,.2,1); }
+[data-book-motion=full] .book-column-flow,[data-book-motion=full] .book-column-ghost { transition:flex-basis .32s cubic-bezier(.2,.8,.2,1),opacity .18s; }
+
+.book-editor-column-break { clear:both; margin:14px 0; padding:6px 0 0; border-top:1px dashed color-mix(in srgb,var(--color-accent) 55%,transparent); font-size:10px; line-height:1.2; text-align:center; color:var(--color-accent); user-select:none; }
+.book-editor-column-break::after { content:' · 后续内容从下一栏开始'; color:var(--color-faint); }
+.book-editor-column-break.ProseMirror-selectednode { outline:2px solid var(--color-accent); outline-offset:3px; border-radius:3px; }
+
+/* 题目选项排列标记 */
+.book-question-option-layout { padding:1px 6px; border-radius:999px; background:color-mix(in srgb,var(--color-accent) 9%,transparent); color:var(--color-muted); }

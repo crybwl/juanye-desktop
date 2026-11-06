@@ -10,11 +10,15 @@ import Color from "@tiptap/extension-color";
 import { Fragment, Slice, type Node as ProseNode } from "@tiptap/pm/model";
 import { AnimatePresence, motion } from "motion/react";
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Braces, ImagePlus, Italic, List, ListOrdered, Pilcrow, Plus, SeparatorHorizontal, Sigma, Table2, Underline, GripVertical, Trash2, Undo2, Redo2 } from "lucide-react";
-import { bookQuestionIds, isBookImage, type BookChapter, type BookNode } from "../book-model";
+import { AlignCenter, AlignLeft, AlignRight, ArrowRightToLine, Bold, Braces, ImagePlus, Italic, List, ListOrdered, Pilcrow, Plus, SeparatorHorizontal, Sigma, Table2, Underline, GripVertical, Trash2, Undo2, Redo2 } from "lucide-react";
+import { bookQuestionIds, isBookImage, type BookChapter, type BookNode, type BookSettings } from "../book-model";
+import { BOOK_OPTION_COLUMNS, bookColumnWidthMm, bookOptionAvailableWidthMm, isBookOptionColumns, optionColumnsLabel, resolveOptionColumns, type BookOptionColumns } from "../book-layout-contract";
+import { BookDocument, BookLayoutStore, ColumnBreak, ColumnSet, columnSetInSelection, flowAt, useBookLayout } from "./BookColumns";
+import { BookAnswerArea, BookSpanHeading } from './BookBlockNodes';
 import { BookQuestionStore as QuestionStore } from "../book-editor-store";
 import type { Question } from "../types";
 import { MathText } from "../math";
+import { extractTikzBlocks } from '../drawing';
 import { TYPE_META } from "../data";
 import { Button, Modal, SharedPill, inputCls } from "../ui";
 import { Select } from "./Select";
@@ -31,24 +35,44 @@ export interface BookEditorProps {
   chapter: BookChapter; questions: Record<string, Question>; numbers: Record<string, string>;
   onChange(content: BookNode): void; onQuestionChange(id: string, patch: Partial<Question>): void;
   onInsertQuestions?(): void; onCloneQuestion?(id: string): string | undefined; active?: boolean;
+  /** 全书排版设置：用于按印刷栏宽显示分栏区、计算选项排列。 */
+  settings?: BookSettings;
 }
 
-function QuestionView({ node, editor, getPos, selected, extension, deleteNode }: NodeViewProps) {
-  const store = (extension.options as { store: QuestionStore }).store, id = String(node.attrs.questionId || '');
+/** 题目所在栏宽下的选项列数；分栏区栏数变化时只重算受影响的题目。 */
+function useQuestionOptionColumns(props: NodeViewProps, layoutStore: BookLayoutStore, question: Question | undefined, sideFigurePercent: number) {
+  const layout = useBookLayout(layoutStore);
+  const flow = useEditorState({ editor: props.editor, selector: ({ editor }) => { const pos = props.getPos(); if (typeof pos !== 'number') return '1:0'; const value = flowAt(editor.state.doc, pos); return `${value.count}:${value.gap}`; } }) ?? '1:0';
+  const [count, gap] = flow.split(':').map(Number);
+  const choice = isBookOptionColumns(props.node.attrs.optionColumns) ? props.node.attrs.optionColumns as BookOptionColumns : null;
+  const hasSideFigure = sideFigurePercent > 0;
+  const availableMm = bookOptionAvailableWidthMm(bookColumnWidthMm(layout.contentWidthMm, count, gap), sideFigurePercent);
+  const resolved = resolveOptionColumns(choice, layout.optionColumns, { options: question?.options ?? [], availableMm, fontSizePt: layout.fontSizePt, fontFamily:layout.fontFamily, hasSideFigure });
+  return { enabled: layout.features.optionColumns, choice, bookDefault: layout.optionColumns, ...resolved };
+}
+
+function QuestionView(props: NodeViewProps) {
+  const { node, editor, getPos, selected, extension, deleteNode, updateAttributes } = props;
+  const { store, layout: layoutStore } = extension.options as { store: QuestionStore; layout: BookLayoutStore }, id = String(node.attrs.questionId || '');
   const subscribe = useCallback((notify: () => void) => store.subscribe(id, notify), [store, id]);
   const snapshot = useCallback(() => store.get(id), [store, id]);
   const value = useSyncExternalStore(subscribe, snapshot, snapshot), question = value?.question;
   const select = () => { const pos = getPos(); if (typeof pos === 'number') editor.chain().focus().setNodeSelection(pos).run(); };
   const patch = (value: Partial<Question>) => store.onChange(id, value);
   const commitStem = (stem: string) => { const current = store.get(id)?.question; if (!current) return; const filled = fillQuestionOptions({ ...current, stem }); patch({ stem: filled.stem, options: filled.options, type: filled.type }); };
+  const figures = question ? questionFigures(question) : [];
+  const rightFigures = figures.filter(figure => figure.layout === 'right');
+  const hasDrawing = !!(question?.drawing?.trim() || question?.image || question && extractTikzBlocks(question.stem).length);
+  const rightWidth = rightFigures.length || hasDrawing ? Math.max(15, ...rightFigures.map(figure => Number.isFinite(figure.width) ? Math.min(100, Math.max(15, figure.width!)) : 35), ...(hasDrawing ? [35] : [])) : 0;
+  const optionLayout = useQuestionOptionColumns(props, layoutStore, question, rightWidth);
   if (!question) return <NodeViewWrapper className="book-question-missing" contentEditable={false}>题目快照不存在<Button size="sm" onClick={deleteNode}>移除引用</Button></NodeViewWrapper>;
-  const figures = questionFigures(question);
+  const showOptionLayout = optionLayout.enabled && hasOptions(question.type) && question.options.some(option => option.trim());
   return <NodeViewWrapper as="section" contentEditable={false} className={`book-question-node${selected ? ' is-selected' : ''}`} data-book-question={id} data-selected={selected || undefined} style={{ marginTop: node.attrs.spaceBefore == null ? undefined : `${Number(node.attrs.spaceBefore)}pt`, marginBottom: node.attrs.spaceAfter == null ? undefined : `${Number(node.attrs.spaceAfter)}pt` }}>
-    <div className="book-question-meta"><span className="book-question-number">{value?.number || '·'}</span><span>{TYPE_META[question.type].label}</span><span>{question.score} 分</span><div className="book-question-actions"><span data-drag-handle="" className="book-question-grip" title="拖动题目" aria-label="拖动题目"><GripVertical size={14}/></span><button type="button" title="删除题目块" aria-label={`删除题目 ${value?.number || ''}`} onClick={deleteNode}><Trash2 size={13}/></button></div></div>
+    <div className="book-question-meta"><span className="book-question-number">{value?.number || '·'}</span><span>{TYPE_META[question.type].label}</span><span>{question.score} 分</span>{showOptionLayout && <span className="book-question-option-layout" title={optionLayout.choice == null ? `跟随全书：${optionColumnsLabel(optionLayout.bookDefault)}` : '本题单独设置'}>选项 {optionLayout.columns} 列{optionLayout.auto ? ' · 自动' : ''}</span>}<div className="book-question-actions"><span data-drag-handle="" className="book-question-grip" title="拖动题目" aria-label="拖动题目"><GripVertical size={14}/></span><button type="button" title="删除题目块" aria-label={`删除题目 ${value?.number || ''}`} onClick={deleteNode}><Trash2 size={13}/></button></div></div>
     <BookContentSwap value={selected ? 'editing' : 'reading'}>{!selected ? <div className="book-question-reading" onClick={select} role="button" tabIndex={0} aria-label={`编辑教辅题目 ${value?.number || ''}`} onKeyDown={event => { if (event.key === 'Enter') select(); }}>
       {figures.filter(figure => figure.layout === 'right').map(figure => <img key={figure.id} src={figure.src} alt={figure.caption || '题图'} className="book-question-figure-right" style={{ width: `${figure.width || 35}%`, maxHeight: figure.maxHeight || 220 }}/>) }
       <MathText text={question.stem || '点击编辑题目'}/>
-      {hasOptions(question.type) && <div className="book-question-options">{question.options.map((option, index) => <div key={index}><b>{String.fromCharCode(65 + index)}.</b><MathText text={option}/></div>)}</div>}
+      {hasOptions(question.type) && <div className="book-question-options" data-option-columns={optionLayout.enabled ? optionLayout.columns : undefined} style={optionLayout.enabled ? { gridTemplateColumns: `repeat(${optionLayout.columns},minmax(0,1fr))` } : undefined}>{question.options.map((option, index) => <div key={index}><b>{String.fromCharCode(65 + index)}.</b><MathText text={option}/></div>)}</div>}
       {figures.filter(figure => figure.layout !== 'right').map(figure => <figure key={figure.id} style={{ width: `${figure.width || (figure.layout === 'half' ? 48 : 75)}%` }}><img src={figure.src} alt={figure.caption || '题图'} style={{ maxHeight: figure.maxHeight || 220 }}/>{figure.caption && <figcaption>{figure.caption}</figcaption>}</figure>)}
       {question.drawing && <MathText text={question.drawing}/>}<div className="book-question-clear"/>
     </div> : <div className="book-question-fields">
@@ -56,7 +80,7 @@ function QuestionView({ node, editor, getPos, selected, extension, deleteNode }:
       {hasOptions(question.type) && <div className="book-question-option-fields">{question.options.map((option, index) => <label key={index}><span>{String.fromCharCode(65 + index)}</span><textarea aria-label={`教辅选项 ${String.fromCharCode(65 + index)}`} value={option} rows={1} onChange={event => patch({ options: question.options.map((item, i) => i === index ? event.target.value : item) })}/></label>)}<Button size="sm" variant="ghost" onClick={() => patch({ options: [...question.options, ''] })} disabled={question.options.length >= 26}>添加选项</Button></div>}
       <BookDisclosure label="答案与解析"><label>参考答案<textarea aria-label="教辅参考答案" rows={2} value={question.answer.join('\n')} onChange={event => patch({ answer: event.target.value.split('\n').filter(value => value.trim()) })}/></label><label>解析<textarea aria-label="教辅解析" rows={3} value={question.analysis} onChange={event => patch({ analysis: event.target.value })}/></label></BookDisclosure>
       <BookDisclosure label="题图与绘图"><FigureEditor question={question} onChange={patch}/><DrawingEditor value={question.drawing || ''} onChange={drawing => patch({ drawing })}/></BookDisclosure>
-      <div className="book-question-attributes"><label>分值<input aria-label="教辅题目分值" type="number" min={0} max={1000} step={0.5} value={question.score} onChange={event => patch({ score: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) })}/></label><label>来源<input aria-label="教辅题目来源" value={question.source || ''} onChange={event => patch({ source: event.target.value })}/></label></div>
+      <div className="book-question-attributes"><label>分值<input aria-label="教辅题目分值" type="number" min={0} max={1000} step={0.5} value={question.score} onChange={event => patch({ score: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) })}/></label><label>来源<input aria-label="教辅题目来源" value={question.source || ''} onChange={event => patch({ source: event.target.value })}/></label>{showOptionLayout && <label>选项排列<Select aria-label="本题选项排列" value={optionLayout.choice == null ? 'inherit' : String(optionLayout.choice)} onValueChange={value => updateAttributes({ optionColumns: value === 'inherit' ? null : value === 'auto' ? 'auto' : Number(value) })} options={[{ value: 'inherit', label: `跟随全书（${optionColumnsLabel(optionLayout.bookDefault)}）` }, ...BOOK_OPTION_COLUMNS.map(value => ({ value: String(value), label: optionColumnsLabel(value) }))]}/></label>}</div>
       <div className="book-question-live-preview"><MathText text={question.stem}/></div>
     </div>}</BookContentSwap>
   </NodeViewWrapper>;
@@ -81,7 +105,8 @@ function mathNode(block: boolean, store: QuestionStore) {
 }
 const Callout = Node.create({
   name: 'callout', group: 'block', content: 'block+', defining: true,
-  addAttributes() { return { kind: { default: 'lesson', parseHTML: element => element.getAttribute('data-callout') || 'lesson' } }; },
+  addExtensions() { return [BookAnswerArea,BookSpanHeading]; },
+  addAttributes() { return { kind: { default: null, parseHTML: element => element.getAttribute('data-callout') || null }, styleId:{default:null,parseHTML:element=>element.getAttribute('data-style-id')||null,renderHTML:attrs=>attrs.styleId?{'data-style-id':attrs.styleId}:{}} }; },
   parseHTML() { return [{ tag: 'section[data-callout]' }]; },
   renderHTML({ HTMLAttributes }) { return ['section', mergeAttributes(HTMLAttributes, { 'data-callout': HTMLAttributes.kind }), 0]; },
 });
@@ -92,7 +117,7 @@ const BookImage = Image.extend({
 });
 const LayoutAttributes = Extension.create({
   name: 'bookLayout',
-  addGlobalAttributes() { return [{ types: ['paragraph', 'heading', 'bookQuestion', 'callout', 'image', 'table', 'blockMath'], attributes: {
+  addGlobalAttributes() { return [{ types: ['paragraph', 'heading', 'bookQuestion', 'callout', 'image', 'table', 'blockMath', 'answerArea'], attributes: {
     spaceBefore: { default: null, parseHTML: element => element.hasAttribute('data-space-before') ? Math.max(0, Math.min(80, Number(element.getAttribute('data-space-before')) || 0)) : null, renderHTML: attrs => attrs.spaceBefore == null ? {} : ({ 'data-space-before': attrs.spaceBefore, style: `margin-top:${Math.max(0, Math.min(80, Number(attrs.spaceBefore) || 0))}pt` }) },
     spaceAfter: { default: null, parseHTML: element => element.hasAttribute('data-space-after') ? Math.max(0, Math.min(80, Number(element.getAttribute('data-space-after')) || 0)) : null, renderHTML: attrs => attrs.spaceAfter == null ? {} : ({ 'data-space-after': attrs.spaceAfter, style: `margin-bottom:${Math.max(0, Math.min(80, Number(attrs.spaceAfter) || 0))}pt` }) },
     keepTogether: { default: null, parseHTML: element => element.hasAttribute('data-keep-together') ? element.getAttribute('data-keep-together') === 'true' : null, renderHTML: attrs => attrs.keepTogether == null ? {} : ({ 'data-keep-together': String(!!attrs.keepTogether) }) },
@@ -123,9 +148,9 @@ function Tool({ label, active, disabled, onClick, children, selectionId }: { lab
       : <AnimatePresence initial={false}>{active && <motion.span className="book-tool-selection" key="selected" initial={rich ? { opacity: 0, scale: .8 } : false} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={rich ? bookSpring : { duration: 0 }}/>}</AnimatePresence>}{children}
   </motion.button>;
 }
-function FormattingBar({ editor, insertImage, insertMath, insertQuestions }: { editor: TiptapEditor; insertImage(): void; insertMath(block: boolean): void; insertQuestions?(): void }) {
+function FormattingBar({ editor, insertImage, insertMath, insertQuestions, columnsEnabled }: { editor: TiptapEditor; insertImage(): void; insertMath(block: boolean): void; insertQuestions?(): void; columnsEnabled: boolean }) {
   const selectionId = useId();
-  const state = useEditorState({ editor, selector: ({ editor }) => ({ bold: editor.isActive('bold'), italic: editor.isActive('italic'), underline: editor.isActive('underline'), bullet: editor.isActive('bulletList'), ordered: editor.isActive('orderedList'), heading: editor.isActive('heading') ? String(editor.getAttributes('heading').level) : 'body', align: editor.getAttributes('paragraph').textAlign || editor.getAttributes('heading').textAlign || 'left', table: editor.isActive('table'), image: editor.isActive('image'), math: editor.isActive('inlineMath') || editor.isActive('blockMath'), undo: editor.can().undo(), redo: editor.can().redo(), layout: JSON.stringify((() => { const selection = editor.state.selection, node = selection.$from.parent; return { type: 'node' in selection ? (selection as unknown as { node: ProseNode }).node.type.name : node.type.name, attrs: 'node' in selection ? (selection as unknown as { node: ProseNode }).node.attrs : node.attrs }; })()) }) });
+  const state = useEditorState({ editor, selector: ({ editor }) => ({ columns: String(columnSetInSelection(editor.state)?.node.attrs.count ?? 1), bold: editor.isActive('bold'), italic: editor.isActive('italic'), underline: editor.isActive('underline'), bullet: editor.isActive('bulletList'), ordered: editor.isActive('orderedList'), heading: editor.isActive('heading') ? String(editor.getAttributes('heading').level) : 'body', align: editor.getAttributes('paragraph').textAlign || editor.getAttributes('heading').textAlign || 'left', table: editor.isActive('table'), image: editor.isActive('image'), math: editor.isActive('inlineMath') || editor.isActive('blockMath'), undo: editor.can().undo(), redo: editor.can().redo(), layout: JSON.stringify((() => { const selection = editor.state.selection, node = selection.$from.parent; return { type: 'node' in selection ? (selection as unknown as { node: ProseNode }).node.type.name : node.type.name, attrs: 'node' in selection ? (selection as unknown as { node: ProseNode }).node.attrs : node.attrs }; })()) }) });
   const [layoutOpen, setLayoutOpen] = useState(false);
   const current = JSON.parse(state.layout) as { type: string; attrs: Record<string, unknown> };
   const setLayout = (attrs: Record<string, unknown>) => editor.chain().focus().updateAttributes(current.type, attrs).run();
@@ -137,6 +162,7 @@ function FormattingBar({ editor, insertImage, insertMath, insertQuestions }: { e
       <Tool label="左对齐" active={state.align === 'left'} selectionId={`book-align-${selectionId}`} onClick={() => editor.chain().focus().setTextAlign('left').run()}><AlignLeft size={15}/></Tool><Tool label="居中" active={state.align === 'center'} selectionId={`book-align-${selectionId}`} onClick={() => editor.chain().focus().setTextAlign('center').run()}><AlignCenter size={15}/></Tool><Tool label="右对齐" active={state.align === 'right'} selectionId={`book-align-${selectionId}`} onClick={() => editor.chain().focus().setTextAlign('right').run()}><AlignRight size={15}/></Tool><Tool label="无序列表" active={state.bullet} onClick={() => editor.chain().focus().toggleBulletList().run()}><List size={15}/></Tool><Tool label="有序列表" active={state.ordered} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListOrdered size={15}/></Tool>
     </div>
     <div className="book-editor-tools-row"><Select aria-label="教辅内容块" value={editor.isActive('callout') ? String(editor.getAttributes('callout').kind) : 'plain'} onValueChange={applyCallout} options={[{ value: 'plain', label: '普通内容' }, { value: 'lesson', label: '知识讲解' }, { value: 'example', label: '例题' }, { value: 'practice', label: '练习' }, { value: 'hint', label: '提示' }]}/>
+      {columnsEnabled && <><Select aria-label="分栏版式" value={state.columns} onValueChange={value => { if (value === '1') editor.chain().focus().unsetColumnSet().run(); else editor.chain().focus().setColumnSet({ count: Number(value) as 2 | 3 }).run(); }} options={[{ value: '1', label: '通栏' }, { value: '2', label: '双栏' }, { value: '3', label: '三栏' }]}/><Tool label="插入换栏（Ctrl+Shift+Enter）" disabled={state.columns === '1'} onClick={() => editor.chain().focus().insertColumnBreak().run()}><ArrowRightToLine size={15}/></Tool><span className="book-tool-divider"/></>}
       <Tool label="插入题目" onClick={() => insertQuestions?.()} disabled={!insertQuestions}><Plus size={15}/></Tool><Tool label="插入图片" onClick={insertImage}><ImagePlus size={15}/></Tool><Tool label="插入行内公式" onClick={() => insertMath(false)}><Sigma size={15}/></Tool><Tool label="插入独立公式" onClick={() => insertMath(true)}><Braces size={15}/></Tool><Tool label="插入表格" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><Table2 size={15}/></Tool><Tool label="插入分页" onClick={() => editor.chain().focus().insertContent({ type: 'pageBreak' }).run()}><SeparatorHorizontal size={15}/></Tool><Tool label="当前块排版" active={layoutOpen} onClick={() => setLayoutOpen(value => !value)}><Pilcrow size={15}/></Tool>
       {state.math && <Button size="sm" variant="ghost" onClick={() => insertMath(editor.isActive('blockMath'))}>编辑公式</Button>}
       {state.table && <><Button size="sm" variant="ghost" onClick={() => editor.chain().focus().addRowAfter().run()}>加行</Button><Button size="sm" variant="ghost" onClick={() => editor.chain().focus().addColumnAfter().run()}>加列</Button><Button size="sm" variant="ghost" onClick={() => editor.chain().focus().deleteRow().run()}>删行</Button><Button size="sm" variant="ghost" onClick={() => editor.chain().focus().deleteColumn().run()}>删列</Button><Button size="sm" variant="ghost" onClick={() => editor.chain().focus().deleteTable().run()}>删表</Button></>}
@@ -149,6 +175,9 @@ function FormattingBar({ editor, insertImage, insertMath, insertQuestions }: { e
 export const BookEditor = forwardRef<BookEditorHandle, BookEditorProps>(function BookEditor(props, ref) {
   const latest = useRef(props); latest.current = props;
   const [store] = useState(() => new QuestionStore());
+  const [layoutStore] = useState(() => { const value = new BookLayoutStore(); value.set(props.settings); return value; });
+  useLayoutEffect(() => layoutStore.set(props.settings), [layoutStore, props.settings]);
+  const layout = useBookLayout(layoutStore);
   const chapterQuestionIds = bookQuestionIds(props.chapter.content);
   store.prepare(props.questions, props.numbers, chapterQuestionIds); store.onChange = props.onQuestionChange;
   useLayoutEffect(() => store.update(props.questions, props.numbers, chapterQuestionIds), [store, props.questions, props.numbers, props.chapter.content]);
@@ -167,7 +196,7 @@ export const BookEditor = forwardRef<BookEditorHandle, BookEditorProps>(function
     } catch (value) { setError(value instanceof Error ? value.message : String(value)); }
   };
   const editor = useEditor({
-    extensions: [StarterKit.configure({ codeBlock: false, link: false }), TableKit.configure({ table: { resizable: false } }), BookImage.configure({ allowBase64: true }), TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, FontFamily, Color, LayoutAttributes, Callout, PageBreak, mathNode(false, store), mathNode(true, store), Node.create<{ store: QuestionStore }>({ name: 'bookQuestion', group: 'block', atom: true, draggable: true, selectable: true, addOptions() { return { store }; }, addAttributes() { return { questionId: { default: '', parseHTML: element => element.getAttribute('data-book-question') || '' } }; }, parseHTML() { return [{ tag: 'section[data-book-question]' }]; }, renderHTML({ HTMLAttributes }) { return ['section', { ...HTMLAttributes, 'data-book-question': HTMLAttributes.questionId }]; }, addNodeView() { return ReactNodeViewRenderer(QuestionView); } })],
+    extensions: [StarterKit.configure({ document: false, codeBlock: false, link: false }), BookDocument, ColumnSet.configure({ layout: layoutStore }), ColumnBreak, TableKit.configure({ table: { resizable: false } }), BookImage.configure({ allowBase64: true }), TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, FontFamily, Color, LayoutAttributes, Callout, PageBreak, mathNode(false, store), mathNode(true, store), Node.create<{ store: QuestionStore; layout: BookLayoutStore }>({ name: 'bookQuestion', group: 'block', atom: true, draggable: true, selectable: true, addOptions() { return { store, layout: layoutStore }; }, addAttributes() { return { questionId: { default: '', parseHTML: element => element.getAttribute('data-book-question') || '' }, optionColumns: { default: null, parseHTML: element => { const raw = element.getAttribute('data-option-columns'); const value = raw === 'auto' ? raw : Number(raw); return isBookOptionColumns(value) ? value : null; }, renderHTML: attrs => attrs.optionColumns == null ? {} : { 'data-option-columns': String(attrs.optionColumns) } } }; }, parseHTML() { return [{ tag: 'section[data-book-question]' }]; }, renderHTML({ HTMLAttributes }) { return ['section', { ...HTMLAttributes, 'data-book-question': HTMLAttributes.questionId }]; }, addNodeView() { return ReactNodeViewRenderer(QuestionView); } })],
     content: props.chapter.content as JSONContent,
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
@@ -225,7 +254,7 @@ export const BookEditor = forwardRef<BookEditorHandle, BookEditorProps>(function
     setMath(undefined);
   };
   return <div className="book-chapter-editor" data-testid="book-editor" data-book-chapter={props.chapter.id}>
-    <FormattingBar editor={editor} insertImage={() => fileInput.current?.click()} insertMath={openMath} insertQuestions={props.onInsertQuestions}/>
+    <FormattingBar editor={editor} insertImage={() => fileInput.current?.click()} insertMath={openMath} insertQuestions={props.onInsertQuestions} columnsEnabled={layout.features.columnSet}/>
     <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={event => { const files = [...event.target.files || []]; event.target.value = ''; if (files.length) void appendImages(editor, files); }}/>
     {error && <div className="book-editor-error" role="alert">{error}</div>}
     <div className="book-editor-scroll"><EditorContent editor={editor}/></div>

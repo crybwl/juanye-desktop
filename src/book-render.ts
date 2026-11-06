@@ -1,6 +1,9 @@
 import katex from 'katex';
 import type { BookProject, BookNode } from './book-model';
 import { bookQuestionNumbers } from './book-model';
+import { bookColumnWidthMm, bookContentWidthMm, bookOptionAvailableWidthMm, bookOptionColumnsDefault, isBookOptionColumns, resolveOptionColumns } from './book-layout-contract';
+import { DEFAULT_BOOK_BLOCK_STYLES } from './book-blocks';
+import { bookBlockIcon, bookBlockStyleCss, renderBookAnswerArea, resolveBookBlockLabels } from './book-block-render';
 import type { Question } from './types';
 import { mathSegments, renderMathText } from './math';
 import { drawingSegments, extractTikzBlocks, stripTikzBlocks } from './drawing';
@@ -26,6 +29,8 @@ function validFormula(latex: string) {
 export function buildBookDocument(book: BookProject, chapterId?: string): BookRenderDocument {
   const warnings: string[] = [], errors: string[] = [], drawings: BookRenderDocument['drawings'] = [];
   const numbers = bookQuestionNumbers(book);
+  const blockLabels = resolveBookBlockLabels(book);
+  const blockStyles = new Map((book.styles ?? DEFAULT_BOOK_BLOCK_STYLES).map(style => [style.id, style]));
   const headingIds = new Map<BookNode, string>();
   const headings = new Map<string, { id: string; title: string; level: number }[]>();
   const headingText = (node: BookNode): string => node.type === 'text' ? node.text || '' : node.type === 'inlineMath' ? String(node.attrs?.latex || '') : (node.content || []).map(headingText).join('');
@@ -73,7 +78,7 @@ export function buildBookDocument(book: BookProject, chapterId?: string): BookRe
     return `<figure class="book-image" style="width:${finite(width, 15, 100, 100)}%;${placement}"><img src="${esc(src)}" alt="${esc(caption)}"/>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
   };
   const solution = (qid: string, question: Question) => `<section class="book-solution" data-book-solution="${esc(qid)}"><b>${esc(numbers.get(qid)?.label ?? '?')}.</b> <strong>答案：</strong>${text(question.answer.join('；') || '待补充')}${question.analysis.trim() ? `<div class="book-analysis"><strong>解析：</strong>${text(question.analysis)}</div>` : ''}</section>`;
-  const questionHtml = (qid: string, attrs: BookNode['attrs']) => {
+  const questionHtml = (qid: string, attrs: BookNode['attrs'], flow: {count:number;gap:number}) => {
     const q = book.questions[qid];
     if (!q) { addError(`缺少题目 ${qid}`); return '<p class="book-media-error">[题目缺失]</p>'; }
     const label = numbers.get(qid)?.label ?? '?';
@@ -85,11 +90,14 @@ export function buildBookDocument(book: BookProject, chapterId?: string): BookRe
     const below = figures.filter(figure => figure.layout !== 'right').map(figure => media(figure.src, figure.caption || '', finite(figure.width, 15, 100, figure.layout === 'half' ? 48 : 100)));
     for (const code of codes) { const id = `drawing-${drawings.length}`; drawings.push({ id, code }); right.push(`<figure class="book-drawing" data-book-drawing="${id}"></figure>`); }
     if (q.image === 'plot') right.push(plotSvg());
-    const body = `<article class="book-question" id="${idFor(qid)}" data-book-question="${esc(qid)}"${blockStyle(attrs)}>${right.length ? `<div class="book-question-figures" style="width:${rightWidth}%">${right.join('')}</div>` : ''}<div class="book-stem"><b class="book-question-number">${esc(label)}.</b> ${text(stripTikzBlocks(q.stem).replace(prefix, ''))}</div>${q.options.length ? `<div class="book-options">${q.options.map((option, i) => `<div><b>${String.fromCharCode(65 + i)}.</b> ${text(option)}</div>`).join('')}</div>` : ''}${below.length ? `<div class="book-question-below">${below.join('')}</div>` : ''}</article>`;
+    const availableMm = bookOptionAvailableWidthMm(bookColumnWidthMm(bookContentWidthMm(s), flow.count, flow.gap), right.length ? rightWidth : 0);
+    const choice = isBookOptionColumns(attrs?.optionColumns) ? attrs.optionColumns : bookOptionColumnsDefault(s);
+    const layout = resolveOptionColumns(choice, bookOptionColumnsDefault(s), { options:q.options,availableMm,fontSizePt:s.fontSize,fontFamily:s.fontFamily,hasSideFigure:right.length>0 });
+    const body = `<article class="book-question" id="${idFor(qid)}" data-book-question="${esc(qid)}"${blockStyle(attrs)}>${right.length ? `<div class="book-question-figures" style="width:${rightWidth}%">${right.join('')}</div>` : ''}<div class="book-stem"><b class="book-question-number">${esc(label)}.</b> ${text(stripTikzBlocks(q.stem).replace(prefix, ''))}</div>${q.options.length ? `<div class="book-options" data-choice="${choice}" data-side-figure="${right.length>0}" data-available-mm="${availableMm}" style="grid-template-columns:repeat(${layout.columns},minmax(0,1fr))">${q.options.map((option, i) => `<div class="book-option"><b>${String.fromCharCode(65 + i)}.</b> ${text(option)}</div>`).join('')}</div>` : ''}${below.length ? `<div class="book-question-below">${below.join('')}</div>` : ''}</article>`;
     return body + (s.answers === 'inline' ? solution(qid, q) : '');
   };
-  const renderNode = (node: BookNode): string => {
-    const attrs = node.attrs || {}, children = () => (node.content || []).map(renderNode).join('');
+  const renderNode = (node: BookNode, flow = {count:1,gap:0}): string => {
+    const attrs = node.attrs || {}, children = () => (node.content || []).map(child=>renderNode(child,flow)).join('');
     switch (node.type) {
       case 'doc': return children();
       case 'text': {
@@ -113,7 +121,7 @@ export function buildBookDocument(book: BookProject, chapterId?: string): BookRe
         return html;
       }
       case 'paragraph': return `<p${blockStyle(attrs)}>${children() || '<br/>'}</p>`;
-      case 'heading': { const level = finite(attrs.level, 1, 6, 2); return `<h${level} id="${headingIds.get(node) || ''}"${blockStyle(attrs)}>${children()}</h${level}>`; }
+      case 'heading': { const level = finite(attrs.level, 1, 6, 2); return `<h${level} id="${headingIds.get(node) || ''}"${attrs.columnSpan==='all'?' data-column-span="all"':''}${blockStyle(attrs)}>${children()}</h${level}>`; }
       case 'hardBreak': return '<br/>';
       case 'horizontalRule': return '<hr/>';
       case 'bulletList': return `<ul>${children()}</ul>`;
@@ -126,9 +134,18 @@ export function buildBookDocument(book: BookProject, chapterId?: string): BookRe
       case 'image': { const align=String(attrs.align||'center'),floating=['left','right'].includes(align),width=finite(attrs.width,15,100,100); return `<div class="book-image-block"${blockStyle(attrs,floating?[`float:${align}`,`width:${width}%`,align==='right'?'margin-left:4mm':'margin-right:4mm']:[])}>${media(attrs.src,String(attrs.alt||attrs.title||''),floating?100:width,'center')}</div>`; }
       case 'inlineMath': return formula(String(attrs.latex || ''), false);
       case 'blockMath': return `<div class="book-display-math"${blockStyle(attrs)}>${formula(String(attrs.latex || ''), true)}</div>`;
-      case 'bookQuestion': return questionHtml(String(attrs.questionId || ''), attrs);
+      case 'bookQuestion': return questionHtml(String(attrs.questionId || ''), attrs, flow);
+      case 'columnSet': { const count=finite(attrs.count,2,3,2),gap=finite(attrs.gap,2,20,6);return `<section class="book-columns" data-columns="${count}" data-column-gap="${gap}" data-column-rule="${attrs.rule===true}">${(node.content??[]).map(child=>renderNode(child,{count,gap})).join('')}</section>`; }
+      case 'columnBreak': return '<div class="book-column-break"></div>';
+      case 'answerArea': return renderBookAnswerArea(attrs);
       case 'pageBreak': return '<div class="book-page-break"></div>';
-      case 'callout': { const kinds: Record<string, string> = { lesson: '知识讲解', example: '例题', practice: '练习', hint: '提示' }; const kind = String(attrs.kind || 'lesson'); return `<aside class="book-callout book-callout-${kinds[kind] ? kind : 'lesson'}"${blockStyle(attrs)}><div class="book-callout-title">${kinds[kind] || kinds.lesson}</div>${children()}</aside>`; }
+      case 'callout': {
+        if (!attrs.styleId) { const kinds: Record<string, string> = { lesson: '知识讲解', example: '例题', practice: '练习', hint: '提示' }; const kind = String(attrs.kind || 'lesson'); return `<aside class="book-callout book-callout-${kinds[kind] ? kind : 'lesson'}"${blockStyle(attrs)}><div class="book-callout-title">${kinds[kind] || kinds.lesson}</div>${children()}</aside>`; }
+        const style=blockStyles.get(String(attrs.styleId));
+        if(!style){addError(`缺少块样式：${String(attrs.styleId)}`);return children();}
+        const counter=blockLabels.get(node);
+        return `<aside class="book-callout book-styled-block" data-style-id="${esc(style.id)}"${blockStyle(attrs,bookBlockStyleCss(style))}><div class="book-callout-title">${bookBlockIcon(style.icon)}${esc(counter ? (style.counter?.format.includes(style.title) ? counter : `${style.title} ${counter}`) : style.title)}</div>${children()}</aside>`;
+      }
       default: addError(`不支持的内容块：${node.type}`); return children() || esc(node.text || '');
     }
   };
@@ -156,6 +173,7 @@ export function buildBookDocument(book: BookProject, chapterId?: string): BookRe
 .book-question{display:flow-root;margin:0 0 ${s.questionGap}mm;break-inside:avoid}.book-question-number{padding-right:1.5mm}.book-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5mm 4mm;margin:2mm 0 0}.book-options>div{min-width:0}.book-question-figures{float:right;width:35%;margin:0 0 2mm 4mm}.book-question-below{clear:both;display:flex;flex-wrap:wrap;gap:3mm}.book-image{break-inside:avoid;margin-top:2mm;margin-bottom:3mm;max-width:100%}.book-image img,.book-drawing img{display:block;max-width:100%;height:auto}.book-image figcaption{font-size:.83em;text-align:center;color:#555;padding-top:1mm}.book-image-block{display:flow-root}.book-drawing{break-inside:avoid;margin:2mm 0}.book-plot{width:100%;height:auto}.book-media-error{color:#a00;border:1px solid #c88;padding:2mm}
 .book-callout{padding:3mm 4mm;margin:3mm 0 5mm;border-left:1mm solid #64748b;background:#f4f6f8}.book-callout-title{font-size:.9em;font-weight:700;color:#465063;margin-bottom:2mm;break-after:avoid}.book-callout-example{border-color:#6b7f69}.book-callout-practice{border-color:#96836c}.book-callout-hint{border-color:#8d829f}.book-callout p:last-child{margin-bottom:0}.book-solution{margin:0 0 4mm;break-inside:avoid}.book-analysis{margin-top:1mm}.book-chapter-answers{break-before:page}.book-page-break{break-before:page;height:0}.book-display-math{margin:2mm 0;break-inside:avoid}
 .book-table,.book-content .math-table{border-collapse:collapse;width:100%;table-layout:fixed;margin:2mm 0 4mm;font-size:.93em}.book-table td,.book-table th,.book-content .math-table td,.book-content .math-table th{border:.2mm solid #777;padding:1.5mm 2mm;vertical-align:top;overflow-wrap:anywhere}.book-table th,.math-table th{background:#f1f2f4}.book-table thead,.math-table thead{display:table-header-group}.book-table tr,.math-table tr{break-inside:avoid}.book-content .katex{font-size:1.03em}.book-content .katex-display{margin:.3em 0;overflow:visible}.book-content blockquote{border-left:.7mm solid #ccc;padding-left:4mm;margin:3mm 0}.book-content ul,.book-content ol{padding-left:6mm}
+.book-styled-block>.book-callout-title{display:flex;align-items:center;gap:1.5mm;margin:-3mm -4mm 2mm;padding:2mm 4mm;background:var(--book-block-title-bg);color:inherit}.book-block-icon{width:1.1em;height:1.1em;flex:none}.book-answer-area{position:relative;margin:2mm 0;break-inside:avoid;border:.15mm solid #d0d6dc;background-repeat:repeat}.book-answer-axes{position:absolute;inset:0;width:100%;height:100%}
 `;
   return { html: `<main class="book-content">${html}</main>`, css, warnings, errors, drawings };
 }
