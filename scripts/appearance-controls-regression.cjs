@@ -45,7 +45,8 @@ async function main() {
   const sections = [
     { id: 'qa-s1', type: 'single', title: '单项选择题', note: '', questions: [question('qa-q1', 'single', '已知函数 $f(x)=x^2$，则 $f(2)$ 的值为'), question('qa-q2', 'single', '若集合 $A=\\{1,2\\}$，则下列结论正确的是')] },
     { id: 'qa-s2', type: 'essay', title: '解答题', note: '', questions: [question('qa-q3', 'essay', '已知函数 $f(x)=x^2-2x$。\n(1) 求函数的最小值；\n(2) 求 $f(x)\\le0$ 的解集。')] },
-    ...Array.from({ length: 6 }, (_, index) => ({ id: `qa-extra-${index}`, type: 'blank', title: `附加大题 ${index + 3}`, note: '', questions: [] })),
+    // v0.6 选项行高 32px：12 个大题才超出 280px 的下拉高度上限，用来检验长列表滚动。
+    ...Array.from({ length: 10 }, (_, index) => ({ id: `qa-extra-${index}`, type: 'blank', title: `附加大题 ${index + 3}`, note: '', questions: [] })),
   ];
   const exam = { title: '主题与控件 · 隔离示例', subtitle: '本地测试', duration: 120, notice: [], sections };
   const layout = { style: 'real', density: 'compact', paper: 'A4', orientation: 'portrait', margin: 11, fontSize: 9.5, lineHeight: 1.42, optionCols: 'auto', pageNumber: true, showScore: true, keepTogether: false, answerSpace: true, answerMode: 'none' };
@@ -107,12 +108,14 @@ async function main() {
       globalThis.__controlsThemeRequests = 0;
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_details, callback) => { globalThis.__controlsThemeRequests++; callback({ cancel: true }); });
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(9000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(9000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { rendererRequests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.waitForSelector('textarea');
-    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); });
     await page.reload(); await page.waitForSelector('textarea');
     if (railOnly) {
       progress('collapsed rail only; full controls/theme checks are not repeated');
@@ -144,8 +147,9 @@ async function main() {
     await assertPaper();
     const dark = await page.evaluate(() => {
       const rgba = color => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1; const context = canvas.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data]; };
-      return { mode: document.documentElement.dataset.theme, selected: localStorage.getItem('juanye.telegram-theme.v1'), scheme: document.documentElement.style.colorScheme, app: rgba(getComputedStyle(document.querySelector('.app-bg')).backgroundColor), pattern: getComputedStyle(document.querySelector('.canvas-dots')).backgroundImage };
+      return { mode: document.documentElement.dataset.theme, selected: localStorage.getItem('juanye.telegram-theme.v1'), scheme: document.documentElement.style.colorScheme, app: rgba(getComputedStyle(document.querySelector('.scene-backdrop')).backgroundColor), pattern: getComputedStyle(document.querySelector('.scene-backdrop-art')).backgroundImage };
     });
+    // 壁纸架构：不透明底色与纹理都由唯一的 .scene-backdrop 层承担，各面板只是其上的半透明罩层。
     assert.equal(dark.mode, 'telegram'); assert.equal(dark.selected, 'ember'); assert.equal(dark.scheme, 'dark');
     assert.ok(Math.max(...dark.app.slice(0, 3)) < 55 && dark.app[3] === 255, 'Telegram interface is not opaque dark');
     assert.notEqual(dark.pattern, 'none');
@@ -168,7 +172,7 @@ async function main() {
       });
     });
     assert.deepEqual(overflow, [], 'Batch inputs or apply buttons overflow the sheet');
-    const answer = batch().getByRole('combobox', { name: '批量作答区', exact: true });
+    const answer = batch().getByRole('combobox', { name: '批量答题卡空间', exact: true });
     await answer.focus(); await answer.press('Space'); await menu().waitFor();
     await answer.press('ArrowDown'); await answer.press('Enter'); await waitMenuClosed();
     assert.match(await answer.innerText(), /四分之一页/);
@@ -187,7 +191,7 @@ async function main() {
     await target.click(); await menu().waitFor();
     const longList = await menuGeometry('Long target-section menu'); assert.ok(longList.scrollHeight > longList.clientHeight, 'Long option list cannot scroll');
     await target.press('End'); await target.press('Enter'); await waitMenuClosed();
-    assert.match(await target.innerText(), /附加大题 8/);
+    assert.match(await target.innerText(), /附加大题 12/);
     checks.push('Custom dropdown works with zero selected questions, keyboard selection, Home/End, Escape, Tab, viewport placement, scrolling and portal hit-testing');
     progress('checkbox and partial selection states');
     const all = batch().getByRole('checkbox', { name: '全选', exact: true });

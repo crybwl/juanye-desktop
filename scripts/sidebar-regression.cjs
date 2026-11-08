@@ -181,6 +181,8 @@ async function main() {
       win.setBackgroundColor = value => { globalThis.__sidebarRegressionNativeColors.push(String(value).toLowerCase()); return setBackgroundColor(value); };
     });
     page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 });
     page.setDefaultTimeout(10000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { externalRequests++; return route.abort('blockedbyclient'); });
@@ -189,7 +191,7 @@ async function main() {
 
     if (screensOnly) {
       progress('stable Telegram screenshots only; no repeated feature/model regression');
-      await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v1', 'false'); });
+      await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v2', 'false'); });
       await page.reload();
       await sidebar().waitFor();
       await page.waitForFunction(() => document.documentElement.dataset.theme === 'telegram' && document.documentElement.dataset.nativeTransparency === 'false');
@@ -211,6 +213,9 @@ async function main() {
     }
 
     progress('empty collapsed rail');
+    // v2：首次启动目录默认展开；收起后再检查收起态。
+    await state('expanded');
+    await collapse();
     await state('collapsed');
     await assertCollapsedActionsAbsent();
     for (const section of sections) {
@@ -234,12 +239,12 @@ async function main() {
     await page.reload();
     await sidebar().waitFor();
     await state('expanded');
-    assert.equal(await page.evaluate(() => localStorage.getItem('juanye.sidebar-expanded.v1')), 'true');
+    assert.equal(await page.evaluate(() => localStorage.getItem('juanye.sidebar-expanded.v2')), 'true');
     await collapse();
     await page.reload();
     await sidebar().waitFor();
     await state('collapsed');
-    assert.equal(await page.evaluate(() => localStorage.getItem('juanye.sidebar-expanded.v1')), 'false');
+    assert.equal(await page.evaluate(() => localStorage.getItem('juanye.sidebar-expanded.v2')), 'false');
     await assertCollapsedActionsAbsent();
     checks.push('Blank area expands; expanded/collapsed state survives reload');
 

@@ -1,9 +1,10 @@
-import { Check, MessagesSquare, Moon, Sun } from "lucide-react";
-import { useAppearance, type Appearance } from "../appearance";
+import { Check, MessagesSquare, Moon, MountainSnow, Sun } from "lucide-react";
+import { useAppearance, withThemeTransition, type Appearance } from "../appearance";
 
 const MODES = [
   { id: "dark", name: "深色", icon: Moon },
   { id: "light", name: "淡色", icon: Sun },
+  { id: "aura", name: "晴岚", icon: MountainSnow },
   { id: "telegram", name: "Telegram", icon: MessagesSquare },
 ] as const;
 
@@ -12,7 +13,7 @@ export function AppearancePicker() {
   return (
     <fieldset className="appearance-picker min-w-0 border-0 p-0">
       <legend className="mb-3 text-[13px] font-medium text-muted">界面模式</legend>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {MODES.map(({ id, name, icon: Icon }) => (
           <label key={id} className="appearance-choice relative cursor-pointer">
             <input
@@ -20,7 +21,7 @@ export function AppearancePicker() {
               name="juanye-appearance"
               value={id}
               checked={appearance === id}
-              onChange={() => setAppearance(id as Appearance)}
+              onChange={() => withThemeTransition(() => setAppearance(id as Appearance))}
               className="peer sr-only"
             />
             <span className="appearance-choice-content flex h-full flex-col gap-3 rounded-xl border border-line-strong p-3 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-3 peer-focus-visible:outline-accent">

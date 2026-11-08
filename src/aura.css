@@ -1,0 +1,125 @@
+/* ============================================================
+   「晴岚」外观
+   - 版式：shadcn/ui Sidebar 的 inset 变体思路（外框 8px、内容卡片 12px 圆角 + 轻阴影，MIT）。
+   - 底色：三团低饱和光晕 + 128px 颗粒（只为抹平渐变色带），整块静态绘制一次，不做逐帧动画。
+   - 正文只出现在不透明表面上；渐变只露在顶栏和卡片外 8px 边缘。
+   data-theme 仍是 light / dark，所有明暗令牌、强调色与对比度规则照常生效。
+   ============================================================ */
+@media screen {
+  :root[data-appearance="aura"]:is([data-theme="light"], [data-theme="dark"]) {
+    --aura-gap: 8px;
+    --aura-radius: 12px;
+    --aura-line: rgb(0 0 51 / .07);
+    --aura-card-shadow: 0 0 0 1px var(--aura-line), 0 1px 2px rgb(0 0 51 / .04), 0 18px 44px -18px rgb(0 0 51 / .2);
+    --surface-header: transparent;
+    --surface-sidebar: color-mix(in srgb, var(--aura-glow-1) 18%, var(--color-panel));
+    --canvas-bg: color-mix(in srgb, var(--aura-base) 72%, #f4f5f7);
+  }
+  :root[data-appearance="aura"][data-theme="dark"] {
+    --aura-line: rgb(255 255 255 / .07);
+    --aura-card-shadow: 0 0 0 1px var(--aura-line), 0 18px 44px -14px rgb(0 0 0 / .65);
+    --surface-sidebar: color-mix(in srgb, var(--aura-glow-1) 22%, var(--color-panel));
+    --canvas-bg: color-mix(in srgb, var(--aura-base) 55%, #0b0c0e);
+  }
+
+  :root[data-appearance="aura"],
+  :root[data-appearance="aura"] body,
+  :root[data-appearance="aura"] #root { background: var(--aura-base); }
+  :root[data-appearance="aura"] .app-bg { background: transparent; }
+
+  /* 底色：沿用唯一的 .scene-backdrop 层（Telegram 用它放壁纸），晴岚只放渐变与颗粒 */
+  :root[data-appearance="aura"] .scene-backdrop {
+    display: block; position: absolute; inset: 0; z-index: -1;
+    overflow: hidden; pointer-events: none; contain: strict;
+    background:
+      radial-gradient(56% 74% at 3% 0%, var(--aura-glow-1) 0%, transparent 72%),
+      radial-gradient(46% 66% at 97% 0%, var(--aura-glow-2) 0%, transparent 70%),
+      radial-gradient(72% 60% at 52% 106%, var(--aura-glow-3) 0%, transparent 72%),
+      var(--aura-base);
+  }
+  :root[data-appearance="aura"] .scene-backdrop-art {
+    inset: 0; opacity: 1; transform: none; will-change: auto;
+    background-image: var(--aura-noise, none); background-size: 128px 128px; background-repeat: repeat;
+    animation: none !important;
+  }
+  :root[data-appearance="aura"][data-theme="dark"] .scene-backdrop-art { opacity: .7; }
+
+  /* 顶栏直接坐在底色上。光晕最浓处也要保证次要文字 ≥ 4.5:1，所以顶栏里的灰字略加深/提亮 */
+  :root[data-appearance="aura"] .app-header { background: transparent; border-bottom-color: transparent; }
+  :root[data-appearance="aura"][data-theme="light"] .app-header { --color-muted: #52565e; --color-faint: #54575f; }
+  :root[data-appearance="aura"][data-theme="dark"] .app-header { --color-faint: #969aa3; }
+  :root[data-appearance="aura"] .app-header .workspace-nav-tab { padding-inline: 12px; }
+  :root[data-appearance="aura"] .app-header .workspace-nav-pill {
+    inset: 10px 0; z-index: -1; height: auto; border-radius: 6px;
+    background: color-mix(in srgb, var(--color-panel) 82%, transparent);
+    box-shadow: 0 0 0 1px var(--aura-line), 0 1px 2px rgb(0 0 51 / .06);
+  }
+  :root[data-appearance="aura"][data-theme="dark"] .app-header .workspace-nav-pill {
+    background: color-mix(in srgb, #fff 9%, transparent);
+    box-shadow: 0 0 0 1px var(--aura-line);
+  }
+  :root[data-appearance="aura"] .app-header :is(.ui-btn-secondary, .titlebar-search) { background: color-mix(in srgb, var(--color-panel) 55%, transparent); }
+  :root[data-appearance="aura"] .app-header :is(.ui-btn-secondary, .titlebar-search):hover { background: color-mix(in srgb, var(--color-panel) 85%, transparent); }
+
+  /* 工作区：一张悬浮卡片。三个工作区（组卷 / 题库 / 教辅）都在卡片里切换，卡片本身不动 */
+  :root[data-appearance="aura"] .workspace-stage {
+    margin: 0 var(--aura-gap) var(--aura-gap);
+    border-radius: var(--aura-radius);
+    background: var(--color-panel);
+    box-shadow: var(--aura-card-shadow);
+  }
+  :root[data-appearance="aura"] .workspace-wallpaper { display: none; }
+
+  /* 右侧抽屉对齐卡片的上沿与圆角 */
+  :root[data-appearance="aura"] .ui-sheet { top: 52px; right: calc(var(--aura-gap) + 4px); bottom: calc(var(--aura-gap) + 4px); border-radius: 10px; }
+
+  /* 设置里的「界面模式」预览卡 */
+  .appearance-swatch-aura {
+    background:
+      radial-gradient(70% 90% at 0% 0%, #c6d4f4 0%, transparent 70%),
+      radial-gradient(60% 80% at 100% 0%, #ddd3f5 0%, transparent 70%),
+      radial-gradient(80% 70% at 50% 110%, #cbe5e2 0%, transparent 70%),
+      #eceff5;
+  }
+  .appearance-swatch-aura .appearance-swatch-sidebar { background: transparent; border-right: 0; }
+  .appearance-swatch-aura .appearance-swatch-page {
+    top: 9px; right: 7px; bottom: 7px; left: 24%; width: auto; height: auto; padding: 9px 22% 9px 12%;
+    border-radius: 5px; box-shadow: 0 0 0 1px rgb(0 0 51 / .06), 0 5px 12px -5px rgb(0 0 51 / .3);
+  }
+
+  /* 晴岚配色选择 */
+  .aura-gallery { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .aura-gallery legend { margin-bottom: 12px; padding: 0; font-size: 13px; font-weight: 500; color: var(--color-muted); }
+  .aura-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .aura-option > span { font-size: 12px; color: var(--color-muted); }
+  .aura-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .aura-choice { position: relative; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+  .aura-swatch {
+    position: relative; display: block; height: 72px; overflow: hidden; border-radius: 8px;
+    background:
+      radial-gradient(70% 90% at 0% 0%, var(--swatch-1) 0%, transparent 72%),
+      radial-gradient(60% 80% at 100% 0%, var(--swatch-2) 0%, transparent 70%),
+      radial-gradient(80% 70% at 50% 110%, var(--swatch-3) 0%, transparent 72%),
+      var(--swatch-base);
+    box-shadow: 0 0 0 1px var(--color-line);
+    transition: box-shadow .15s, transform .2s cubic-bezier(.2,.9,.25,1.2);
+  }
+  .aura-choice:hover .aura-swatch { transform: translateY(-2px); }
+  .aura-choice input:checked ~ .aura-swatch { box-shadow: 0 0 0 2px var(--swatch-fill); }
+  .aura-choice input:focus-visible ~ .aura-swatch { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  .aura-swatch-card {
+    position: absolute; inset: 14px 10px 0 22px; display: flex; flex-direction: column; gap: 5px;
+    padding: 9px 10px; border-radius: 6px 6px 0 0; background: var(--swatch-card);
+    box-shadow: 0 0 0 1px rgb(0 0 51 / .06), 0 6px 14px -6px rgb(0 0 0 / .3);
+  }
+  .aura-swatch-card > i { display: block; height: 3px; border-radius: 2px; background: var(--swatch-ink); opacity: .22; }
+  .aura-swatch-card > i:first-child { width: 46%; background: var(--swatch-fill); opacity: 1; }
+  .aura-swatch-card > i:nth-child(2) { width: 82%; }
+  .aura-swatch-card > i:nth-child(3) { width: 64%; }
+  .aura-name { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-muted); }
+  .aura-choice input:checked ~ .aura-name { color: var(--color-fg); font-weight: 500; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-swatch { transition: none; }
+}

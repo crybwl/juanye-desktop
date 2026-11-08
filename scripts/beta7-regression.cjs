@@ -56,7 +56,9 @@ async function main() {
       globalThis.fetch = (url, options) => { if (!String(url).startsWith(`${endpoint}/`)) { globalThis.__beta7BlockedFetch++; throw Error('External network disabled in beta7 QA'); } return originalFetch(url, options); };
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { globalThis.__beta7OcrCalls++; throw Error('OCR disabled in beta7 QA'); });
     }, endpoint);
-    page = await app.firstWindow(); page.setDefaultTimeout(10000); await page.setViewportSize({ width: 1440, height: 900 });
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(10000); await page.setViewportSize({ width: 1440, height: 900 });
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { externalRequests++; return route.abort('blockedbyclient'); });
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();

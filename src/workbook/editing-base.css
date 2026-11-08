@@ -1,0 +1,94 @@
+/* 富文本字段与公式输入的通用样式：教辅纸面与试卷编辑区共用。 */
+/* ---------- 富文本 ---------- */
+.wb-field { position: relative; min-width: 0; }
+.wb-flow {
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+  outline: none;
+}
+.wb-flow p { margin: 0; }
+.wb-flow :is(ul, ol) { margin: 0; padding-left: 1.6em; }
+.wb-flow ul { list-style: disc; }
+.wb-flow ol { list-style: decimal; }
+.wb-flow li > p { margin: 0; }
+.wb-field[data-empty]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--wb-placeholder, #b3b8c1);
+  pointer-events: none;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.wb-math { border-radius: 3px; transition: background-color 0.15s, box-shadow 0.15s; }
+.wb-math.is-selected { background: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 13%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb-accent, var(--color-accent)) 22%, transparent); }
+.wb-math-empty {
+  display: inline-block;
+  padding: 0 0.45em;
+  border: 1px dashed #b9bec8;
+  border-radius: 3px;
+  color: #9aa0aa;
+  font-family: var(--font-sans);
+  font-size: 0.82em;
+  line-height: 1.5;
+}
+
+.wb-blank {
+  display: inline-block;
+  min-width: 3.5em;
+  padding: 0 0.5em;
+  border-bottom: 1px solid currentColor;
+  line-height: 1.25;
+  text-align: center;
+  text-indent: 0;
+  border-radius: 2px 2px 0 0;
+  transition: background-color 0.15s;
+}
+.wb-blank-answer, .wb-blank-answer .katex { color: transparent; transition: color 0.25s ease; }
+.wb-blank.is-selected { background: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 13%, transparent); }
+
+.wb-dots {
+  -webkit-text-emphasis: filled dot;
+  text-emphasis: filled dot;
+  -webkit-text-emphasis-position: under right;
+  text-emphasis-position: under right;
+}
+
+/* ---------- Desmos 式公式输入（MathLive） ---------- */
+.wb-math.is-editing { padding: 0 1px; border-radius: 4px; background: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 6%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb-accent, var(--color-accent)) 38%, transparent); }
+.wb-mathfield {
+  --caret-color: var(--wb-accent, var(--color-accent));
+  --primary-color: var(--wb-accent, var(--color-accent));
+  --selection-background-color: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 22%, transparent);
+  --contains-highlight-background-color: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 7%, transparent);
+  --smart-fence-color: currentColor;
+  --placeholder-color: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 70%, transparent);
+  display: inline-block;
+  min-width: 1.2em;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.05em;
+  line-height: normal;
+  vertical-align: middle;
+  text-indent: 0;
+}
+.wb-mathfield::part(virtual-keyboard-toggle), .wb-mathfield::part(menu-toggle) { display: none; }
+.wb-mathfield::part(content) { padding: 1px 2px; }
+.wb-mathfield.is-display { display: block; width: 100%; font-size: 1.12em; }
+.wb-mathfield.is-display::part(content) { justify-content: center; padding: 4px 0; }
+.wb-formula-edit { border-radius: 6px; background: color-mix(in srgb, var(--wb-accent, var(--color-accent)) 4%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wb-accent, var(--color-accent)) 32%, transparent); }
+.wb-math-helper .wb-panel-head span { color: #8a909b; }
+.wb-chip-icon { margin-left: auto; padding: 0 7px; }
+
+
+.wb-math.is-display { display: block; margin: 0.3em 0; text-align: center; }
+.wb-math.is-display .katex-display { margin: 0; }

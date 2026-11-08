@@ -45,7 +45,9 @@ async function main() {
   const timer = setTimeout(() => { console.error(`QA timeout at ${stage}`); app?.process().kill(); process.exitCode = 1; }, 150000);
   try {
     app = await _electron.launch({ executablePath: path.join(root, packaged ? 'release/win-unpacked/卷页.exe' : 'node_modules/electron/dist/electron.exe'), args: packaged ? [] : [root], env, timeout: 25000 });
-    const page = await app.firstWindow(); page.setDefaultTimeout(10000);
+    const page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(10000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { network++; return route.abort(); });
     await app.evaluate(({ session, ipcMain }) => {
@@ -55,7 +57,7 @@ async function main() {
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', (_event, options) => { globalThis.__parityRecognitions.push(options.image); return JSON.stringify({ questions: [{ type: 'essay', stem: `本地模拟识别 ${globalThis.__parityRecognitions.length} $x+1=2$`, options: [], score: 12, answer: [], analysis: '' }] }); });
     });
     await page.waitForSelector('textarea');
-    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); });
     await page.reload(); await page.waitForSelector('textarea');
     const sidebar = () => page.getByRole('complementary', { name: '试卷目录', exact: true });
     const draft = () => page.evaluate(() => window.juanye.loadDraft());

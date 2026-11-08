@@ -2,25 +2,17 @@ export {};
 
 declare global {
   interface Window {
-    flushJuanyeBook?: () => Promise<void>;
     juanye?: {
       platform: string;
       renderDrawing(code: string): Promise<{ svg: string; width: number; height: number }>;
-      setAppearance(appearance: { mode: "dark" | "light" | "telegram"; telegramScheme?: "dark" | "light"; opacity?: number }): Promise<{ nativeTransparency: boolean }>;
+      setAppearance(appearance: { mode: "dark" | "light" | "telegram" | "aura"; telegramScheme?: "dark" | "light"; auraScheme?: "dark" | "light"; opacity?: number }): Promise<{ nativeTransparency: boolean }>;
       windowControl(action: "min" | "max" | "close"): void;
       exportPdf(options: { name: string; widthMm: number; heightMm: number }): Promise<{ canceled: boolean; path?: string }>;
-      bookExportPdf(book: import('./book-model').BookProject): Promise<{ canceled: boolean; path?: string; pages?: number; warnings?: string[] }>;
-      bookCancelPdf(): Promise<void>;
       saveText(options: { name: string; content: string; extension: string }): Promise<{ canceled: boolean; path?: string }>;
       loadDraft(): Promise<unknown>;
       saveDraft(draft: unknown): Promise<void>;
-      bookLoad(): Promise<import('./book-model').BookProject | null>;
-      bookSave(book: import('./book-model').BookProject): Promise<void>;
-      bookRestore(): Promise<import('./book-model').BookProject>;
-      bookExport(options: { name: string; bytes: Uint8Array | number[] }): Promise<{ canceled: boolean; path?: string }>;
-      bookVersions(): Promise<{ id: string; title: string; createdAt: string }[]>;
-      bookCheckpoint(book: import('./book-model').BookProject): Promise<{ id: string; title: string; createdAt: string }>;
-      bookVersion(id: string): Promise<import('./book-model').BookProject>;
+      workbookLoad?(): Promise<unknown>;
+      workbookSave?(workbook: import("./workbook/model").Workbook): Promise<void>;
       getModel(): Promise<{ baseUrl: string; model: string; hasKey: boolean }>;
       saveModel(config: { baseUrl: string; model: string; key?: string }): Promise<void>;
       testModel(config: { baseUrl: string; model: string; key?: string }): Promise<{ latencyMs: number }>;

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileInput, Loader2, X } from "lucide-react";
+import { FileInput, FileUp, Loader2 } from "lucide-react";
 import type { Exam, Question } from "../types";
 import { TYPE_META } from "../data";
 import { readDocumentText } from "../documents";
 import { parsePaperImport, type ImportKind, type ImportPlan, type SolutionPlacement } from "../paper-import";
 import { matchSolutions, type SolutionMatch } from "../import-application";
 import { MathText, plain } from "../math";
-import { Button, Modal, Segmented } from "../ui";
+import { Button, Modal, Segmented, cx } from "../ui";
+import { DialogHeader } from "./DialogChrome";
 import { Checkbox } from "./Checkbox";
 import { Select } from "./Select";
 
@@ -14,6 +15,8 @@ export type ImportCommit =
   | { kind: "questions" | "annotated"; questions: Question[] }
   | { kind: "solutions"; matches: SolutionMatch[]; selected: Set<number>; overwrite: boolean };
 const titles: Record<ImportKind, string> = { questions: "导入题目文件", solutions: "导入解析文件", annotated: "导入解析版试卷" };
+const subtitles: Record<ImportKind, string> = { questions: "按题号拆分成题目，导入前可逐题勾选和预览", solutions: "按题号把答案与解析匹配到当前试卷", annotated: "题目和答案解析在同一份文件里，一次导入" };
+const FORMATS = "TXT、Markdown、Word、PDF、JSON";
 
 export function ImportDialog({ kind, exam, onClose, onCommit }: { kind: ImportKind; exam: Exam; onClose: () => void; onCommit: (value: ImportCommit) => void }) {
   const [placement, setPlacement] = useState<SolutionPlacement>("after");
@@ -25,6 +28,7 @@ export function ImportDialog({ kind, exam, onClose, onCommit }: { kind: ImportKi
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [targets, setTargets] = useState<Record<number, string>>({});
   const [overwrite, setOverwrite] = useState(false);
+  const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
   useEffect(() => () => { generation.current++; }, []);
@@ -68,26 +72,30 @@ export function ImportDialog({ kind, exam, onClose, onCommit }: { kind: ImportKi
     } catch (error) { setCommitError(error instanceof Error ? error.message : String(error)); }
   };
   return <Modal open onClose={onClose} label={titles[kind]} className="flex max-h-[88vh] w-[940px] max-w-full flex-col">
-    <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-5">
-      <FileInput size={19} className="text-accent" /><h2 className="text-[15px] font-semibold">{titles[kind]}</h2>
-      <button aria-label="关闭导入" onClick={onClose} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/5"><X size={17} /></button>
-    </div>
-    <div className="space-y-3 border-b border-line px-5 py-4">
+    <DialogHeader title={titles[kind]} subtitle={subtitles[kind]} closeLabel="关闭导入" onClose={onClose} />
+    <div className="space-y-3 border-b border-line px-5 py-3">
       {kind === "annotated" && <div role="group" aria-label="答案解析位置" className="flex items-center gap-4"><span className="text-[13px] text-muted">答案解析位置</span><Segmented size="sm" value={placement} onChange={setPlacement} options={[{ value: "after", label: "题后" }, { value: "end", label: "卷尾" }]} /></div>}
-      <div className="flex items-center gap-3"><Button size="sm" variant="outline" disabled={reading} onClick={() => input.current?.click()} icon={reading ? <Loader2 size={14} className="animate-spin" /> : <FileInput size={14} />}>选择文件</Button><span className="min-w-0 truncate text-[12px] text-muted">{name || "TXT / Markdown / DOCX / PDF / JSON"}</span></div>
+      <div className="flex items-center gap-3"><Button size="sm" variant="outline" disabled={reading} onClick={() => input.current?.click()} icon={reading ? <Loader2 size={14} className="animate-spin" /> : <FileInput size={14} />}>{name ? "重新选择" : "选择文件"}</Button><span className="min-w-0 truncate text-[12px] text-muted">{name || FORMATS}</span></div>
       <input ref={input} data-import-file aria-label="导入文件" type="file" accept=".txt,.md,.markdown,.docx,.pdf,.json,.juanye" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void load(file); }} />
       {(readError || parsed.error || commitError) && <p role="alert" className="text-[12px] text-danger">{readError || parsed.error || commitError}</p>}
       {plan?.warnings.map((warning, index) => <p key={index} role="status" className="text-[12px] text-warn">{warning}</p>)}
       {kind === "solutions" && !flat.length && <p className="text-[12px] text-warn">请先导入题目，再匹配解析。</p>}
     </div>
-    <div className="min-h-[180px] flex-1 overflow-y-auto px-5 py-4">
-      {!plan && !parsed.error && !readError && <div className="py-10 text-center text-[13px] text-faint">{reading ? "正在读取…" : "请选择文件"}</div>}
-      {kind !== "solutions" && plan?.questions.map(({ number, question }, index) => <section key={question.id} data-import-number={number} className="mb-3 rounded-xl border border-line p-3 text-[12.5px]">
-        <div className="flex items-center gap-2"><Checkbox aria-label={`导入第 ${number} 题`} checked={selected.has(index)} onCheckedChange={value => choose(index, value === true)} /><b>第 {number} 题</b><span className="text-muted">{TYPE_META[question.type].label} · {question.score} 分</span></div>
-        <p className="mt-2 line-clamp-2 text-muted">{plain(question.stem)}</p>
-        <details className="mt-2"><summary className="cursor-pointer text-accent">查看内容</summary><div className="mt-3 space-y-2 leading-relaxed"><MathText text={question.stem} />{question.options.map((option, i) => <div key={i}>{String.fromCharCode(65 + i)}. <MathText text={option} /></div>)}{question.answer.length > 0 && <div><b>答案：</b><MathText text={question.answer.join("；")} /></div>}{question.analysis && <div><b>解析：</b><MathText text={question.analysis} /></div>}{question.source && <p>来源：{question.source}</p>}{question.knowledge?.length ? <p>知识点：{question.knowledge.join("、")}</p> : null}{question.figures?.length ? <p>题图：{question.figures.length} 张</p> : null}</div></details>
+    <div className={cx("import-body min-h-[220px] flex-1 overflow-y-auto px-5 py-4", over && "import-body-over")}
+      onDragOver={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setOver(true); } }}
+      onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(false); }}
+      onDrop={event => { if (!event.dataTransfer.files.length) return; event.preventDefault(); setOver(false); const file = event.dataTransfer.files[0]; if (file) void load(file); }}>
+      {!plan && !parsed.error && !readError && <button type="button" className="import-dropzone" data-over={over || undefined} disabled={reading} onClick={() => input.current?.click()}>
+        <span className="import-dropzone-icon">{reading ? <Loader2 size={22} className="animate-spin" /> : <FileUp size={22} />}</span>
+        <span className="text-[14px] font-medium text-fg">{reading ? "正在读取…" : over ? "松开即可导入" : "拖入文件，或点击选择"}</span>
+        <span className="text-[12px] text-faint">{FORMATS}</span>
+      </button>}
+      {kind !== "solutions" && plan?.questions.map(({ number, question }, index) => <section key={question.id} data-import-number={number} className="import-row text-[13px]">
+        <div className="flex items-center gap-2"><Checkbox aria-label={`导入第 ${number} 题`} checked={selected.has(index)} onCheckedChange={value => choose(index, value === true)} /><b>第 {number} 题</b><span className="text-[12px] text-faint">{TYPE_META[question.type].label} · {question.score} 分</span></div>
+        <p className="mt-1.5 line-clamp-2 pl-6 text-muted">{plain(question.stem)}</p>
+        <details className="mt-1.5 pl-6"><summary className="cursor-pointer text-[12px] text-accent">查看内容</summary><div className="mt-3 space-y-2 leading-relaxed"><MathText text={question.stem} />{question.options.map((option, i) => <div key={i}>{String.fromCharCode(65 + i)}. <MathText text={option} /></div>)}{question.answer.length > 0 && <div><b>答案：</b><MathText text={question.answer.join("；")} /></div>}{question.analysis && <div><b>解析：</b><MathText text={question.analysis} /></div>}{question.source && <p>来源：{question.source}</p>}{question.knowledge?.length ? <p>知识点：{question.knowledge.join("、")}</p> : null}{question.figures?.length ? <p>题图：{question.figures.length} 张</p> : null}</div></details>
       </section>)}
-      {kind === "solutions" && matches.map(match => <section key={match.index} data-import-number={match.entry.number} className="mb-3 rounded-xl border border-line p-3 text-[12.5px]">
+      {kind === "solutions" && matches.map(match => <section key={match.index} data-import-number={match.entry.number} className="import-row text-[13px]">
         <div className="flex items-center gap-2"><Checkbox aria-label={`应用第 ${match.entry.number} 题解析`} checked={selected.has(match.index)} disabled={!match.target || !!match.reason} onCheckedChange={value => choose(match.index, value === true)} /><b>原第 {match.entry.number} 题</b><span className="ml-auto text-muted">{match.targetNumber ? `当前第 ${match.targetNumber} 题` : "未匹配"}</span></div>
         <Select aria-label={`第 ${match.entry.number} 题的匹配目标`} className="mt-2 w-full" value={targets[match.index] ?? match.target?.id ?? ""} onValueChange={id => { setTargets(previous => ({ ...previous, [match.index]: id })); choose(match.index, !!id); }} options={[{ value: "", label: "不匹配" }, ...flat.map((q, i) => ({ value: q.id, label: `第 ${i + 1} 题${q.importNumber ? `（原 ${q.importNumber}）` : ""} · ${plain(q.stem).slice(0, 55) || "空题干"}` }))]} />
         {match.reason && <p className="mt-2 text-warn">{match.reason}</p>}
@@ -97,7 +105,7 @@ export function ImportDialog({ kind, exam, onClose, onCommit }: { kind: ImportKi
       </section>)}
       {plan && !(kind === "solutions" ? matches.length : plan.questions.length) && <p className="py-8 text-center text-[13px] text-faint">没有可导入的内容</p>}
     </div>
-    <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line px-5 py-4">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-5 py-3">
       {kind === "solutions" && <label className="mr-auto flex cursor-pointer items-center gap-2 text-[12px] text-muted"><Checkbox aria-label="允许覆盖已有内容" checked={overwrite} onCheckedChange={value => {
         const allowed = value === true; setOverwrite(allowed);
         setSelected(previous => {
@@ -107,7 +115,7 @@ export function ImportDialog({ kind, exam, onClose, onCommit }: { kind: ImportKi
         });
       }} />允许覆盖已有内容</label>}
       {kind !== "solutions" && <span className="mr-auto text-[12px] text-muted">已选 {count} 道题</span>}
-      <Button variant="outline" onClick={onClose}>取消</Button><Button variant="primary" disabled={reading || !count || !!blocked} onClick={commit}>{kind === "solutions" ? `应用 ${count} 道解析` : `导入 ${count} 道题`}</Button>
+      <Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={reading || !count || !!blocked} onClick={commit}>{kind === "solutions" ? `应用 ${count} 道解析` : `导入 ${count} 道题`}</Button>
     </div>
   </Modal>;
 }

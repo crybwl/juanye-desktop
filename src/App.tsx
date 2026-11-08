@@ -1,56 +1,84 @@
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, LoaderCircle, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle } from "lucide-react";
+import { AlertTriangle, Check, Eye, FileCode2, FileDown, FileInput, History as HistoryIcon, ListChecks, LoaderCircle, PenLine, Plus, ScanText, SlidersHorizontal, Sparkles, Hash, Undo2, Redo2, FolderTree, BookOpen, BarChart3, Shuffle, ChevronDown, NotebookPen, MountainSnow, Maximize2, Minimize2 } from "lucide-react";
 import type { Exam, Mode, PreviewView, Question, QType } from "./types";
 import { defaultLayout, sampleExam, uid, TYPE_META, PAPER_MM } from "./data";
 import { plain } from "./math";
-import { Button, SharedPill, ToastProvider, cx, softSpring, useToast } from "./ui";
-import { TitleBar } from "./components/TitleBar";
+import { Button, IconButton, Segmented, ToastProvider, cx, softSpring, useToast } from "./ui";
+import { SaveBadge, TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
 import { PreviewPane } from "./components/PreviewPane";
 import { LayoutPanel } from "./components/LayoutPanel";
-import { SettingsDialog, ACCENTS } from "./components/Settings";
+import { ACCENTS } from "./accents";
 import { CommandPalette, type Command } from "./components/CommandPalette";
-import { OcrDialog } from "./components/Ocr";
-import { HistorySheet } from "./components/History";
 import { AnswerCard, PaperPages } from "./components/Paper";
-import { applyAccentPalette, setAppearance } from "./appearance";
+import { applyAccentPalette, setAppearance, withThemeTransition } from "./appearance";
+import { setAura } from "./aura";
 import { setTelegramScheme } from "./telegram-scheme";
 import { exportProject, exportTex, parseProject } from "./documents";
 import { exportMarkdown } from "./markdown-export";
 import type { ImportKind } from "./paper-import";
 import { applySolutionMatches } from "./import-application";
-import { ImportDialog, type ImportCommit } from "./components/ImportDialog";
+import type { ImportCommit } from "./components/ImportDialog";
 import { loadWorkspace, saveWorkspace, saveText, type Snapshot, type WorkspaceData } from "./storage";
 import { useWorkspaceUndo } from "./useWorkspaceUndo";
 import { copyQuestions, defaultOptions, defaultScore, transferQuestions } from "./structure";
-import { StructurePanel } from "./components/StructurePanel";
-import { BatchPanel } from "./components/BatchPanel";
 import { prepareDrawings, waitForDrawings } from "./drawing";
-import { QuestionBankDialog } from "./components/QuestionBank";
 import { BANK_DRAG_MIME, parseBankDrag, resolveBankDrag } from "./question-bank";
-import { AbPaperDialog, ExamAnalysisDialog } from "./components/ExamTools";
-import { GenerateQuestionDialog } from "./components/GenerateQuestion";
 import type { GenerationAction } from "./generated-question";
 import { isOcrPasteTarget } from "./ocr-queue";
-import { ExportCenter, type ExportFormat } from "./components/ExportCenter";
+import type { ExportFormat } from "./components/ExportCenter";
 import { examSnapshotFingerprint, missingReportMetadataPatches, previewMetadataPatches, reportMatchesExam, type ExamAiReport, type ExamMetadataPatch } from "./exam-ai";
 import { ExamMetadataReceipts } from "./exam-ai-autofill";
 import { BankSourceNotice } from "./components/BankSourceNotice";
-import { patchWorkspaceQuestion } from "./workspace-edits";
+import { AUTO_SECTION, distributeByType, patchWorkspaceQuestion } from "./workspace-edits";
 import { SceneBackdrop } from "./SceneBackdrop";
 import { WorkspaceView } from "./components/WorkspaceView";
+import type { WorkbookHandle } from "./workbook/WorkbookWorkspace";
 import { ExamAiSession } from "./exam-ai-session";
 import "./workspace-motion.css";
-import type { BookWorkspaceHandle } from "./components/BookWorkspace";
+import "./components/workspace-tools.css";
 
 const BankWorkspace = lazy(() => import("./components/BankWorkspace").then(module => ({ default: module.BankWorkspace })));
-const BookWorkspace = lazy(() => import("./components/BookWorkspace").then(module => ({ default: module.BookWorkspace })));
+const WorkbookWorkspace = lazy(() => import("./workbook/WorkbookWorkspace").then(module => ({ default: module.WorkbookWorkspace })));
+// 低频弹窗按需加载：首屏包只包含编辑与预览。
+const SettingsDialog = lazy(() => import("./components/Settings").then(module => ({ default: module.SettingsDialog })));
+const OcrDialog = lazy(() => import("./components/Ocr").then(module => ({ default: module.OcrDialog })));
+const HistorySheet = lazy(() => import("./components/History").then(module => ({ default: module.HistorySheet })));
+const ImportDialog = lazy(() => import("./components/ImportDialog").then(module => ({ default: module.ImportDialog })));
+const StructurePanel = lazy(() => import("./components/StructurePanel").then(module => ({ default: module.StructurePanel })));
+const BatchPanel = lazy(() => import("./components/BatchPanel").then(module => ({ default: module.BatchPanel })));
+const QuestionBankDialog = lazy(() => import("./components/QuestionBank").then(module => ({ default: module.QuestionBankDialog })));
+const ExamAnalysisDialog = lazy(() => import("./components/ExamTools").then(module => ({ default: module.ExamAnalysisDialog })));
+const AbPaperDialog = lazy(() => import("./components/ExamTools").then(module => ({ default: module.AbPaperDialog })));
+const GenerateQuestionDialog = lazy(() => import("./components/GenerateQuestion").then(module => ({ default: module.GenerateQuestionDialog })));
+const ExportCenter = lazy(() => import("./components/ExportCenter").then(module => ({ default: module.ExportCenter })));
+/** 打开过一次后保持挂载，关闭时仍能播放原有的退出动画。 */
+function useEverTrue(value: boolean) {
+  const [ever, setEver] = useState(value);
+  if (value && !ever) setEver(true);
+  return ever || value;
+}
 const WorkspaceSidebar = memo(Sidebar);
 const WorkspaceLayoutPanel = memo(LayoutPanel);
 const EMPTY_COMMANDS: Command[] = [];
+
+const LAST_QUESTION_KEY = "juanye.last-question.v1";
+const SESSION_KEY = "juanye.session.v1";
+/** 应用重新打开时回到上次编辑的题目；窗口内重载（sessionStorage 仍在）照旧从第 1 题开始。 */
+function resumeQuestion(exam: Exam): string | null {
+  const ids = exam.sections.flatMap(section => section.questions.map(question => question.id));
+  try {
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+      const saved = JSON.parse(localStorage.getItem(LAST_QUESTION_KEY) || "null") as { examId?: string; questionId?: string } | null;
+      if (saved && saved.examId === exam.id && saved.questionId && ids.includes(saved.questionId)) return saved.questionId;
+    }
+  } catch { /* 存储不可用时从第 1 题开始 */ }
+  return ids[0] ?? null;
+}
+function markSessionStarted() { try { sessionStorage.setItem(SESSION_KEY, "1"); } catch { /* ignore */ } }
 
 export default function App() {
   const [motionPref, setMotionPref] = useState<"full" | "reduced">("full");
@@ -63,19 +91,23 @@ export default function App() {
   );
 }
 
+/** 编辑 / 排版预览切换：独立 memo，打字时其高亮药丸不参与布局测量。 */
+const MODE_OPTIONS = [{ value: "edit" as Mode, label: "编辑", icon: <PenLine size={13} /> }, { value: "preview" as Mode, label: "排版预览", icon: <Eye size={13} /> }];
+const ModeSwitch = memo(function ModeSwitch({ mode, setMode }: { mode: Mode; setMode: (mode: Mode) => void }) {
+  return <Segmented size="sm" value={mode} onChange={setMode} options={MODE_OPTIONS} />;
+});
+
 function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduced"; setMotionPref: (v: "full" | "reduced") => void }) {
   const toast = useToast();
   const systemReducedMotion = useReducedMotion();
   const reducedMotion = motionPref === "reduced" || !!systemReducedMotion;
   const [initialExam] = useState(() => ({ ...sampleExam, id: uid() }));
   const { exam, layout, setExam, setLayout, reset: resetWorkspace, undo, redo, canUndo, canRedo } = useWorkspaceUndo(initialExam, defaultLayout);
-  const [workArea, setWorkArea] = useState<"exam" | "bank" | "book">("exam");
-  const [bookVisited, setBookVisited] = useState(false);
-  const bookWorkspace = useRef<BookWorkspaceHandle>(null);
-  const [bookStatus, setBookStatus] = useState({ title: "教辅编辑台", saving: false, error: "" });
-  useEffect(() => { if (workArea === "book") setBookVisited(true); }, [workArea]);
+  const [workArea, setWorkArea] = useState<"exam" | "bank" | "workbook">("exam");
   const [bankVisited, setBankVisited] = useState(false);
-  useEffect(() => { if (workArea === "bank") setBankVisited(true); }, [workArea]);
+  const [workbookVisited, setWorkbookVisited] = useState(false);
+  const workbookHandle = useRef<WorkbookHandle>(null);
+  useEffect(() => { if (workArea === "bank") setBankVisited(true); if (workArea === "workbook") setWorkbookVisited(true); }, [workArea]);
   const [exportCenter, setExportCenter] = useState(false);
   const [printName, setPrintName] = useState("");
   const wordExporting = useRef(false);
@@ -120,8 +152,11 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const [printing, setPrinting] = useState(false);
   const [accent, setAccent] = useState(0);
   const [animating, setAnimating] = useState(false);
+  // 专注编辑：收起目录与预览，只留编辑区；不持久化，重开应用恢复常规布局。
+  const [focusMode, setFocusMode] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(() => {
-    try { return localStorage.getItem("juanye.sidebar-expanded.v1") === "true"; }
+    // v2：目录默认展开，能直接看到题号与题干摘要。
+    try { const stored = localStorage.getItem("juanye.sidebar-expanded.v2"); return stored === null ? true : stored === "true"; }
     catch { return false; }
   });
   const importRef = useRef<HTMLInputElement>(null);
@@ -172,6 +207,14 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     });
   }, [flat, indexById, activeId]);
 
+  // 记住正在编辑的题目：下次打开应用时回到这里（同一窗口内重载不改变原有行为）。
+  useEffect(() => {
+    if (!ready || !activeId) return;
+    try { localStorage.setItem(LAST_QUESTION_KEY, JSON.stringify({ examId: exam.id, questionId: activeId })); } catch { /* 只是便利功能 */ }
+  }, [ready, activeId, exam.id]);
+  // 任务栏与 Alt+Tab 里显示当前试卷名。
+  useEffect(() => { const title = exam.title?.trim(); document.title = title ? `${title} - 卷页` : "卷页"; }, [exam.title]);
+
   const select = useCallback(
     (id: string | null) => {
       if (id) {
@@ -194,6 +237,13 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     setModeRaw(m);
     window.setTimeout(() => setAnimating(false), 750);
   }, [mode]);
+  // 预览模式下按专注编辑：直接进入编辑区专注；再按一次回到常规三栏。
+  const toggleFocus = useCallback(() => {
+    if (mode !== "edit") { setMode("edit"); setFocusMode(true); return; }
+    setAnimating(true);
+    window.setTimeout(() => setAnimating(false), 750);
+    setFocusMode(value => !value);
+  }, [mode, setMode]);
 
   const updateQ = useCallback((id: string, patch: Partial<Question>) => {
     setExam(e => patchWorkspaceQuestion(e, id, patch));
@@ -212,6 +262,14 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   }, [setExam]);
 
   const insertBankQuestions = useCallback((questions: Question[], targetSectionId: string) => {
+    if (targetSectionId === AUTO_SECTION) {
+      if (!questions.length) throw Error("选题篮为空");
+      if (count + questions.length > 2000) throw Error("整卷最多2000道题，请分卷导入");
+      setExam(previous => distributeByType(previous, questions));
+      setActiveId(questions[0].id); setMode("edit");
+      toast({ title: `已按题型加入 ${questions.length} 道题` });
+      return;
+    }
     const target = exam.sections.find(section => section.id === targetSectionId);
     if (!questions.length || !target) throw Error("请选择有效的目标大题");
     if (target.questions.length + questions.length > 1000 || count + questions.length > 2000) throw Error("单个大题最多1000道题，整卷最多2000道题，请分卷导入");
@@ -332,11 +390,12 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         if (data.version !== 1 || !Array.isArray(data.exam?.sections) || !data.layout?.paper || !Array.isArray(data.history)) throw new Error("本地草稿格式无效，未覆盖原文件");
         const loadedExam = { ...data.exam, id: data.exam.id || uid() };
         resetWorkspace({ exam: loadedExam, layout: data.layout }); setSnapshots(data.history);
-        setActiveId(data.exam.sections.flatMap(s => s.questions)[0]?.id ?? null);
+        setActiveId(resumeQuestion(loadedExam));
         lastSaved.current = JSON.stringify({ exam: data.exam, layout: data.layout });
         // Legacy drafts still need one save to persist their newly assigned ID.
         if (data.exam.id) lastSavedFrame.current = { exam: loadedExam, layout: data.layout };
       }
+      markSessionStarted();
       setReady(true);
     }).catch(error => { if (live) { setSaveError(String(error.message || error)); toast({ title: "草稿载入失败", desc: String(error.message || error), tone: "warn" }); } });
     return () => { live = false; };
@@ -481,11 +540,16 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     const k = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const editing = e.target instanceof HTMLElement && Boolean(e.target.closest("input,textarea,[contenteditable='true']"));
-      if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), setPalette((v) => !v));
+      if (e.defaultPrevented) return;
+      if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault(); setPalette(v => !v);
+      }
       else if (mod && e.key === ",") (e.preventDefault(), setSettings(true));
       else if (workArea !== "exam") return;
       else if (mod && e.key === "1") (e.preventDefault(), setMode("edit"));
       else if (mod && e.key === "2") (e.preventDefault(), setMode("preview"));
+      else if (mod && e.shiftKey && e.key.toLowerCase() === "f") (e.preventDefault(), toggleFocus());
+      else if (e.key === "Escape" && focusMode && !editing && !document.querySelector('[role="dialog"],[data-select-menu]')) (e.preventDefault(), setFocusMode(false));
       else if (mod && e.key.toLowerCase() === "e") (e.preventDefault(), exportPdf());
       else if (mod && e.key.toLowerCase() === "n") (e.preventDefault(), newQuestion());
       else if (mod && e.key.toLowerCase() === "z" && !editing) (e.preventDefault(), e.shiftKey ? redo() : undo());
@@ -505,24 +569,51 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
     ro.observe(main.current!);
     return () => ro.disconnect();
   }, []);
-  const outlineFull = W < 1280 ? 340 : 364;
+  const outlineFull = W < 1280 ? 304 : 312;
   const outlineWidth = sidebarExpanded ? outlineFull : 76;
-  const previewCandidate = Math.round(Math.min(620, Math.max(400, W * 0.36)));
-  const previewEdit = W < 1060 || W - outlineWidth - 520 < 320 ? 0 : Math.min(previewCandidate, W - outlineWidth - 520);
+  // 预览宽度按比例分配（可拖动分隔线调整并记住），编辑区至少保留 520px。
+  const [previewRatio, setPreviewRatio] = useState(() => { try { const value = Number(localStorage.getItem("juanye.preview-ratio.v1")); return value >= 0.25 && value <= 0.72 ? value : 0.5; } catch { return 0.5; } });
+  const [resizing, setResizing] = useState(false);
+  const availableWidth = W - outlineWidth;
+  const previewEdit = W < 1060 || availableWidth - 520 < 320 ? 0 : Math.round(Math.min(availableWidth - 520, Math.max(360, availableWidth * previewRatio)));
   const editorFull = Math.max(520, W - outlineWidth - previewEdit);
   const cols =
     mode === "edit"
-      ? { outline: outlineWidth, layout: 0, editor: W - outlineWidth - previewEdit, preview: previewEdit }
+      ? focusMode
+        ? { outline: 0, layout: 0, editor: W, preview: 0 }
+        : { outline: outlineWidth, layout: 0, editor: W - outlineWidth - previewEdit, preview: previewEdit }
       : { outline: 0, layout: 340, editor: 0, preview: W - 340 };
-  const colT = animating ? { type: "spring" as const, stiffness: 210, damping: 30 } : { duration: 0.24, ease: [0.2, 0.8, 0.2, 1] as const };
+  const colT = resizing ? { duration: 0 } : animating ? { type: "spring" as const, stiffness: 210, damping: 30 } : { duration: 0.24, ease: [0.2, 0.8, 0.2, 1] as const };
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !main.current) return;
+    event.preventDefault();
+    const handle = event.currentTarget, right = main.current.getBoundingClientRect().right;
+    handle.setPointerCapture(event.pointerId);
+    setResizing(true);
+    let ratio = previewRatio;
+    const move = (e: PointerEvent) => { ratio = Math.min(0.72, Math.max(0.25, (right - e.clientX) / Math.max(1, availableWidth))); setPreviewRatio(ratio); };
+    const up = () => {
+      handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); handle.removeEventListener("pointercancel", up);
+      setResizing(false);
+      try { localStorage.setItem("juanye.preview-ratio.v1", ratio.toFixed(3)); } catch { /* 偏好仅本机便利 */ }
+    };
+    handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", up); handle.addEventListener("pointercancel", up);
+  };
   const expandSidebar = useCallback((expanded: boolean) => {
     setSidebarExpanded(expanded);
     if (!expanded) { setBatch(false); setSelected(new Set()); }
   }, []);
   useEffect(() => {
-    try { localStorage.setItem("juanye.sidebar-expanded.v1", String(sidebarExpanded)); }
+    try { localStorage.setItem("juanye.sidebar-expanded.v2", String(sidebarExpanded)); }
     catch { /* UI state remains usable when preference storage is unavailable. */ }
   }, [sidebarExpanded]);
+
+  const openPalette = useCallback(() => setPalette(true), []);
+  const openSettings = useCallback(() => setSettings(true), []);
+
+  const settingsMounted = useEverTrue(settings);
+  const ocrMounted = useEverTrue(ocr);
+  const historyMounted = useEverTrue(history);
 
   /* ---------- 命令面板 ---------- */
   // Avoid formatting every question's search title on each keystroke while closed.
@@ -537,6 +628,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
       { id: "batch", group: "功能", title: "批量编辑", icon: <ListChecks size={15} />, run: () => { setMode("edit"); setSidebarExpanded(true); setBatch(true); } },
       { id: "structure", group: "功能", title: "管理大题", icon: <FolderTree size={15} />, run: () => { setSidebarExpanded(true); setStructure(true); } },
       { id: "bank", group: "功能", title: "本地题库", icon: <BookOpen size={15} />, run: () => setWorkArea("bank") },
+      { id: "workbook", group: "功能", title: "教辅编辑台", icon: <NotebookPen size={15} />, run: () => setWorkArea("workbook") },
       { id: "bank-picker", group: "功能", title: "从题库选题", icon: <BookOpen size={15} />, run: () => { setWorkArea("exam"); setBank(true); } },
       { id: "exam-analysis", group: "功能", title: "试卷分析与双向细目表", icon: <BarChart3 size={15} />, run: openExamAnalysis },
       { id: "ab-paper", group: "功能", title: "生成 B 卷（选项乱序）", icon: <Shuffle size={15} />, run: () => setAbPaper(true) },
@@ -560,11 +652,14 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         if (!window.confirm("新建空白试卷？当前试卷会保留在历史记录中。")) return;
         void persistRef.current().then(() => { setExam({ id: uid(), title: "未命名试卷", subtitle: "", duration: 120, notice: [], sections: (["single", "multi", "blank", "essay"] as QType[]).map(type => ({ id: uid(), type, title: TYPE_META[type].label, note: "", questions: [] })) }); setActiveId(null); setWorkArea("exam"); });
       } },
-      { id: "theme-dark", group: "外观", title: "深色模式", icon: <Eye size={15} />, run: () => setAppearance("dark") },
-      { id: "theme-light", group: "外观", title: "淡色模式", icon: <Eye size={15} />, run: () => setAppearance("light") },
-      { id: "theme-telegram", group: "外观", title: "Telegram 深色", icon: <Sparkles size={15} />, run: () => { setTelegramScheme("dark"); setAppearance("telegram"); } },
-      { id: "theme-telegram-light", group: "外观", title: "Telegram 浅色", icon: <Sparkles size={15} />, run: () => { setTelegramScheme("light"); setAppearance("telegram"); } },
+      { id: "theme-dark", group: "外观", title: "深色模式", icon: <Eye size={15} />, run: () => withThemeTransition(() => setAppearance("dark")) },
+      { id: "theme-light", group: "外观", title: "淡色模式", icon: <Eye size={15} />, run: () => withThemeTransition(() => setAppearance("light")) },
+      { id: "theme-aura-light", group: "外观", title: "晴岚 浅色", icon: <MountainSnow size={15} />, run: () => withThemeTransition(() => { setAura({ scheme: "light" }); setAppearance("aura"); }) },
+      { id: "theme-aura-dark", group: "外观", title: "晴岚 深色", icon: <MountainSnow size={15} />, run: () => withThemeTransition(() => { setAura({ scheme: "dark" }); setAppearance("aura"); }) },
+      { id: "theme-telegram", group: "外观", title: "Telegram 深色", icon: <Sparkles size={15} />, run: () => withThemeTransition(() => { setTelegramScheme("dark"); setAppearance("telegram"); }) },
+      { id: "theme-telegram-light", group: "外观", title: "Telegram 浅色", icon: <Sparkles size={15} />, run: () => withThemeTransition(() => { setTelegramScheme("light"); setAppearance("telegram"); }) },
       { id: "edit", group: "视图", title: "切换到编辑", icon: <PenLine size={15} />, kbd: "Ctrl 1", run: () => setMode("edit") },
+      { id: "focus", group: "视图", title: focusMode && mode === "edit" ? "退出专注编辑" : "专注编辑（收起目录和预览）", icon: <Maximize2 size={15} />, kbd: "Ctrl Shift F", run: toggleFocus },
       { id: "prev", group: "视图", title: "切换到排版预览", icon: <Eye size={15} />, run: () => setMode("preview") },
       { id: "model", group: "设置", title: "Qwen 模型设置", icon: <Sparkles size={15} />, kbd: "Ctrl ,", run: () => setSettings(true) },
       ...flat.map((x, i) => ({
@@ -600,6 +695,10 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
   const openOcr = useCallback(() => setOcr(true), []);
   const openStructure = useCallback(() => setStructure(true), []);
   const editMode = useCallback(() => setMode("edit"), [setMode]);
+  // 编辑模式下排版面板宽度为 0：沿用进入编辑前的试卷，打字时不重渲染（其分段控件会触发整树布局测量）。
+  const layoutPanelSnapshot = useRef(exam);
+  if (mode === "preview") layoutPanelSnapshot.current = exam;
+  const layoutPanelExam = layoutPanelSnapshot.current;
   const toggleLayout = useCallback(() => setMode(mode === "edit" ? "preview" : "edit"), [setMode, mode]);
   const previewTex = useCallback(() => { void exportSource(); }, [exportSource]);
   const reorder = useCallback((sectionId: string, questions: Question[]) => setExam(exam => ({ ...exam, sections: exam.sections.map(section => section.id === sectionId ? { ...section, questions } : section) })), [setExam]);
@@ -637,30 +736,36 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         catch (error) { toast({ title: "题库拖入失败", desc: String(error), tone: "warn" }); }
       }}>
       <SceneBackdrop />
-      <TitleBar
-        title={workArea === "book" ? bookStatus.title : exam.title}
-        mode={mode}
-        setMode={setMode}
-        saving={workArea === "book" ? bookStatus.saving : saving || !ready}
-        saveError={workArea === "book" ? bookStatus.error : saveError}
-        onPalette={() => setPalette(true)}
-        onHistory={() => workArea === "book" ? bookWorkspace.current?.openHistory() : setHistory(true)}
-        onSettings={() => setSettings(true)}
-        onExport={() => workArea === "book" ? bookWorkspace.current?.exportPdf() : exportPdf()}
-        onExportMore={() => workArea === "book" ? bookWorkspace.current?.exportProject() : setExportCenter(true)}
-        workspace={workArea}
-      />
-
-      <nav aria-label="工作区" className="workspace-nav relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line px-4">
-        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "exam" ? "page" : undefined} icon={<>{workArea === "exam" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<PenLine size={15} /></>} onClick={() => setWorkArea("exam")}>组卷</Button>
-        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "bank" ? "page" : undefined} icon={<>{workArea === "bank" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("bank")}>本地题库</Button>
-        <Button size="sm" variant="ghost" className="workspace-nav-tab" aria-current={workArea === "book" ? "page" : undefined} icon={<>{workArea === "book" && <SharedPill layoutId="workspace-nav-pill" className="workspace-nav-pill" aria-hidden="true" transition={softSpring} />}<BookOpen size={15} /></>} onClick={() => setWorkArea("book")}>教辅编辑台</Button>
-        <div key={workArea} className="workspace-nav-tools ml-auto flex items-center gap-1">{workArea === "exam" ? <>
-          <Button variant="ghost" size="sm" icon={<BookOpen size={14} />} onClick={() => setBank(true)}>从题库选题</Button>
-          <Button variant="ghost" size="sm" icon={<BarChart3 size={14} />} onClick={openExamAnalysis}>试卷分析</Button>
-          <Button variant="ghost" size="sm" icon={<Shuffle size={14} />} onClick={() => setAbPaper(true)}><span className="nav-secondary-label">生成 </span>B 卷</Button>
-        </> : workArea === "bank" ? <span className="px-2 text-[12px] text-muted">{exam.title} · {count} 题 · {score} 分</span> : <span className="px-2 text-[12px] text-muted">书稿与试卷独立保存</span>}</div>
-      </nav>
+      <TitleBar workspace={workArea} onWorkspace={setWorkArea} onPalette={openPalette} onSettings={openSettings}>
+        {/* 当前工作区工具：与标题栏同一行，只放当前工作区自己的内容 */}
+        <div key={workArea} className="workspace-nav-tools flex h-full min-w-0 flex-1 items-center gap-1">{workArea === "exam" ? <>
+          <span className="app-header-sep" aria-hidden="true" />
+          <button onClick={() => setPalette(true)} aria-label="项目与功能" title="切换项目、新建或导入" className="app-doc-title flex min-w-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[13px] font-medium text-fg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/50">
+            <span className="truncate">{exam.title}</span>
+            <ChevronDown size={13} className="shrink-0 text-faint" />
+          </button>
+          <SaveBadge saving={saving || !ready} error={saveError} />
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <ModeSwitch mode={mode} setMode={setMode} />
+            <IconButton label={focusMode ? "退出专注编辑" : "专注编辑"} kbd="Ctrl Shift F" active={focusMode && mode === "edit"} aria-pressed={focusMode && mode === "edit"} onClick={toggleFocus}>{focusMode && mode === "edit" ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</IconButton>
+            <span className="app-header-sep" aria-hidden="true" />
+            <Button variant="ghost" size="sm" aria-label="从题库选题" icon={<BookOpen size={14} />} onClick={() => setBank(true)}><span><span className="nav-secondary-label">从题库</span>选题</span></Button>
+            <IconButton label="试卷分析" onClick={openExamAnalysis}><BarChart3 size={16} /></IconButton>
+            <IconButton label="生成 B 卷" onClick={() => setAbPaper(true)}><Shuffle size={16} /></IconButton>
+            <IconButton label="历史记录" onClick={() => setHistory(true)}><HistoryIcon size={16} /></IconButton>
+            <div className="export-split ml-1 flex items-center">
+              <Button variant="primary" size="sm" icon={<FileDown size={14} />} onClick={() => exportPdf()}>导出 PDF</Button>
+              <IconButton label="导出中心" className="export-split-more" onClick={() => setExportCenter(true)}><ChevronDown size={14} /></IconButton>
+            </div>
+          </div>
+        </> : workArea === "workbook" ? <>
+          <span className="app-header-sep" aria-hidden="true" />
+          <div id="workbook-nav-slot" className="flex h-full min-w-0 flex-1 items-center" />
+        </> : <>
+          <span className="app-header-sep" aria-hidden="true" />
+          <span className="truncate text-[12px] text-faint">当前试卷：{exam.title} · {count} 题 · {score} 分</span>
+        </>}</div>
+      </TitleBar>
 
       <div ref={main} className="workspace-stage relative flex min-h-0 flex-1 overflow-hidden">
         <div className="workspace-wallpaper" aria-hidden="true" />
@@ -670,7 +775,7 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           initial={{ opacity: 0, x: -12 }}
           animate={{ width: cols.outline, opacity: cols.outline ? 1 : 0, x: 0 }}
           transition={{ ...colT, opacity: { duration: 0.25 }, x: softSpring }}
-          className="shrink-0 overflow-hidden border-r border-line bg-panel/80"
+          className="workspace-outline-stage shrink-0 overflow-hidden border-r border-line bg-panel/80"
           style={{ "--sidebar-expanded-width": `${outlineFull}px` } as CSSProperties}
         >
             <WorkspaceSidebar
@@ -704,9 +809,9 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           initial={false}
           animate={{ width: cols.layout, opacity: cols.layout ? 1 : 0 }}
           transition={{ ...colT, opacity: { duration: 0.25 } }}
-          className="shrink-0 overflow-hidden border-r border-line bg-panel/80"
+          className="workspace-outline-stage shrink-0 overflow-hidden border-r border-line bg-panel/80"
         >
-          <WorkspaceLayoutPanel layout={layout} setLayout={setLayout} exam={exam} setExam={setExam} onDone={editMode} />
+          <WorkspaceLayoutPanel layout={layout} setLayout={setLayout} exam={layoutPanelExam} setExam={setExam} onDone={editMode} />
         </motion.div>
 
         {/* 中：题目编辑 */}
@@ -758,8 +863,9 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           initial={{ opacity: 0, x: 12 }}
           animate={{ width: cols.preview, opacity: cols.preview ? 1 : 0, x: 0 }}
           transition={{ ...colT, opacity: { duration: 0.25 }, x: { ...softSpring, delay: 0.1 } }}
-          className={cx("workspace-preview-stage shrink-0 overflow-hidden", mode === "edit" && "border-l border-line")}
+          className={cx("workspace-preview-stage relative shrink-0 overflow-hidden", mode === "edit" && "border-l border-line")}
         >
+          {mode === "edit" && cols.preview > 0 && <div className="preview-resizer" data-resizing={resizing || undefined} role="separator" aria-orientation="vertical" aria-label="拖动调整编辑区与预览宽度" title="拖动调整宽度，双击恢复默认" onPointerDown={startResize} onDoubleClick={() => { setPreviewRatio(0.5); try { localStorage.removeItem("juanye.preview-ratio.v1"); } catch { /* ignore */ } }} />}
           <PreviewPane
             exam={exam}
             layout={layout}
@@ -776,17 +882,17 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         </motion.div>
         </WorkspaceView>
         {bankVisited && <WorkspaceView name="bank" active={workArea === "bank"} offset={16} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开题库…</div>}><BankWorkspace active={workArea === "bank"} exam={exam} examId={exam.id} currentQuestion={cur?.q} currentSelection={bankSelection} onInsert={insertBankQuestions} onCreateExam={createExamFromBank} /></Suspense></WorkspaceView>}
-        {bookVisited && <WorkspaceView name="book" active={workArea === "book"} offset={16} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开教辅编辑台…</div>}><BookWorkspace ref={bookWorkspace} active={workArea === "book"} exam={exam} onStatus={setBookStatus}/></Suspense></WorkspaceView>}
+        {workbookVisited && <WorkspaceView name="workbook" active={workArea === "workbook"} offset={18} reducedMotion={reducedMotion}><Suspense fallback={<div className="relative m-auto text-muted">正在打开教辅…</div>}><WorkbookWorkspace active={workArea === "workbook"} handle={workbookHandle} /></Suspense></WorkspaceView>}
       </div>
 
       <AnimatePresence initial={false}>
-      {batch && <BatchPanel key="batch-panel" paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} />}
-      {structure && <StructurePanel key="structure-panel" exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} />}
-      {bank && <QuestionBankDialog key="bank-picker" open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} />}
-      {examAnalysis && <ExamAnalysisDialog key="exam-analysis" open={examAnalysis} onClose={closeExamAnalysis} exam={exam} session={examAiSession} initialTab={examAnalysisInitialTab} onLocate={id => { closeExamAnalysis(); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} onReportAvailable={autoFillReportMetadata} />}
-      {abPaper && <AbPaperDialog key="ab-paper" open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} />}
-      {aiTask && <GenerateQuestionDialog key="generate-question" open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} />}
-      {exportCenter && <ExportCenter key="export-center" exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} />}
+      {batch && <Suspense key="batch-panel" fallback={null}><BatchPanel paperMode={layout.paperMode} exam={exam} selected={selected} onSelection={setSelected} onChange={setExam} onClose={() => { setBatch(false); setSelected(new Set()); }} /></Suspense>}
+      {structure && <Suspense key="structure-panel" fallback={null}><StructurePanel exam={exam} onChange={setExam} onClose={() => setStructure(false)} onSelect={id => { setMode("edit"); setSidebarExpanded(true); setRequestedSectionId(id); }} /></Suspense>}
+      {bank && <Suspense key="bank-picker" fallback={null}><QuestionBankDialog open={bank} onClose={() => setBank(false)} exam={exam} sections={exam.sections} currentQuestion={cur?.q} onInsert={insertBankQuestions} /></Suspense>}
+      {examAnalysis && <Suspense key="exam-analysis" fallback={null}><ExamAnalysisDialog open={examAnalysis} onClose={closeExamAnalysis} exam={exam} session={examAiSession} initialTab={examAnalysisInitialTab} onLocate={id => { closeExamAnalysis(); setMode("edit"); select(id); }} onApplyMetadata={applyExamMetadata} onReportAvailable={autoFillReportMetadata} /></Suspense>}
+      {abPaper && <Suspense key="ab-paper" fallback={null}><AbPaperDialog open={abPaper} onClose={() => setAbPaper(false)} exam={exam} onApply={next => { void applyBPaper(next); }} /></Suspense>}
+      {aiTask && <Suspense key="generate-question" fallback={null}><GenerateQuestionDialog open source={aiTask.question} action={aiTask.action} onClose={() => setAiTask(undefined)} onApply={applyGenerated} /></Suspense>}
+      {exportCenter && <Suspense key="export-center" fallback={null}><ExportCenter exam={exam} layout={layout} view={view} onClose={() => setExportCenter(false)} onExport={async (format: ExportFormat, name, target) => { if (format === "pdf") exportPdf(target, name); else if (format === "docx") await exportWord(name); else if (format === "md") await exportMd(name); else if (format === "tex") await exportSource(name); else await exportWorkspace(name); }} /></Suspense>}
       </AnimatePresence>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
@@ -797,9 +903,9 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
         initial={reducedMotion ? false : { opacity: 0, transform: "translateY(6px) scale(.9)" }} animate={{ opacity: 1, transform: "translateY(0px) scale(1)" }} exit={{ opacity: 0, transform: "translateY(4px) scale(.9)" }} transition={reducedMotion ? { duration: 0 } : softSpring}
         onClick={() => { setExamAnalysisInitialTab("ai"); setExamAnalysis(true); examAiSession.acknowledge(); }}
       >{examAiTask.phase === "running" ? <LoaderCircle size={17} className="exam-ai-task-spinner" /> : examAiTask.phase === "success" ? <Check size={17} /> : <AlertTriangle size={17} />}</motion.button>}</AnimatePresence>
-      {importKind && <ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} />}
-      <SettingsDialog open={settings} onClose={() => setSettings(false)} accent={accent} setAccent={setAccent} motionPref={motionPref} setMotionPref={setMotionPref} />
-      <OcrDialog
+      {importKind && <Suspense fallback={null}><ImportDialog kind={importKind} exam={exam} onClose={() => setImportKind(undefined)} onCommit={commitImport} /></Suspense>}
+      {settingsMounted && <Suspense fallback={null}><SettingsDialog open={settings} onClose={() => setSettings(false)} accent={accent} setAccent={setAccent} motionPref={motionPref} setMotionPref={setMotionPref} /></Suspense>}
+      {ocrMounted && <Suspense fallback={null}><OcrDialog
         open={ocr}
         incomingPaste={incomingPaste}
         onClose={() => { setOcr(false); setIncomingPaste(undefined); }}
@@ -808,11 +914,11 @@ function Workspace({ motionPref, setMotionPref }: { motionPref: "full" | "reduce
           toast({ title: `已添加 ${qs.length} 道题` });
           setTimeout(() => select(qs[0].id), 50);
         }}
-      />
-      <HistorySheet open={history} onClose={() => setHistory(false)} items={snapshots} onRestore={snapshot => {
+      /></Suspense>}
+      {historyMounted && <Suspense fallback={null}><HistorySheet open={history} onClose={() => setHistory(false)} items={snapshots} onRestore={snapshot => {
         if (!window.confirm("恢复该版本？当前内容将保留为历史快照。")) return;
         void persistRef.current().then(() => { setExam({ ...structuredClone(snapshot.exam), id: snapshot.exam.id || uid() }); setLayout({ ...snapshot.layout }); setActiveId(snapshot.exam.sections.flatMap(s => s.questions)[0]?.id ?? null); setWorkArea("exam"); setHistory(false); toast({ title: "已恢复历史版本" }); });
-      }} />
+      }} /></Suspense>}
       <input
         ref={importRef}
         type="file"

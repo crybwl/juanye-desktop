@@ -1,171 +1,121 @@
-/* Shared chrome belongs to its panel, rather than floating above it as a grid of
-   separate boxes. Keep sizing, Motion gestures and component-specific layouts. */
+/* 共用控件（v0.6 界面规范）：中性灰阶 + 单一强调色，按钮实色、无发光；
+   选中态用中性浅灰底，只有“当前位置/已确认”用强调色。保留所有 Motion 手势与滑动高亮。 */
 @media screen {
   :root {
     --ui-action-ink: var(--color-accent);
-    --ui-action-idle: color-mix(in srgb, var(--color-accent) 7%, transparent);
-    --ui-action-hover: color-mix(in srgb, var(--color-accent) 13%, transparent);
-    --ui-action-selected: color-mix(in srgb, var(--color-accent) 16%, transparent);
-    --ui-action-line: color-mix(in srgb, var(--color-accent) 21%, transparent);
-    --ui-panel-line: color-mix(in srgb, var(--color-line) 70%, transparent);
-  }
-  :root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) {
-    /* A little semantic foreground keeps even warm palettes readable over the
-       unchanged 24% hover tint (80% accent alone is still too light for ember). */
-    --ui-action-ink: color-mix(in srgb, var(--color-accent) 72%, var(--color-fg));
+    --ui-action-idle: var(--surface-hover);
+    --ui-action-hover: var(--surface-hover);
+    --ui-action-selected: var(--surface-active);
+    --ui-action-line: var(--color-line-strong);
+    --ui-panel-line: var(--color-line);
   }
 
-  :root .btn[data-ui-button][data-variant] {
-    border-color: transparent;
-    box-shadow: none;
-  }
-  :root .btn[data-ui-button][data-variant="primary"] {
-    background: color-mix(in srgb, var(--color-accent) 17%, var(--color-panel));
-    color: var(--ui-action-ink);
-    box-shadow: inset 0 0 0 1px var(--ui-action-line);
-  }
-  :root .btn[data-ui-button][data-variant="primary"]:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-accent) 24%, var(--color-panel));
-    filter: none;
-  }
-  :root .btn[data-ui-button][data-variant="primary"]::after { opacity: .18; }
-  :root .btn[data-ui-button]:is([data-variant="secondary"], [data-variant="outline"]) {
-    background: var(--ui-action-idle);
-    color: var(--color-fg);
-  }
-  :root .btn[data-ui-button]:is([data-variant="secondary"], [data-variant="outline"]):hover:not(:disabled) {
-    background: var(--ui-action-hover);
-    border-color: transparent;
-  }
-  :root .btn[data-ui-button][data-variant="ghost"] {
-    background: transparent;
-    color: var(--color-muted);
-  }
-  :root .btn[data-ui-button][data-variant="ghost"]:hover:not(:disabled) {
-    background: var(--ui-action-hover);
-    color: var(--color-fg);
-  }
-  :root .btn[data-ui-button][data-variant="danger"] {
-    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-    color: var(--color-danger);
-  }
-  :root .btn[data-ui-button][data-variant="danger"]:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-danger) 17%, transparent);
-  }
-  :root [data-ui-button="icon"] {
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-  }
-  :root [data-ui-button="icon"]:hover:not(:disabled) {
-    background: var(--ui-action-hover);
-    color: var(--color-fg);
-  }
-  :root [data-ui-button="icon"][data-active="true"] {
-    background: var(--ui-action-selected);
-    color: var(--ui-action-ink);
-  }
-  :root [data-ui-button="icon"][data-active="true"]:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
-    color: var(--ui-action-ink);
-  }
-  :root [data-ui-button]:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-  }
-  :root [data-ui-button="icon"]:disabled { opacity: .4; cursor: not-allowed; }
+  /* ---------- 按钮 ---------- */
+  :root .btn[data-ui-button][data-variant] { border-color: transparent; box-shadow: none; }
+  :root .btn[data-ui-button][data-variant="primary"] { background: var(--accent-fill); color: var(--accent-ink, #fff); }
+  :root .btn[data-ui-button][data-variant="primary"]:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-fill) 88%, #000); filter: none; }
+  :root .btn[data-ui-button][data-variant="secondary"] { background: var(--surface-active); color: var(--color-fg); }
+  :root .btn[data-ui-button][data-variant="secondary"]:hover:not(:disabled) { background: color-mix(in srgb, var(--color-fg) 12%, transparent); }
+  :root .btn[data-ui-button][data-variant="outline"] { border: 1px solid var(--color-line-strong); background: var(--color-panel); color: var(--color-fg); }
+  :root .btn[data-ui-button][data-variant="outline"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-fg) 22%, transparent); background: color-mix(in srgb, var(--color-fg) 4%, var(--color-panel)); }
+  :root .btn[data-ui-button][data-variant="ghost"] { background: transparent; color: var(--color-muted); }
+  :root .btn[data-ui-button][data-variant="ghost"]:hover:not(:disabled) { background: var(--surface-hover); color: var(--color-fg); }
+  :root .btn[data-ui-button][data-variant="danger"] { background: transparent; color: var(--color-danger); }
+  :root .btn[data-ui-button][data-variant="danger"]:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 9%, transparent); }
+  :root .btn[data-ui-button]:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) { color: var(--color-fg); }
+  :root .btn[data-ui-button][data-variant="primary"]:is([aria-selected="true"], [aria-pressed="true"]) { color: var(--accent-ink, #fff); }
 
-  /* Selection stays explicit, but uses the same quiet inset tint everywhere.
-     Animated shared pills remain the selection layer; no new motion is added. */
-  :root .btn[data-ui-button]:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) {
-    color: var(--ui-action-ink);
-  }
-  :root :is(.workspace-nav-pill, .workbench-tab-pill, .exam-analysis-tab-pill, .export-format-pill, .bank-nav-pill, .bank-density-pill) {
-    background: var(--ui-action-selected);
+  :root [data-ui-button="icon"] { background: transparent; border-color: transparent; box-shadow: none; }
+  :root [data-ui-button="icon"]:hover:not(:disabled) { background: var(--surface-hover); color: var(--color-fg); }
+  :root [data-ui-button="icon"][data-active="true"] { background: var(--surface-active); color: var(--color-fg); }
+  :root [data-ui-button="icon"][data-active="true"]:hover:not(:disabled) { background: color-mix(in srgb, var(--color-fg) 11%, transparent); color: var(--color-fg); }
+  :root [data-ui-button]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  :root [data-ui-button="icon"]:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ---------- 滑动高亮（共享 layoutId 的药丸） ---------- */
+  :root :is(.workbench-tab-pill, .exam-analysis-tab-pill, .export-format-pill, .bank-nav-pill, .bank-density-pill) {
+    background: var(--surface-active);
     border-color: transparent;
     box-shadow: none;
   }
-  :root .workspace-nav-pill::after, :root .bank-nav-pill::before { box-shadow: none; }
-  :root :is(.workbench-nav, .exam-analysis-tabs, .exam-matrix-switch, .export-target-switch, .bank-density, [role="tablist"][class~="ring-inset"]) {
+  :root .bank-nav-pill::before { box-shadow: none; }
+  :root :is(.workbench-nav, .exam-analysis-tabs, .exam-matrix-switch, .export-target-switch, .bank-density) {
     border-color: transparent;
     background-color: var(--surface-inset);
-    --tw-ring-color: transparent;
     box-shadow: none;
   }
-  :root [role="tablist"] > [role="tab"] > [class~="bg-[#262a37]"] {
-    background: var(--ui-action-selected);
-    box-shadow: none;
+  :root .export-target-switch .exam-analysis-tab-pill, :root .exam-analysis-tabs .exam-analysis-tab-pill {
+    background: var(--color-panel);
+    box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--color-line);
   }
-  :root :is(.dialog-header-icon, .export-format-icon) {
-    border-color: transparent;
-    background: var(--ui-action-idle);
-    box-shadow: none;
-  }
-  :root :is(.export-format-selected .export-format-icon, .workbench-tab[aria-selected="true"]) {
-    color: var(--ui-action-ink);
-  }
-  /* Bank controls use their own animated pills; retain their category hues and
-     native focus/selection behavior while sharing the surrounding soft material. */
-  :root .bank-type-pill {
-    border-color: transparent;
-    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 16%, transparent);
-    box-shadow: none;
-  }
-  :root .bank-type-rail button {
-    border-color: transparent;
-    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 6%, transparent);
-  }
-  :root .bank-type-rail button:hover {
-    border-color: transparent;
-    background: color-mix(in srgb, var(--type-hue, var(--color-accent)) 11%, transparent);
-  }
-  :root .bank-type-rail button[aria-pressed="true"] { background: transparent; }
-  :root .bank-density button[aria-pressed="true"] { color: var(--ui-action-ink); }
-  :root .bank-more > summary {
-    border-color: transparent;
-    background: var(--ui-action-idle);
-    box-shadow: none;
-  }
-  :root .bank-more > summary:hover {
-    border-color: transparent;
-    background: var(--ui-action-hover);
-  }
-  :root .bank-more[open] > summary {
-    border-color: transparent;
-    background: var(--ui-action-selected);
-    color: var(--ui-action-ink);
-  }
-  :root :is(.question-sidebar .question-type-button, .workbench-footer > button) {
-    border-color: transparent;
-    background: var(--ui-action-idle);
-    box-shadow: none;
-  }
-  :root .question-sidebar .question-type-button:hover {
-    background: var(--ui-action-hover);
-  }
-  :root .question-sidebar .question-type-button:is([aria-pressed="true"], [data-active="true"]) {
-    background: var(--ui-action-selected);
-    border-color: var(--ui-action-line);
-    color: var(--ui-action-ink) !important;
-    box-shadow: none;
-  }
-  :root .question-sidebar .question-type-button:is([aria-pressed="true"], [data-active="true"]) .question-type-icon {
-    color: var(--ui-action-ink);
-  }
-  :root .app-bg :is(.sidebar-summary, section[data-workbench-group], .workbench-panel--experimental) {
-    border-color: var(--ui-panel-line);
-    box-shadow: none;
-  }
+  :root :is(.export-format-selected .export-format-icon, .workbench-tab[aria-selected="true"]) { color: var(--color-fg); }
+  :root .export-format-icon { border-color: var(--color-line); background: var(--color-panel); box-shadow: none; }
+
+  /* 题库筛选：题型不再各自着色，统一中性 */
+  :root .bank-type-pill { border-color: transparent; background: var(--surface-active); box-shadow: none; }
+  :root .bank-type-rail button { border-color: transparent; background: transparent; }
+  :root .bank-type-rail button:hover { border-color: transparent; background: var(--surface-hover); }
+  :root .bank-type-rail button[aria-pressed="true"] { background: transparent; color: var(--color-fg); }
+  :root .bank-density button[aria-pressed="true"] { color: var(--color-fg); }
+  :root .bank-more > summary { border-color: transparent; background: transparent; box-shadow: none; }
+  :root .bank-more > summary:hover { border-color: transparent; background: var(--surface-hover); }
+  :root .bank-more[open] > summary { border-color: transparent; background: var(--surface-active); color: var(--color-fg); }
+
+  /* 收起态目录：圆形题型按钮单色 */
+  :root .question-sidebar .question-type-button { border: 0; background: transparent; color: var(--color-muted); box-shadow: none; }
+  :root .question-sidebar .question-type-button:hover { background: var(--surface-hover); color: var(--color-fg); }
+  :root .question-sidebar .question-type-button:is([aria-pressed="true"], [data-active="true"]) { background: var(--surface-active); color: var(--color-fg) !important; box-shadow: none; }
+  :root .question-sidebar .question-type-button .question-type-icon { color: inherit; }
+  :root .workbench-footer > button { border-color: transparent; background: transparent; box-shadow: none; }
+  :root .app-bg :is(.sidebar-summary, section[data-workbench-group], .workbench-panel--experimental) { border-color: var(--color-line); box-shadow: none; }
+
+  /* ---------- 下拉选择 ---------- */
   :root .select-trigger {
-    border-color: var(--ui-panel-line);
-    background-color: color-mix(in srgb, var(--surface-input) 88%, var(--color-panel));
-    box-shadow: none;
+    height: 32px; gap: 8px; padding: 0 10px;
+    border: 1px solid var(--color-line-strong); border-radius: 6px;
+    background-color: var(--surface-input); box-shadow: none;
   }
-  :root .select-trigger:hover:not(:disabled) { border-color: var(--ui-action-line); }
+  :root .select-trigger:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-fg) 24%, transparent); }
   :root .select-trigger:is(:focus-visible, [aria-expanded="true"]) {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
   }
+  :root .select-trigger[aria-expanded="true"] .select-chevron { color: var(--color-muted); }
+  :root .select-menu { padding: 4px; border: 0; border-radius: 8px; background: var(--surface-popup); box-shadow: var(--shadow-popup); }
+  :root .select-option { min-height: 32px; padding: 6px 8px; border-radius: 4px; }
+  :root .select-option[data-highlighted="true"] { background: var(--surface-hover); }
+  :root .select-option[aria-selected="true"] { color: var(--color-fg); font-weight: 500; }
+  :root .select-option[aria-selected="true"] > svg { color: var(--color-accent); }
+
+  /* ---------- 勾选框 ---------- */
+  :root .checkbox-indicator { width: 16px; height: 16px; border: 1px solid var(--color-line-strong); border-radius: 4px; background: var(--surface-input); color: #fff; box-shadow: none; }
+  :root .checkbox-indicator[data-checked="true"], :root .checkbox-indicator[data-checked="mixed"] { background: var(--accent-fill); border-color: var(--accent-fill); box-shadow: none; }
+  :root .checkbox-control:hover:not(:disabled) .checkbox-indicator { border-color: color-mix(in srgb, var(--color-fg) 35%, transparent); transform: none; }
+  :root .checkbox-control:hover:not(:disabled) .checkbox-indicator:is([data-checked="true"], [data-checked="mixed"]) { border-color: var(--accent-fill); }
+
+  /* ---------- 输入框、提示、按键、分段、开关、滑块 ---------- */
+  :root .ui-input { border-color: var(--color-line-strong); background: var(--surface-input); }
+  :root .ui-input:hover { border-color: color-mix(in srgb, var(--color-fg) 24%, transparent); }
+  :root .ui-input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+  :root .ui-tooltip { background: #1c2024; color: #fff; box-shadow: 0 4px 12px rgb(0 0 0 / .18); }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .ui-tooltip { background: #2e3135; color: var(--color-fg); box-shadow: 0 4px 12px rgb(0 0 0 / .4), 0 0 0 1px rgb(255 255 255 / .06); }
+  :root .ui-tooltip .ui-kbd { border-color: rgb(255 255 255 / .18); background: rgb(255 255 255 / .1); color: rgb(255 255 255 / .75); }
+  :root .ui-kbd { border: 1px solid var(--color-line-strong); background: var(--surface-inset); }
+  :root .ui-segmented { background: var(--surface-inset); }
+  :root .ui-segmented-pill { background: var(--color-panel); box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--color-line); }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .ui-segmented-pill { background: var(--surface-selected); box-shadow: 0 0 0 1px var(--color-line); }
+  :root .ui-switch-on { background: var(--accent-fill); }
+  :root .ui-switch-off { background: var(--color-line-strong); }
+  :root .ui-slider-track { background: var(--color-line-strong); }
+  :root .ui-slider-range { background: var(--accent-fill); }
+  :root .ui-slider-thumb { box-shadow: 0 0 0 1px var(--color-line-strong), 0 1px 3px rgb(0 0 0 / .2); }
+
+  /* ---------- 浮层：弹窗、通知、悬浮工具条 ---------- */
+  :root .ui-modal-overlay { background: var(--surface-overlay); }
+  :root :is(.ui-modal, .ui-toast, .ui-floating-bar) { border: 0; box-shadow: var(--shadow-popup); }
+  :root .ui-modal { box-shadow: 0 16px 48px rgb(0 0 0 / .18), 0 0 0 1px var(--color-line); }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .ui-modal { box-shadow: 0 16px 48px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .08); }
+  :root :is(.dialog-header-icon, .export-format-icon) { box-shadow: none; }
 
   /* One continuous, decoded scene under the whole application. Pane backgrounds
      are washes over that scene, never copies of the SVG restarted in each box. */

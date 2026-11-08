@@ -114,7 +114,9 @@ async function main() {
         ipcMain.removeHandler(name); ipcMain.handle(name, () => { globalThis.__overhaul.modelCalls++; throw Error(`Paid/model IPC disabled: ${name}`); });
       }
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(12000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(12000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { rendererRequests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1500, height: 900 }); await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -213,7 +215,9 @@ async function main() {
     await page.evaluate(async items => { await window.juanye.bankSave({ questions: items, origin: { examTitle: '春季数学精选 · 本地隔离素材', examId: 'overhaul-fixture' } }); }, questions);
     await nav('组卷').click(); await openBank(); await settled(25);
     assert.equal((await page.evaluate(() => window.juanye.bankLoad())).entries.length, 84);
-    assert.equal(await bank().locator('.bank-filter-grid').getByRole('combobox').count(), 3);
+    await bank().getByRole('button', { name: '筛选', exact: true }).click();
+    assert.equal(await page.getByRole('dialog', { name: '更多筛选条件' }).getByRole('combobox').count(), 3);
+    await page.keyboard.press('Escape');
     assert.equal(await bank().locator('.bank-type-rail > button').count(), 8);
     for (const name of shortTypes) assert.equal((await bank().locator('.bank-type-rail > button').filter({ hasText: name }).first().locator('small [aria-hidden="true"]').innerText()).trim(), '12');
     assert.match(await bank().locator('.bank-library-distribution [role="img"]').getAttribute('aria-label'), /单选 12.*自定义 12/);
@@ -241,7 +245,8 @@ async function main() {
     });
     assert.ok(statGeometry.summary.bottom <= statGeometry.top + 1, 'Usage/distribution must sit above favorite/review navigation');
     assert.ok(statGeometry.bottom <= statGeometry.footerTop + 1, 'Favorite/review statistics must sit above local-only footer');
-    assert.ok(statGeometry.summary.fontSize <= 11, 'Library overview must remain secondary text');
+    // v0.6 字号阶梯最小为 12px：次要信息靠灰色与位置区分，而不是更小的字号。
+    assert.ok(statGeometry.summary.fontSize <= 12, 'Library overview must remain secondary text');
     assert.match(statGeometry.summary.background, /^(transparent|rgba\(0, 0, 0, 0\))$/); assert.equal(statGeometry.summary.shadow, 'none');
     assert.match(await bank().locator('.bank-library-usage').innerText(), /累计使用/);
     assert.match(await bank().locator('.bank-library-distribution').innerText(), /题型分布/);
@@ -285,7 +290,9 @@ async function main() {
     hoverControls.push({ label: '60px rail, 220px overlay drawer, catalog hit testing and stable geometry before/after reveal', idleSidebarGeometry, revealedSidebarGeometry });
     await hoverAndFocus(catalogHeading(), bank().locator('.bank-catalog-tools button'), 'Catalog display tools');
     await exposed(bank().locator('.bank-collection-heading button'), true, 'New collection rail action remains discoverable');
-    await hoverAndFocus(rows().first(), cardControls(rows().first()), 'Question favorite/selection/checkbox');
+    // 2026-11-08：勾选框与“选题”改为常驻，收藏仍为悬停显示。
+    await exposed(rows().first().locator('.bank-pick, [role="checkbox"]'), true, 'Question selection and pick stay visible');
+    await hoverAndFocus(rows().first(), rows().first().locator('.bank-favorite'), 'Question favorite');
     await hoverAndFocus(detailTools(), detailTools().locator('button.bank-detail-action'), 'Detail history action');
     await exposed(detailTools().getByRole('button', { name: '编辑题目', exact: true }), true, 'Main edit-question action is permanent');
     await hoverAndFocus(detailHeading(), detailHeading().locator('button'), 'Detail collapse action');
@@ -298,7 +305,8 @@ async function main() {
 
     progress('type filters preserve contextual counts; selection and keyboard navigation');
     await bank().locator('.bank-type-rail > button').filter({ hasText: '单选' }).click(); await settled(12);
-    await select('题库知识点', '函数与运算'); await settled(12);
+    await bank().getByRole('button', { name: '筛选', exact: true }).click();
+    await select('题库知识点', '函数与运算'); await page.keyboard.press('Escape'); await settled(12);
     assert.equal(await bank().locator('.bank-type-rail > button').count(), 4);
     assert.equal((await bank().locator('.bank-type-rail > button').first().locator('small [aria-hidden="true"]').innerText()).trim(), '36');
     await bank().getByRole('button', { name: '重置筛选', exact: true }).click(); await settled(25);
@@ -326,7 +334,8 @@ async function main() {
     await shot('bank-populated-grid-dark');
     await page.reload(); await openBank(); await settled(25);
     assert.equal(await bank().getByRole('button', { name: '卡片视图', exact: true }).getAttribute('aria-pressed'), 'true');
-    await hoverAndFocus(rows().first(), cardControls(rows().first()), 'Grid question favorite/selection/checkbox');
+    await exposed(rows().first().locator('.bank-pick, [role="checkbox"]'), true, 'Grid question selection and pick stay visible');
+    await hoverAndFocus(rows().first(), rows().first().locator('.bank-favorite'), 'Grid question favorite');
     await catalogHeading().hover(); await bank().getByRole('button', { name: '列表视图', exact: true }).click(); await pause(500);
     assert.equal(await page.evaluate(() => localStorage.getItem('juanye.bankDensity')), 'list');
     checks.push('Both densities render; grid choice survives renderer reload; list choice is saved');
@@ -410,7 +419,7 @@ async function main() {
     await until(async () => (await basketIds()).length === 3, 'Batch basket add failed'); await pause(1200);
     const scores = await basket().locator('.bank-basket-item small').allTextContents();
     assert.deepEqual(await basket().locator('.bank-basket-summary [aria-hidden="true"]').allTextContents(), ['3', String(scores.reduce((sum, text) => sum + parseFloat(text), 0))]);
-    await bank().locator('.bank-result-toolbar').getByRole('button', { name: '清除', exact: true }).click();
+    await bank().getByRole('button', { name: '取消选择', exact: true }).click();
     checks.push('Actual flight frames, native drag MIME/drop hint, order controls, remove/clear, batch add, exact score and workspace persistence');
 
     progress('figure keyboard activation, Escape, focus confinement and restoration');

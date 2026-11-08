@@ -7,6 +7,9 @@ test('旧透明配置迁移到Telegram，拒绝未知模式', () => {
   assert.deepEqual(checkedAppearance({ mode: 'telegram' }), { mode: 'telegram' });
   assert.deepEqual(checkedAppearance({ mode: 'telegram', telegramScheme: 'light' }), { mode: 'telegram', telegramScheme: 'light' });
   assert.throws(() => checkedAppearance({ mode: 'telegram', telegramScheme: 'sepia' }));
+  assert.deepEqual(checkedAppearance({ mode: 'aura', auraScheme: 'light' }), { mode: 'aura', auraScheme: 'light' });
+  assert.deepEqual(checkedAppearance({ mode: 'aura' }), { mode: 'aura' });
+  assert.throws(() => checkedAppearance({ mode: 'aura', auraScheme: 'system' }));
   assert.throws(() => checkedAppearance({ mode: 'remote' }));
   assert.throws(() => checkedAppearance(null));
 });
@@ -17,5 +20,7 @@ test('所有模式背景不透明，不降低纸张和文字的整体透明度',
   applyWindowAppearance(window, { mode: 'dark' });
   applyWindowAppearance(window, { mode: 'light' });
   applyWindowAppearance(window, { mode: 'telegram', telegramScheme: 'light' });
-  assert.deepEqual(backgrounds, ['#0b0e13', '#08090c', '#f4f5f9', '#e8eff0']);
+  applyWindowAppearance(window, { mode: 'aura', auraScheme: 'light' });
+  applyWindowAppearance(window, { mode: 'aura', auraScheme: 'dark' });
+  assert.deepEqual(backgrounds, ['#0b0e13', '#08090c', '#f4f5f9', '#e8eff0', '#eceff5', '#101218']);
 });

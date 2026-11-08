@@ -39,3 +39,14 @@
 .exam-analysis-note { color: var(--color-muted); font-size: 12px; line-height: 1.7; }
 @media(max-width:760px) { .exam-analysis-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } .exam-distributions { grid-template-columns: 1fr; gap: 16px; } .exam-analysis-tabs { margin-inline: 16px; } .exam-analysis-tabs .exam-analysis-tab { min-width: calc(50% - 4px); } .exam-tools-scroll { padding: 20px; } }
 @media(prefers-reduced-motion:reduce) { .exam-analysis-tabs *, .exam-matrix-switch *, .exam-tools-scroll * { scroll-behavior: auto !important; } }
+
+/* v0.6：统计卡片去掉渐变底；圆角统一 8px，标签栏与全局分段控件一致。 */
+.exam-analysis-tabs { padding: 2px; border: 0; border-radius: 8px; }
+.exam-analysis-tabs .exam-analysis-tab { height: 32px; border-radius: 6px; }
+.exam-analysis-stat { border-radius: 8px; padding: 14px 16px; background: var(--color-panel); box-shadow: none; }
+.exam-analysis-stat strong { font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.exam-distribution { border-radius: 8px; }
+.exam-section-title h3 { font-weight: 600; }
+.exam-distribution-track span { background: var(--accent-fill); opacity: 1; }
+.exam-tools-table { border-radius: 8px; }
+.exam-matrix-switch { padding: 2px; border: 0; border-radius: 8px; }

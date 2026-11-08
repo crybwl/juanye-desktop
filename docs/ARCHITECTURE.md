@@ -31,6 +31,6 @@ Markdown 用于可读交换，`.juanye` 用于保存完整工作区。导出的�
 | tests/ | 本地合成夹具和回归测试 |
 | scripts/ | 构建、打包与隔离 UI 检查 |
 | public/ | 静态资源，PDF.js 资源在构建时复制 |
-| .github/ | CI、Windows 打包及问题模板 |
+| .github/ | 核心 CI 与问题模板（不包含发布工作流） |
 
 node_modules、dist、release、artifacts、output、tmp 和真实用户数据均不进入源码版本控制。

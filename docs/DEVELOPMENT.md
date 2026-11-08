@@ -17,22 +17,18 @@ npm start
 
 `npm run dev` 提供浏览器 UI 开发，但没有桌面 IPC、密钥存储和原生 PDF 导出。使用 `npm run build` 后再 `npm start` 检查完整桌面流程。
 
-`npm run pack` 生成 release/win-unpacked；`npm run dist` 生成 Windows 安装版和免安装 ZIP。安装包未配置商业签名，Windows 可能提示未知发布者。
+`npm run pack` 生成 release/win-unpacked；`npm run dist` 生成 Windows 安装版和免安装 ZIP（已固定 `--publish never`，不会上传）。安装包未配置商业签名，Windows 可能提示未知发布者。
 
 ## 测试
 
 - `npm test`：文本解析、导入匹配、公式、分页几何、缓存和 Electron 服务单测；不调用真实模型服务。
-- `node scripts/book-workspace-regression.cjs [--packaged] --pdf`：独立教辅的实际编辑、题库快照、章节重排、版本恢复、项目往返及真实 PDF；40 章 1,000 题容量样稿，记录真实页数，不删内容来满足页数上限。所有资料为合成隔离数据。
-- `node scripts/book-editor-regression.cjs [--packaged]`：连续正文、键盘公式输入（含无遗留美元符号）、可编辑表格、局部排版、ABCD 填入、立即切章不丢输入、题目粘贴新 ID。
-- `node scripts/book-pagination-regression.cjs [--pdf]`：真实内置分页引擎、80 行长表格重复表头、超页题干及解析、重复句子的逐段完整性、目录真实页码、局部预览和公式失败。
-- `node scripts/book-completeness-regression.cjs`：真实分页中逐项核对 100 题与 100 份答案，不只判断渲染调用是否成功。
-- `node scripts/book-pdf-safety-regression.cjs [--packaged]`：保存框前并发锁、请求中取消、公式错误不覆盖旧文件、清理与重试，走真实主进程和 PDF 写盘。
-- `python scripts/audit-book-pdf.py 路径 --output artifacts/审计目录 --questions 1000`：Poppler/pypdf 校验实际 PDF 题号顺序、答案数量、页面边界、空页，并栅格化全部页面。需人工检查联系表及代表页；不可用 DOM 验收冒充 PDF 验收。
 - `npm run test:ui`：侧栏展开、目标大题、编辑、拖动和布局回归。
+- `node scripts/exam-visual-editor-regression.cjs`：组卷可视编辑（题干/选项原位编辑、$ 公式、写回 $…$ 字符串、源码开关、折叠区、分隔线）与题库新布局（选项预览、单行筛选、常驻选题、按题型自动归入）。
+- `node scripts/workbook-regression.cjs`：教辅编辑台原位编辑零跳动、目录定位、Desmos 式公式、学/教版切换、插入撤销、保存与两版 PDF。
+- 依赖 LaTeX 输入框（textarea）的旧回归脚本启动后会切到“源码编辑”偏好（`juanye.editor-input.v1 = source`）再继续。
 - `node scripts/import-fix-regression.cjs`：合成 DOCX、GBK、UTF-16 的实际导入与字段编辑回归。
 - `node scripts/import-workflow-regression.cjs --imports-only`：三种导入及 Markdown 导出。
 - `node scripts/performance-regression.cjs --label=local`：120 题、44 页量级的压力样例（实际页数受布局影响）；动效保持开启。
-- `node scripts/verify-release.cjs`：打包后比较 asar 中的版本和入口资源与本地 dist 是否一致。
 - `node scripts/bank-workspace-regression.cjs [--packaged]`：独立题库全流程，临时用户目录，禁止 HTTP；从完整编辑到题集、版本、回收站、选题篮和新卷。
 - `node scripts/library-ai-regression.cjs [--packaged]`：题库外观/窗口宽度、来源对照、整卷 AI 真实 IPC 与本机模型替身；发送确认、缓存、取消、元数据采用/撤销、报告失效及实际 Word 导出，不使用真实密钥。
 - `node scripts/beta7-regression.cjs [--packaged]`：60px窄栏/220px悬停浮层、原宽栏区域不抢点击、列表不重排；后台分析确认前零请求、请求时仅左下角转圈、编辑/切换/重新查看不重复请求、完成报告过期保护、后台明确取消与普通关闭取消、服务错误脱敏且不自动重试。手动释放本机模型替身响应，不使用真实密钥或付费模型。

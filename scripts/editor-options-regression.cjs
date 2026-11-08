@@ -49,7 +49,9 @@ async function main() {
       ipcMain.removeHandler('model:recognize');
       ipcMain.handle('model:recognize', () => { globalThis.__editorOptionsModelCalls++; throw new Error('Editor-only QA must not invoke a model'); });
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(8000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await new Promise(resolve => setTimeout(resolve, 1500)); fs.writeFileSync(path.join(userData, 'draft.json'), JSON.stringify({ version: 1, exam, layout, history: [] })); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(8000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { network++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1440, height: 940 });
@@ -62,17 +64,17 @@ async function main() {
       await sidebar().locator(`[data-question-id="${id}"]`).getByRole('button').first().click();
       const number = ['qa-existing', 'qa-paste', 'qa-typing', 'qa-conflict'].indexOf(id) + 1;
       await editor.getByRole('heading', { name: `第 ${number} 题`, level: 1, exact: true }).waitFor();
+      // 上一题主体播放退出动画期间会同时存在两个题干输入框。
+      await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 15000 });
       await stem().waitFor();
       await pause(250);
     };
     const fields = async () => {
       const result = [];
       for (const letter of 'ABCD') {
-        const card = editor.getByRole('button', { name: `将 ${letter} 设为正确答案`, exact: true }).locator('..');
-        await card.locator('.cursor-text').click({ force: true });
-        const input = card.locator('input');
+        // 2026-11-08：选项改为 MathTextField，源码模式下是带 aria-label 的 textarea。
+        const input = editor.getByRole('textbox', { name: `选项 ${letter}`, exact: true });
         result.push(await input.inputValue());
-        await input.press('Enter');
       }
       return result;
     };

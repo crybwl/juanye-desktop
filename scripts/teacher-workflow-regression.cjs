@@ -46,6 +46,8 @@ async function main() {
   }
   async function selectFirst() {
     await page.getByRole('button', { name: '编辑第 1 题', exact: true }).click();
+    // 切题时上一题主体仍在播放退出动画：等只剩一个题目主体再读取。
+    await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 15000 });
     await until(async () => (await page.getByPlaceholder('输入题干…', { exact: true }).inputValue()) === stem, 'First original question not selected');
   }
   async function pasteAt(selector, text = '', includeImage = true) {
@@ -85,10 +87,12 @@ async function main() {
         globalThis.__teacherSaves.push({ extension, filePath }); return { canceled: false, filePath };
       };
     }, { out, stem, variantStem, analysisText });
-    page = await app.firstWindow(); page.setDefaultTimeout(9000); await page.setViewportSize({ width: 1500, height: 980 });
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(9000); await page.setViewportSize({ width: 1500, height: 980 });
     page.on('pageerror', error => errors.push(error.message));
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
-    await page.evaluate(() => { localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); localStorage.setItem('juanye.appearance.v1', 'light'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); localStorage.setItem('juanye.appearance.v1', 'light'); });
     await page.reload(); await page.getByRole('button', { name: '编辑第 1 题', exact: true }).waitFor();
     await until(async () => count(await load()) === 2, 'Initial fixture not loaded');
 
@@ -132,6 +136,8 @@ async function main() {
     await ocr.getByRole('button', { name: '添加 1 道题到试卷', exact: true }).click();
     await until(async () => count(await load()) === 3, 'Confirmed OCR question not added');
     await selectFirst();
+    // 连续切题时上一题主体仍在播放退出动画：等编辑区只剩一个题目主体。
+    await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 15000 });
     await pasteAt('textarea[placeholder="输入题干…"]', '本地粘贴文字', false); await pause(150);
     assert.equal(await page.getByRole('dialog').count(), 0); assert.equal(await app.evaluate(() => globalThis.__teacherOcr), 1);
     await page.getByPlaceholder('输入题干…', { exact: true }).fill(stem);
@@ -144,6 +150,8 @@ async function main() {
     await until(async () => !(await ocr.getByRole('button', { name: '添加 1 道题到试卷', exact: true }).isDisabled()), 'Stem screenshot OCR did not finish');
     assert.equal(count(await load()), 3);
     await ocr.getByRole('button', { name: '关闭', exact: true }).click();
+    // 2026-11-08：题图区收在“题图 · 绘图 · 属性”折叠区内，先展开。
+    if (await page.locator('.editor-extras-head[aria-expanded="false"]').count()) await page.locator('.editor-extras-head').click();
     await pasteAt('[data-workbench-group="figures"] .space-y-3');
     try {
       await until(async () => (await load()).exam.sections[0].questions[0].figures?.length === 1, 'Image-area paste did not attach a figure');

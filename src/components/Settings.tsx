@@ -5,6 +5,7 @@ import { Button, Field, SharedPill, Kbd, Modal, Segmented, Switch, cx, inputCls,
 import { Logo } from "./TitleBar";
 import { getOcrPreferences, saveOcrPreferences } from "../ocr";
 import { AppearancePicker } from "./AppearancePicker";
+import { AuraPicker } from "./AuraPicker";
 import { errorMessage } from "../errors";
 import { useAppearance } from "../appearance";
 import { TelegramThemePicker } from "./TelegramThemePicker";
@@ -12,14 +13,8 @@ import { ScenePatternPicker } from "./ScenePatternPicker";
 import { useExperimentalWorkbench } from "../experimental-workbench";
 import { version as appVersion } from "../../package.json";
 
-export const ACCENTS: { name: string; c: [string, string] }[] = [
-  { name: "长春花", c: ["#9db1ff", "#c4b2ff"] },
-  { name: "青碧", c: ["#7fd8d0", "#93c5ff"] },
-  { name: "薄荷", c: ["#8fe0a8", "#c8ee8f"] },
-  { name: "琥珀", c: ["#f5c26b", "#ff9f7a"] },
-  { name: "珊瑚", c: ["#ff9e8a", "#f7a6d0"] },
-  { name: "樱紫", c: ["#e3a6ff", "#a6b4ff"] },
-];
+import { ACCENTS } from "../accents";
+export { ACCENTS };
 
 const TABS = [
   { id: "model", label: "模型服务", icon: <Sparkles size={15} /> },
@@ -86,13 +81,9 @@ function ModelTab() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-5 overflow-y-auto px-8 pb-6 pt-7">
-        <div className="flex items-center gap-4">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#2a55ff] to-[#7a4dff] text-white shadow-[0_10px_30px_-10px_#4b5bff]">
-            <Sparkles size={22} />
-          </span>
-          <div>
-            <div className="text-[17px] font-semibold">Qwen 模型设置</div>
-          </div>
+        <div>
+          <div className="text-[16px] font-semibold">Qwen 模型设置</div>
+          <div className="mt-1 text-[12px] text-faint">用于图片识别等 AI 功能，密钥加密保存在本机。</div>
         </div>
 
         <Field label="API Key">
@@ -137,8 +128,8 @@ function ModelTab() {
                   disabled={saving}
                   onClick={(e) => { e.preventDefault(); changed(); setModel(m); }}
                   className={cx(
-                    "flex h-8 items-center gap-1.5 rounded-lg px-3 font-mono text-[12px] transition-colors",
-                    on ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/40" : "bg-white/[0.04] text-muted ring-1 ring-inset ring-white/[0.08] hover:text-fg",
+                    "flex h-7 items-center gap-1.5 rounded-[6px] border px-2.5 font-mono text-[12px] transition-colors",
+                    on ? "border-[var(--color-accent)] text-fg" : "border-line-strong text-muted hover:text-fg",
                   )}
                 >
                   <AnimatePresence initial={false}>
@@ -215,13 +206,14 @@ function LookTab({ accent, setAccent, motionPref, setMotionPref }: { accent: num
   const [workbench, setWorkbench] = useExperimentalWorkbench();
   return (
     <div className="h-full overflow-y-auto px-8 pb-6 pt-7">
-      <div className="mb-5 text-[17px] font-semibold">外观</div>
+      <div className="mb-5 text-[16px] font-semibold">外观</div>
       <AppearancePicker />
       <Line title="实验性题目编辑台">
         <Switch label="实验性题目编辑台" checked={workbench} onChange={setWorkbench} />
       </Line>
       {appearance === "telegram" && <div className="mt-6"><ScenePatternPicker /><TelegramThemePicker /></div>}
-      {appearance !== "telegram" && <><div className="mb-2.5 mt-6 text-[12.5px] font-medium text-muted">强调色</div><div className="flex gap-3">
+      {appearance === "aura" && <div className="mt-6"><AuraPicker /></div>}
+      {appearance !== "telegram" && appearance !== "aura" && <><div className="mb-2.5 mt-6 text-[12px] font-medium text-muted">强调色</div><div className="flex gap-4">
         {ACCENTS.map((a, i) => (
           <motion.button
             key={a.name}
@@ -231,14 +223,14 @@ function LookTab({ accent, setAccent, motionPref, setMotionPref }: { accent: num
             onClick={() => setAccent(i)}
             className="flex flex-col items-center gap-2"
           >
-            <span className="relative grid h-11 w-11 place-items-center rounded-full" style={{ background: `linear-gradient(140deg, ${a.c[0]}, ${a.c[1]})` }}>
+            <span className="relative grid h-8 w-8 place-items-center rounded-full" style={{ background: a.c[0] }}>
               {accent === i && (
-                <SharedPill layoutId="accent-ring" transition={spring} className="absolute -inset-[5px] rounded-full ring-2 ring-white/80" />
+                <SharedPill layoutId="accent-ring" transition={spring} className="absolute -inset-[4px] rounded-full ring-2 ring-[var(--color-line-strong)]" />
               )}
               <AnimatePresence>
                 {accent === i && (
-                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="text-[#0c0f1c]">
-                    <Check size={18} strokeWidth={3} />
+                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="text-white">
+                    <Check size={15} strokeWidth={3} />
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -259,6 +251,7 @@ function LookTab({ accent, setAccent, motionPref, setMotionPref }: { accent: num
 const KEYS: [string, string[]][] = [
   ["命令面板", ["Ctrl", "K"]],
   ["编辑 / 排版预览", ["Ctrl", "1 / 2"]],
+  ["专注编辑（收起目录和预览）", ["Ctrl", "Shift", "F"]],
   ["上一题 / 下一题", ["Alt", "↑ / ↓"]],
   ["新建题目", ["Ctrl", "N"]],
   ["导出 PDF", ["Ctrl", "E"]],
@@ -282,8 +275,8 @@ export function SettingsDialog({
 }) {
   const [tab, setTab] = useState<Tab>("model");
   return (
-    <Modal open={open} onClose={onClose} className="flex h-[600px] w-[860px] max-w-full">
-      <aside className="w-[210px] shrink-0 border-r border-line bg-black/20 p-3">
+    <Modal open={open} onClose={onClose} className="flex h-[560px] w-[820px] max-w-full">
+      <aside className="w-[200px] shrink-0 border-r border-line bg-[var(--surface-sidebar)] p-2">
         <div className="flex items-center gap-2 px-2 pb-4 pt-1.5">
           <Logo size={22} />
           <span className="text-[13px] font-semibold">设置</span>
@@ -292,16 +285,16 @@ export function SettingsDialog({
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={cx("relative mb-0.5 flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[13px] transition-colors", tab === t.id ? "text-fg" : "text-muted hover:text-fg")}
+            className={cx("relative mb-0.5 flex h-8 w-full items-center gap-2.5 rounded-[6px] px-2.5 text-[13px] transition-colors", tab === t.id ? "font-medium text-fg" : "text-muted hover:bg-[var(--surface-hover)] hover:text-fg")}
           >
-            {tab === t.id && <SharedPill layoutId="settings-nav" transition={spring} className="absolute inset-0 rounded-lg bg-white/[0.07]" />}
+            {tab === t.id && <SharedPill layoutId="settings-nav" transition={spring} className="absolute inset-0 rounded-[6px] bg-[var(--surface-active)]" />}
             <span className="relative">{t.icon}</span>
             <span className="relative">{t.label}</span>
           </button>
         ))}
       </aside>
       <main className="relative min-w-0 flex-1">
-        <button onClick={onClose} className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-lg text-faint transition-colors hover:bg-white/[0.06] hover:text-fg" aria-label="关闭">
+        <button onClick={onClose} className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-[6px] text-faint transition-colors hover:bg-[var(--surface-hover)] hover:text-fg" aria-label="关闭">
           <X size={17} />
         </button>
         <AnimatePresence mode="wait" initial={false}>
@@ -318,7 +311,7 @@ export function SettingsDialog({
             {tab === "look" && <LookTab accent={accent} setAccent={setAccent} motionPref={motionPref} setMotionPref={setMotionPref} />}
             {tab === "keys" && (
               <div className="px-8 pt-7">
-                <div className="mb-2 text-[17px] font-semibold">快捷键</div>
+                <div className="mb-2 text-[16px] font-semibold">快捷键</div>
                 {KEYS.map(([t, k]) => (
                   <Line key={t} title={t}>
                     <span className="flex gap-1">

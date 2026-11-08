@@ -20,7 +20,8 @@ const pdfOutput = path.join(root, 'output/pdf');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate, message, timeout = 10000) {
   const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) { if (await predicate()) return; await pause(80); }
+  // 切题过渡期间新旧编辑器会短暂并存，定位器的严格模式报错视为“尚未就绪”继续等待。
+  while (Date.now() < deadline) { try { if (await predicate()) return; } catch { /* retry */ } await pause(80); }
   throw new Error(message);
 }
 
@@ -129,7 +130,9 @@ async function main() {
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { globalThis.__workflowModelCalls++; throw new Error('Import/layout QA may not invoke OCR'); });
       dialog.showSaveDialog = async (_window, options) => { globalThis.__workflowSaveCalls.push(options); return globalThis.__workflowSaveTarget ? { canceled: false, filePath: globalThis.__workflowSaveTarget } : { canceled: true }; };
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(8000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(8000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { network++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1440, height: 960 });
@@ -246,6 +249,8 @@ async function main() {
       await chooseQuestion('qa-original-16');
       assert.match(await editor.getByPlaceholder('写下解题思路…', { exact: true }).inputValue(), /解析文件按原题号匹配/);
       assert.equal(await editor.getByRole('button', { name: '将 B 设为正确答案', exact: true }).locator('svg').count(), 1);
+      // 来源 / 知识点 / 难度在“题图 · 绘图 · 属性”折叠区内，先展开。
+      if (await editor.locator('.editor-extras-head[aria-expanded="false"]').count()) await editor.locator('.editor-extras-head').first().click();
       assert.equal(await editor.getByRole('textbox', { name: '题目来源', exact: true }).inputValue(), '解析导入来源');
       assert.equal(await editor.getByRole('textbox', { name: '题目知识点', exact: true }).inputValue(), '函数，代入');
       assert.equal(await editor.getByRole('combobox', { name: '题目难度', exact: true }).innerText(), '中等');

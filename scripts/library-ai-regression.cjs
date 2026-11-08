@@ -50,7 +50,9 @@ async function main() {
   try {
     app = await _electron.launch({ executablePath: path.join(root, packaged ? 'release/win-unpacked/卷页.exe' : 'node_modules/electron/dist/electron.exe'), args: packaged ? [] : [root], env });
     await app.evaluate(({ BrowserWindow, dialog, ipcMain }) => { const win = BrowserWindow.getAllWindows()[0]; win.webContents.setBackgroundThrottling(false); win.setPosition(-16000, -16000); win.showInactive(); dialog.showSaveDialog = async () => ({ canceled: true }); globalThis.__qaOcrCancels = 0; ipcMain.removeHandler('model:cancel'); ipcMain.handle('model:cancel', () => { globalThis.__qaOcrCancels++; }); });
-    page = await app.firstWindow(); page.setDefaultTimeout(9000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(9000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
     await page.evaluate(async ({ endpoint, exam }) => { await window.juanye.saveModel({ baseUrl: endpoint, model: 'local-qa-model', key: 'sk-local-tests-only-never-real' }); await window.juanye.bankSave({ questions: exam.sections.flatMap(s => s.questions), origin: { examTitle: exam.title, examId: exam.id } }); }, { endpoint, exam });

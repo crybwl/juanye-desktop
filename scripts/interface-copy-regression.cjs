@@ -30,6 +30,8 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_details, callback) => { globalThis.__copyQaRequests++; callback({ cancel: true }); });
     });
     const page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 });
     page.setDefaultTimeout(7000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { network++; return route.abort(); });
@@ -41,7 +43,7 @@ async function main() {
     await page.waitForSelector('textarea');
     await clean();
     // Formula insertion and live math remain available after removing the prose hint.
-    await page.getByRole('button', { name: '行内公式', exact: true }).click();
+    await page.getByRole('button', { name: '行内公式（或输入 $）', exact: true }).click();
     assert.ok((await page.locator('textarea').first().inputValue()).includes('$x$'));
     await page.waitForSelector('.katex');
     await page.getByRole('button', { name: '设置', exact: true }).click();
@@ -52,8 +54,9 @@ async function main() {
     for (const tab of ['识别', '外观', '快捷键', '关于']) {
       await dialog.getByRole('button', { name: tab, exact: true }).click();
       if (tab === '关于') {
-        await dialog.getByText('版本 0.4.0-beta.1', { exact: true }).waitFor();
-        assert.equal((await dialog.locator('main').innerText()).trim(), '卷页\n版本 0.4.0-beta.1');
+        const version = require(path.join(root, 'package.json')).version; // 版本号随 package.json
+        await dialog.getByText(`版本 ${version}`, { exact: true }).waitFor();
+        assert.equal((await dialog.locator('main').innerText()).trim(), `卷页\n版本 ${version}`);
       } else {
         await dialog.getByText(tab === '外观' ? '界面模式' : tab === '快捷键' ? '命令面板' : '默认多题识别', { exact: true }).waitFor();
       }

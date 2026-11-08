@@ -1,10 +1,12 @@
 .workspace-nav { background: var(--color-panel); }
 .workspace-nav { isolation: isolate; }
-.workspace-nav .workspace-nav-tab { overflow: visible; isolation: isolate; }
-.workspace-nav .workspace-nav-tab > svg { transition: transform .35s cubic-bezier(.2,.9,.25,1.25); }
-.workspace-nav .workspace-nav-tab:hover > svg { transform: translateY(-1px) rotate(-6deg); }
-.workspace-nav button[aria-current="page"] { background: transparent; color: var(--color-accent); }
-.workspace-nav button[aria-current="page"]:hover { background: transparent; }
+.workspace-tabs { isolation: isolate; }
+:is(.workspace-nav, .workspace-tabs) .workspace-nav-tab { overflow: visible; isolation: isolate; }
+:is(.workspace-nav, .workspace-tabs) .workspace-nav-tab > svg { transition: transform .35s cubic-bezier(.2,.9,.25,1.25); }
+:is(.workspace-nav, .workspace-tabs) .workspace-nav-tab:hover > svg { transform: translateY(-1px) rotate(-6deg); }
+:is(.workspace-nav, .workspace-tabs) button[aria-current="page"] { background: transparent; color: var(--color-accent); }
+:is(.workspace-nav, .workspace-tabs) button[aria-current="page"]:hover { background: transparent; }
+@media (max-width: 1180px) { .titlebar-search-label { display: none; } }
 .workspace-nav-pill { position: absolute; inset: 0; z-index: -1; border-radius: 8px; background: color-mix(in srgb, var(--color-accent) 13%, var(--color-panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 22%, transparent), 0 6px 18px -10px var(--color-accent); }
 .workspace-nav-pill::after { position: absolute; right: 22%; bottom: -6px; left: 22%; height: 2px; border-radius: 2px; background: var(--color-accent); box-shadow: 0 0 10px var(--color-accent); content: ""; }
 .workspace-nav-tools { animation: workspace-tools-in .38s cubic-bezier(.2,.8,.2,1) backwards; }
@@ -16,7 +18,7 @@
 .workspace-exam-area > :nth-child(3) { animation-delay: .1s; }
 @keyframes workspace-tools-in { from { opacity: 0; translate: 10px 0; } }
 @keyframes workspace-area-in { from { opacity: 0; translate: 0 10px; } }
-@media (prefers-reduced-motion: reduce) { .workspace-nav-tools, .workspace-nav-tools > *, .workspace-exam-area > * { animation: none; } .workspace-nav .workspace-nav-tab:hover > svg { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .workspace-nav-tools, .workspace-nav-tools > *, .workspace-exam-area > * { animation: none; } :is(.workspace-nav, .workspace-tabs) .workspace-nav-tab:hover > svg { transform: none; } }
 [data-interface-motion="reduced"] .workspace-nav-tools, [data-interface-motion="reduced"] .workspace-nav-tools > *, [data-interface-motion="reduced"] .workspace-exam-area > * { animation: none; }
 .export-center { background: var(--color-panel); }
 .export-center-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
@@ -27,7 +29,7 @@
 .print-summary-title { width: 58%; height: 4px; margin: 0 auto 9px; background: #566172; }
 .print-summary-seal { position: absolute; inset: 0 auto 0 0; border-right: 1px dashed #838b96; display: grid; place-items: center; }
 .print-summary-seal span { writing-mode: vertical-rl; color: #747e89; font-size: 6px; letter-spacing: 3px; }
-@media (max-width: 1100px) { .workspace-nav .nav-secondary-label { display: none; } }
+@media (max-width: 1240px) { .workspace-nav .nav-secondary-label { display: none; } }
 @media (max-width: 700px) { .export-center-body { grid-template-columns: 1fr; } .export-options { border-left: 0; border-top: 1px solid var(--color-line); } }
 
 /* Compatibility for the existing shared dialog chrome and export-center controls. */
@@ -56,3 +58,12 @@
 .export-target-switch button[aria-pressed="true"] { color: var(--color-fg); }
 .export-target-switch .exam-analysis-tab-pill { position: absolute; inset: 0; z-index: 0; border-radius: inherit; background: var(--surface-selected); border: 1px solid var(--color-line-strong); box-shadow: 0 2px 5px rgb(0 0 0 / .06); }
 @media(prefers-reduced-motion:reduce) { .export-format-list .export-format,.export-format-icon { transition: none !important; } }
+
+/* 编辑区 / 预览分隔线 */
+.preview-resizer { position: absolute; inset: 0 auto 0 0; z-index: 20; width: 7px; cursor: col-resize; touch-action: none; }
+.preview-resizer::after { position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--color-accent); opacity: 0; transition: opacity .15s; content: ""; }
+.preview-resizer:hover::after, .preview-resizer[data-resizing]::after { opacity: .55; }
+
+/* 试卷目录行：屏幕外的行跳过渲染（WICG content-visibility），auto 尺寸记住真实高度，滚动不跳动 */
+.sidebar-row { content-visibility: auto; contain-intrinsic-size: auto 68px; }
+.sidebar-row:focus-within, .sidebar-row[data-active] { content-visibility: visible; }

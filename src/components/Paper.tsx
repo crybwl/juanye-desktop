@@ -231,6 +231,17 @@ export function buildBlocks(exam: Exam, l: Layout, totalScore: number, qCount: n
 }
 
 /* ---------- 分页：先在隐藏容器里量高度，再贪心装页 ---------- */
+// 读取 document.fonts.ready 会强制一次样式计算；缓存到下一次字体加载开始。
+let fontsReadyPromise: Promise<unknown> | undefined;
+function fontsReady() {
+  if (!document.fonts) return undefined;
+  if (!fontsReadyPromise) {
+    fontsReadyPromise = document.fonts.ready;
+    document.fonts.addEventListener("loading", () => { fontsReadyPromise = undefined; }, { once: true });
+  }
+  return fontsReadyPromise;
+}
+
 export function usePages(blocks: Block[], contentW: number, avail: number, layout: Layout, columns: 1 | 2 = 1) {
   const ref = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<PagePiece[][]>([]);
@@ -291,7 +302,7 @@ export function usePages(blocks: Block[], contentW: number, avail: number, layou
     const mutations = new MutationObserver(schedule);
     mutations.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-drawing-status", "src"] });
     const images = Array.from(el.querySelectorAll("img"));
-    Promise.all([document.fonts?.ready, ...images.map((image) => image.decode().catch(() => undefined))]).then(() => {
+    Promise.all([fontsReady(), ...images.map((image) => image.decode().catch(() => undefined))]).then(() => {
       if (!active) return;
       resourcesReady = true;
       schedule();

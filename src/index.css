@@ -6,64 +6,81 @@
   --font-serif: "Source Han Serif SC", "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, "Noto Sans SC", monospace;
 
-  --color-bg: #08090c;
-  --color-panel: #0d0f14;
-  --color-raised: #141720;
-  --color-line: rgb(255 255 255 / 0.065);
-  --color-line-strong: rgb(255 255 255 / 0.1);
-  --color-fg: #eceef4;
-  --color-muted: #9ba1b3;
-  --color-faint: #666c7d;
-  --color-accent: #9db1ff;
-  --color-accent-2: #c4b2ff;
-  --color-ok: #74d6a6;
-  --color-warn: #f4b870;
-  --color-danger: #f28585;
+  /* 卷页 v0.6 界面规范：中性灰阶（Radix Colors slate，MIT）+ 一个强调色。
+     颜色只表达层级与状态；题型不再各自着色。 */
+  --color-bg: #111113;
+  --color-panel: #18191b;
+  --color-raised: #212225;
+  --color-line: rgb(255 255 255 / 0.075);
+  --color-line-strong: rgb(255 255 255 / 0.12);
+  --color-fg: #edeef0;
+  --color-muted: #b0b4ba;
+  --color-faint: #80848d;
+  --color-accent: #9eb1ff;
+  --color-accent-2: #9eb1ff;
+  --color-ok: #3dd68c;
+  --color-warn: #f1a10d;
+  --color-danger: #ff6369;
 }
 
 :root {
   color-scheme: dark;
-  --accent-fill: #9db1ff;
-  --accent-fill-2: #c4b2ff;
-  --surface-input: #0a0c11;
-  --surface-popup: #1c1f29;
-  --surface-selected: #262a37;
-  --surface-glass: rgb(19 21 29 / 0.94);
-  --surface-inset: rgb(0 0 0 / 0.2);
-  --surface-overlay: rgb(5 6 10 / 0.6);
-  --canvas-bg: #0b0c11;
-  --canvas-dot: rgb(255 255 255 / 0.055);
+  --accent-fill: #3e63dd;
+  --accent-fill-2: #3e63dd;
+  --accent-ink: #fff;
+  --surface-input: #141517;
+  --surface-popup: #1f2023;
+  --surface-selected: #2a2c30;
+  --surface-glass: #1c1d20;
+  --surface-inset: rgb(255 255 255 / 0.035);
+  --surface-hover: rgb(255 255 255 / 0.05);
+  --surface-active: rgb(255 255 255 / 0.08);
+  --surface-overlay: rgb(0 0 0 / 0.55);
+  --surface-header: #111113;
+  --surface-sidebar: #111113;
+  --surface-editor: #18191b;
+  --canvas-bg: #0c0d0e;
+  --canvas-dot: transparent;
   --scroll-thumb: rgb(255 255 255 / 0.12);
-  --syntax-math: #c9d4ff;
-  --syntax-brace: #7f86a0;
+  --syntax-math: #b9c6ff;
+  --syntax-brace: #80848d;
+  --shadow-popup: 0 8px 24px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --radius-control: 6px;
+  --radius-popup: 8px;
 }
 
 :root:is([data-theme="light"], [data-theme="telegram"][data-telegram-scheme="light"]) {
   color-scheme: light;
-  --color-bg: #f4f5f9;
+  --color-bg: #f9f9fb;
   --color-panel: #fff;
   --color-raised: #fff;
-  --color-line: rgb(39 52 82 / 0.105);
-  --color-line-strong: rgb(39 52 82 / 0.17);
-  --color-fg: #242d40;
-  --color-muted: #576277;
-  --color-faint: #657086;
-  --color-accent: #555f8a;
-  --color-accent-2: #6a608a;
-  --color-ok: #187247;
-  --color-warn: #8a5a15;
-  --color-danger: #b23b4d;
+  --color-line: #e8e8ec;
+  --color-line-strong: #d9d9e0;
+  --color-fg: #1c2024;
+  --color-muted: #60646c;
+  --color-faint: #737780;
+  --color-accent: #3a5bc7;
+  --color-accent-2: #3a5bc7;
+  --color-ok: #218358;
+  --color-warn: #ab6400;
+  --color-danger: #ce2c31;
   --surface-input: #fff;
   --surface-popup: #fff;
   --surface-selected: #fff;
-  --surface-glass: rgb(255 255 255 / 0.97);
-  --surface-inset: rgb(39 52 82 / 0.035);
-  --surface-overlay: rgb(43 51 76 / 0.26);
-  --canvas-bg: #e9edf4;
-  --canvas-dot: rgb(59 75 110 / 0.13);
-  --scroll-thumb: rgb(73 87 117 / 0.28);
-  --syntax-math: #394f99;
-  --syntax-brace: #66729a;
+  --surface-glass: #fff;
+  --surface-inset: #f0f0f3;
+  --surface-hover: rgb(0 0 51 / 0.04);
+  --surface-active: rgb(0 0 51 / 0.07);
+  --surface-overlay: rgb(28 32 36 / 0.32);
+  --surface-header: #fff;
+  --surface-sidebar: #f9f9fb;
+  --surface-editor: #fff;
+  --canvas-bg: #f0f0f3;
+  --canvas-dot: transparent;
+  --scroll-thumb: rgb(0 0 51 / 0.18);
+  --syntax-math: #3a5bc7;
+  --syntax-brace: #80838d;
+  --shadow-popup: 0 8px 24px rgb(0 0 51 / 0.08), 0 2px 6px rgb(0 0 51 / 0.05), 0 0 0 1px rgb(0 0 51 / 0.06);
 }
 
 :root[data-theme="telegram"] {
@@ -95,6 +112,11 @@
   --scroll-thumb: rgb(173 183 197 / 0.25);
   --syntax-math: var(--tg-accent);
   --syntax-brace: #969fae;
+  --surface-hover: rgb(255 255 255 / 0.05);
+  --surface-active: rgb(255 255 255 / 0.08);
+  --surface-header: var(--tg-header, #15191f);
+  --surface-sidebar: var(--tg-sidebar, #15191f);
+  --surface-editor: transparent;
 }
 html,
 body,
@@ -137,42 +159,23 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   background-color: color-mix(in srgb, var(--color-muted) 45%, transparent);
 }
 
+/* 浮层：不透明表面 + 细描边阴影（不再用毛玻璃） */
 .glass {
   background: var(--surface-glass);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
-/* 主按钮：渐变 + 悬停流光 */
+/* 主按钮：纯色填充，无渐变、无流光、无发光 */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
-  box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.12) inset,
-    0 6px 20px -6px color-mix(in srgb, var(--color-accent) 60%, transparent);
-}
-.btn-primary::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
-  transform: translateX(-120%);
-  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.btn-primary:hover::after {
-  transform: translateX(120%);
+  background: var(--accent-fill);
+  color: var(--accent-ink, #fff);
 }
 
-/* 背景：极淡的品牌色光晕 */
 .app-bg {
-  background:
-    radial-gradient(900px 500px at 12% -10%, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 70%),
-    radial-gradient(700px 500px at 100% 0%, color-mix(in srgb, var(--color-accent-2) 6%, transparent), transparent 70%),
-    var(--color-bg);
+  background: var(--color-bg);
 }
+/* 预览画布：纯色底，白纸自己就是焦点 */
 .canvas-dots {
   background-color: var(--canvas-bg);
-  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
-  background-size: 18px 18px;
 }
 
 /* 编辑器高亮层 */
@@ -585,10 +588,8 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
   box-shadow: 0 14px 60px rgb(0 0 0 / 0.42), 0 1px 0 rgb(255 255 255 / 0.035) inset;
 }
 :root[data-theme="telegram"] .btn-primary {
-  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  background: var(--accent-fill);
   color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 0.22), 0 1px 0 rgb(255 255 255 / 0.08) inset;
 }
 :root[data-theme="telegram"] .btn-primary:hover { filter: brightness(1.08); }
 :root[data-theme="telegram"] .btn-primary::after { display: none; }
@@ -872,9 +873,6 @@ button, input, textarea, select, [role="button"] { -webkit-app-region: no-drag; 
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-  .btn-primary::after {
-    display: none;
   }
   :root[data-theme="telegram"] .workspace-wallpaper::before {
     animation: none !important;

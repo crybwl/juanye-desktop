@@ -108,3 +108,6 @@
 @media(max-width:850px) { .exam-ai-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } .exam-ai-advanced-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .exam-ai-setup,.exam-ai-summary,.exam-ai-proposals { padding: 16px; } .exam-ai-model { max-width: 100%; margin-left: 0; } .exam-ai-heading > .exam-ai-muted { margin-left: 0; width: 100%; } .exam-ai-finding-title { flex-wrap: wrap; } .exam-ai-finding-title strong { flex-basis: 100%; margin-left: 14px; } .exam-ai-report-metrics { gap: 8px; } .exam-ai-report-metrics strong { display: block; } .exam-ai-proposal { flex-wrap: wrap; } .exam-ai-proposal > div:last-child { flex-basis: 100%; margin-left: 28px; } }
 @media(prefers-reduced-motion:reduce) { .exam-ai-panel * { transition: none !important; } .exam-ai-running-dot { animation: none; } }
+
+/* v0.6：摘要卡片去掉渐变底 */
+.exam-ai-summary { border-radius: 8px; background: var(--color-panel); box-shadow: none; }

@@ -8,9 +8,9 @@
 | --- | --- | --- |
 | Electron | MIT；随包 Chromium/Node.js 等另有许可 | 桌面宿主与 PDF 输出 |
 | React / React DOM | MIT | 编辑界面 |
-| Tiptap 开源核心与扩展 / ProseMirror | MIT | 教辅文档流编辑、表格与结构化内容块；不含付费扩展 |
-| Paged.js | MIT；传递依赖以包内许可为准 | 教辅章节预览和整本 PDF 分页 |
 | Motion | MIT | 动画 |
+| Tiptap（@tiptap/core、starter-kit、extension-text-style）/ ProseMirror | MIT | 教辅编辑台的原位富文本编辑 |
+| MathLive | MIT；随包字体与声音资源未使用 | 教辅编辑台的 Desmos 式公式输入 |
 | KaTeX | MIT；字体及附带资源以包内说明为准 | 数学公式 |
 | markdown-it | MIT | Markdown 表格及文字 |
 | Mammoth | BSD-2-Clause | DOCX 提取 |
@@ -35,3 +35,12 @@
 - node-tikzjax 携带的 TeX、WASM 和 BaKoMa 字体等资源不得被统一改标为 MIT；再分发时保留其许可文本和通知。若修改这些第三方文件，应按对应许可另行履行变更与分发要求。
 
 本仓库不包含用户的私人试卷、题库授权或模型服务授权。导入内容的版权和服务使用权限需由使用者自行确认。
+
+
+## 界面数值参考（未引入代码或依赖）
+
+- Radix Colors（MIT，© WorkOS）：slate 灰阶与各色 9 / 11 级色值，用于 src/index.css、src/accents.ts。
+- Ant Design（MIT，© Ant UED）：seed token 的数值体系（基准字号、控件高度、4px 网格、圆角），用于 src/design-system.css。
+- shadcn/ui（MIT，© shadcn）：Sidebar inset 变体的版式思路（外框留白、内容卡片圆角与轻阴影），用于 src/aura.css。
+- VitePress（MIT，© Yuxi (Evan) You）：用 View Transitions 切换外观并尊重减少动效设置的做法，用于 src/appearance.ts。
+- Zen Browser（MPL-2.0）：工作区“渐变 + 颗粒”配色的概念参考；未复制其代码或资源。

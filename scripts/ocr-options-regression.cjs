@@ -56,13 +56,15 @@ async function main() {
       });
     });
     page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 });
     page.setDefaultTimeout(8000);
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { network++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1440, height: 940 });
     await page.waitForSelector('textarea');
-    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); });
     await page.reload();
     await page.waitForSelector('.workspace-editor-stage textarea');
     const draft = () => page.evaluate(() => window.juanye.loadDraft());
@@ -94,10 +96,11 @@ async function main() {
     assert.doesNotMatch(imported.stem, /[A-D]\.\s*\d/);
     checks.push('OCR review separates inline A/B/C/D labels into editable math-normalized option fields and imports them once');
     progress('Imported option stays editable and persists to draft');
-    const optionB = page.getByRole('button', { name: '将 B 设为正确答案', exact: true }).locator('..');
-    await optionB.locator('.cursor-text').click();
-    await optionB.locator('input').fill('$20$');
-    await optionB.locator('input').press('Enter');
+    // 选项已改为与题干同一套文本字段（源码偏好下为 LaTeX 文本框），不再是“点击预览 → input”的旧结构。
+    const optionB = page.locator('.workspace-editor-stage').getByRole('textbox', { name: '选项 B', exact: true });
+    await optionB.click();
+    await optionB.fill('$20$');
+    await optionB.blur();
     await until(async () => (await question(imported.id)).options[1] === '$20$', 'Edited option did not persist');
     checks.push('Imported choices remain editable in the question editor and save to the isolated draft');
     progress('Re-recognition applies options and changes a previously misclassified essay to a choice');

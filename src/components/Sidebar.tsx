@@ -1,61 +1,31 @@
 import { AnimatePresence, Reorder, motion, useDragControls } from "motion/react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { AlertTriangle, ChevronDown, GripVertical, Image as ImageIcon, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, ScanText, FolderTree, Undo2, Redo2 } from "lucide-react";
 import type { Exam, QType, Question } from "../types";
-import { TYPE_META } from "../data";
+import { CN_NUM, TYPE_META } from "../data";
 import { MathText } from "../math";
 import { AnimatedNumber, Button, SharedPill, IconButton, cx, spring, softSpring } from "../ui";
 import { QuestionTypeIcon } from "./QuestionTypeIcon";
 import { CheckboxIndicator } from "./Checkbox";
 import { SidebarRowStore } from "../sidebar-row-store";
 
-const ExamCard = memo(function ExamCard({ exam, score, count, flags, onJump }: { exam: Exam; score: number; count: number; flags: number; onJump: () => void }) {
+/** 目录顶部的试卷摘要：标题 + 一行统计；校对提醒只在需要时出现。 */
+const ExamSummary = memo(function ExamSummary({ exam, score, count, flags, onJump, onCollapse }: { exam: Exam; score: number; count: number; flags: number; onJump: () => void; onCollapse: () => void }) {
   return (
-    <div className="sidebar-summary relative overflow-hidden rounded-2xl border border-white/[0.08] p-4">
-      {/* 缓慢流动的品牌色光斑 */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/[0.16] via-accent-2/[0.08] to-transparent" />
-      <motion.div
-        className="pointer-events-none absolute -left-10 -top-14 h-40 w-40 rounded-full bg-accent/30 blur-3xl"
-        animate={{ x: [0, 60, 10, 0], y: [0, 20, 40, 0] }}
-        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="pointer-events-none absolute -bottom-16 -right-10 h-40 w-40 rounded-full bg-accent-2/25 blur-3xl"
-        animate={{ x: [0, -50, -10, 0], y: [0, -30, 10, 0] }}
-        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <div className="relative">
-        <div className="text-[15px] font-semibold leading-snug tracking-tight">{exam.title}</div>
-        <div className="mt-1 text-[12px] text-muted">
-          {exam.subtitle} · {exam.duration} 分钟
-        </div>
-        <div className="mt-4 grid grid-cols-3 rounded-xl bg-black/25 py-2.5 ring-1 ring-inset ring-white/[0.06]">
-          {(
-            [
-              [exam.sections.length, "大题"],
-              [count, "小题"],
-              [score, "总分"],
-            ] as const
-          ).map(([v, l], i) => (
-            <div key={l} className={cx("text-center", i > 0 && "border-l border-white/[0.07]")}>
-              <AnimatedNumber value={v} className="text-[18px] font-semibold" />
-              <div className="text-[11px] text-muted">{l}</div>
-            </div>
-          ))}
-        </div>
-        <AnimatePresence mode="wait" initial={false}>
+    <div className="sidebar-summary px-4 pb-3 pt-3">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 truncate text-[13px] font-semibold" title={exam.title}>{exam.title}</div>
+        <IconButton label="收起试卷目录" aria-expanded onClick={onCollapse} className="-mr-1.5 h-7 w-7"><PanelLeftClose size={16} /></IconButton>
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-faint">
+        <span><AnimatedNumber value={exam.sections.length} /> 大题</span><span aria-hidden="true">·</span>
+        <span><AnimatedNumber value={count} /> 小题</span><span aria-hidden="true">·</span>
+        <span><AnimatedNumber value={score} /> 分</span>
+        <AnimatePresence initial={false}>
           {flags > 0 && (
-            <motion.button
-              key="warn"
-              onClick={onJump}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="mt-3 flex w-full items-center gap-2 rounded-lg bg-warn/10 px-2.5 py-1.5 text-[12px] text-warn transition-colors hover:bg-warn/15"
-            >
-              <AlertTriangle size={13} />
-              {flags} 处需要校对
-              <span className="ml-auto text-warn/70">定位 →</span>
+            <motion.button key="warn" type="button" onClick={onJump} initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -4 }}
+              className="sidebar-flag-link ml-auto inline-flex items-center gap-1 rounded-[4px] text-warn outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent/50" title="定位到第一处待校对题目">
+              <AlertTriangle size={12} />{flags} 处待校对
             </motion.button>
           )}
         </AnimatePresence>
@@ -75,11 +45,11 @@ const Row = memo(function Row({
   sectionId: string;
   onActivate: (sectionId: string, id: string) => void;
 }) {
-  const subscribe = useCallback((notify: () => void) => store.subscribe(id, notify), [store, id]);
-  const snapshot = useCallback(() => store.get(id), [store, id]);
-  const { q, num, active, batch, checked } = useSyncExternalStore(subscribe, snapshot, snapshot);
+  // 外层可拖动行只订阅“是否当前题”：打字只重渲染 RowBody，避免 Motion 对整列可拖动行重新测量布局。
   const controls = useDragControls();
-  const onClick = () => onActivate(sectionId, q.id);
+  const subscribeActive = useCallback((notify: () => void) => store.subscribe(id, notify), [store, id]);
+  const activeSnapshot = useCallback(() => store.get(id).active, [store, id]);
+  const active = useSyncExternalStore(subscribeActive, activeSnapshot, activeSnapshot);
   return (
     <Reorder.Item
       value={id}
@@ -91,9 +61,33 @@ const Row = memo(function Row({
       exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
       whileDrag={{ scale: 1.025, zIndex: 30 }}
       transition={spring}
-      className="group relative"
-      data-question-id={q.id}
+      className="sidebar-row group relative"
+      data-active={active || undefined}
+      data-question-id={id}
     >
+      {active && (
+        <SharedPill layoutId="outline-active" transition={spring} className="sidebar-row-pill pointer-events-none absolute inset-0 rounded-[6px]" />
+      )}
+      <RowBody id={id} store={store} sectionId={sectionId} onActivate={onActivate} controls={controls} />
+    </Reorder.Item>
+  );
+});
+
+const RowBody = memo(function RowBody({ id, store, sectionId, onActivate, controls }: {
+  id: string;
+  store: SidebarRowStore;
+  sectionId: string;
+  onActivate: (sectionId: string, id: string) => void;
+  controls: ReturnType<typeof useDragControls>;
+}) {
+  const subscribe = useCallback((notify: () => void) => store.subscribe(id, notify), [store, id]);
+  const snapshot = useCallback(() => store.get(id), [store, id]);
+  const { q, num, active, batch, checked } = useSyncExternalStore(subscribe, snapshot, snapshot);
+  // 题干摘要延后跟随输入：连续打字时目录不逐键重排、重绘，停顿后再更新。
+  const stem = useDeferredValue(q.stem);
+  const onClick = () => onActivate(sectionId, q.id);
+  return (
+    <>
       <div
         onClick={onClick}
         role={batch ? "checkbox" : "button"}
@@ -105,15 +99,10 @@ const Row = memo(function Row({
           if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onClick(); }
         }}
         className={cx(
-          "relative flex cursor-pointer items-start gap-2.5 rounded-[10px] py-2 pl-2 pr-7 transition-colors",
-          !active && "hover:bg-white/[0.035]",
+          "sidebar-row-body relative flex cursor-pointer items-start gap-2 rounded-[6px] py-1.5 pl-2 pr-9 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50",
+          !active && "hover:bg-[var(--surface-hover)]",
         )}
       >
-        {active && (
-          <SharedPill layoutId="outline-active" transition={spring} className="absolute inset-0 rounded-[10px] bg-accent/[0.1] ring-1 ring-inset ring-accent/20">
-            <span className="absolute bottom-2.5 left-0 top-2.5 w-[2.5px] rounded-full bg-accent" />
-          </SharedPill>
-        )}
         <AnimatePresence initial={false}>
           {batch && (
             <motion.span
@@ -127,27 +116,22 @@ const Row = memo(function Row({
             </motion.span>
           )}
         </AnimatePresence>
-        <span
-          className={cx(
-            "relative mt-[1px] grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums transition-colors duration-300",
-            active ? "bg-accent text-[#0b0d18]" : "bg-white/[0.06] text-muted",
-          )}
-        >
+        <span className={cx("sidebar-row-num relative w-5 shrink-0 text-right text-[12px] leading-[1.65] tabular-nums transition-colors duration-200", active ? "font-semibold text-accent" : "text-faint")}>
           {num}
         </span>
         <div className="relative min-w-0 flex-1">
-          <MathText text={q.stem || "（空题干）"} className={cx("line-clamp-2 text-[12.5px] leading-[1.6]", active ? "text-fg" : "text-fg/80")} />
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-faint">
-            <span>{q.score} 分</span>
-            {q.image && <ImageIcon size={11} />}
+          <MathText text={stem || "（空题干）"} className={cx("line-clamp-2 text-[13px] leading-[1.65]", active ? "text-fg" : "text-muted")} />
+          {(q.image || q.flag) && <div className="mt-0.5 flex items-center gap-2 text-[11px] text-faint">
+            {q.image && <ImageIcon size={11} aria-label="含题图" />}
             {q.flag && (
               <span className="flex items-center gap-1 text-warn">
                 <AlertTriangle size={11} />
                 待校对
               </span>
             )}
-          </div>
+          </div>}
         </div>
+        <span className="sidebar-row-score absolute right-2.5 top-[7px] text-[11px] tabular-nums text-faint">{q.score}分</span>
       </div>
         <button
           type="button"
@@ -157,12 +141,12 @@ const Row = memo(function Row({
             controls.start(e);
           }}
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-1.5 top-2.5 cursor-grab touch-none rounded p-0.5 text-faint opacity-0 transition-opacity hover:text-fg focus:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+          className="sidebar-row-grip absolute right-1.5 top-1.5 cursor-grab touch-none rounded p-0.5 text-faint opacity-0 transition-opacity hover:text-fg focus:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
           title="拖动排序"
         >
           <GripVertical size={14} />
         </button>
-    </Reorder.Item>
+    </>
   );
 });
 
@@ -187,8 +171,9 @@ const SortableQuestionRows = memo(function SortableQuestionRows({ ids, store, se
   ids: string[]; store: SidebarRowStore; sectionId: string;
   onActivate: (sectionId: string, id: string) => void; onReorder: (ids: string[]) => void;
 }) {
+  // presenceAffectsLayout=false：避免外层重渲染经 PresenceContext 级联到每一行（每行都是可拖动布局节点）。
   return <Reorder.Group axis="y" as="div" values={ids} onReorder={onReorder} className="pb-1 pl-1">
-    <AnimatePresence initial={false}>
+    <AnimatePresence initial={false} presenceAffectsLayout={false}>
       {ids.map(id => <Row key={id} id={id} store={store} sectionId={sectionId} onActivate={onActivate} />)}
     </AnimatePresence>
     {ids.length === 0 && <div className="px-3 py-2 text-[12px] text-faint">暂无题目</div>}
@@ -305,8 +290,8 @@ export function Sidebar({
   let n = 0;
   return (
     <aside aria-label="试卷目录" data-sidebar-state={expanded ? "expanded" : "collapsed"} className="question-sidebar flex h-full w-full overflow-hidden" onClick={clickBackground}>
-      <div className="sidebar-rail flex h-full w-[76px] shrink-0 flex-col items-center gap-4 border-r border-line px-3 pt-3" onClick={clickBackground}>
-        <button type="button" aria-label={expanded ? "收起试卷目录" : "展开目录面板"} aria-expanded={expanded} title={expanded ? "收起试卷目录" : "展开试卷目录"} onClick={() => onExpandedChange(!expanded)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted outline-none transition-colors hover:bg-white/[0.06] hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+      {!expanded && <div className="sidebar-rail flex h-full w-[76px] shrink-0 flex-col items-center gap-3 px-3 pt-3" onClick={clickBackground}>
+        <button type="button" aria-label={expanded ? "收起试卷目录" : "展开目录面板"} aria-expanded={expanded} title={expanded ? "收起试卷目录" : "展开试卷目录"} onClick={() => onExpandedChange(!expanded)} className="grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-muted outline-none transition-colors hover:bg-[var(--surface-hover)] hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
           {expanded ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
         </button>
         <div className="flex min-h-0 w-full shrink flex-col items-center gap-3 overflow-y-auto py-1" onClick={clickBackground}>
@@ -314,30 +299,28 @@ export function Sidebar({
             const meta = TYPE_META[section.type];
             const sectionOpen = expanded && Boolean(section.id) && !closed.has(section.id!);
             const label = `${sectionOpen ? "收起" : "展开"}${meta.label}${section.count > 1 ? ` · ${section.title}` : ""}`;
-            return <button key={section.id || section.type} type="button" aria-label={label} title={section.count > 1 ? `${label}（第 ${index + 1} 大题）` : label} aria-expanded={sectionOpen} aria-pressed={Boolean(section.id && contextSectionId === section.id)} aria-controls={section.id ? `sidebar-section-${section.id}` : undefined} data-question-type={section.type} data-section-target={section.id} onClick={() => { if (section.id) toggleSection(section.id); else onExpandedChange(true); }} className={cx("question-type-button relative grid h-11 w-11 shrink-0 place-items-center rounded-full border outline-none transition-[background,border-color,box-shadow] hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-accent/60", contextSectionId === section.id && section.id ? "border-accent/50 bg-accent/10 shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-accent)_7%,transparent)]" : "border-line-strong bg-white/[0.025]")} style={{ color: meta.hue }}><QuestionTypeIcon type={section.type} /></button>;
+            return <button key={section.id || section.type} type="button" aria-label={label} title={section.count > 1 ? `${label}（第 ${index + 1} 大题）` : label} aria-expanded={sectionOpen} aria-pressed={Boolean(section.id && contextSectionId === section.id)} aria-controls={section.id ? `sidebar-section-${section.id}` : undefined} data-question-type={section.type} data-section-target={section.id} onClick={() => { if (section.id) toggleSection(section.id); else onExpandedChange(true); }} className="question-type-button relative grid h-10 w-10 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/60" data-active={contextSectionId === section.id && section.id ? "true" : undefined}><QuestionTypeIcon type={section.type} /></button>;
           })}
         </div>
-        <button type="button" aria-label={expanded ? "收起目录空白区域" : "展开试卷目录"} title={expanded ? "点击空白处收起目录" : "点击空白处展开目录"} onClick={() => onExpandedChange(!expanded)} className="mb-2 min-h-6 w-full flex-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40" />
-      </div>
-      {expanded && <div className="sidebar-drawer flex h-full shrink-0 flex-col" style={{ width: "calc(var(--sidebar-expanded-width, 364px) - 76px)" }}>
-      <div className="px-3 pt-3">
-        <ExamCard exam={exam} score={score} count={count} flags={flags} onJump={onJumpFlag} />
-      </div>
-      <div className="flex items-center justify-between gap-1 px-3 pb-1.5 pt-4">
-        <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-faint">试卷结构</span>
+        <button type="button" aria-label="展开试卷目录" title="点击空白处展开目录" onClick={() => onExpandedChange(true)} className="mb-2 min-h-6 w-full flex-1 rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40" />
+      </div>}
+      {expanded && <div className="sidebar-drawer flex h-full shrink-0 flex-col" style={{ width: "var(--sidebar-expanded-width, 304px)" }}>
+      <ExamSummary exam={exam} score={score} count={count} flags={flags} onJump={onJumpFlag} onCollapse={() => onExpandedChange(false)} />
+      <div className="sidebar-toolbar flex items-center justify-between gap-1 px-4 pb-1 pt-2">
+        <span className="text-[12px] font-medium text-faint">目录</span>
         <div className="flex items-center">
-          <IconButton label="撤销" onClick={onUndo} disabled={!canUndo}><Undo2 size={14} /></IconButton>
-          <IconButton label="重做" onClick={onRedo} disabled={!canRedo}><Redo2 size={14} /></IconButton>
-          <IconButton label="管理大题" onClick={onManageSections}><FolderTree size={15} /></IconButton>
-          <IconButton label={batch ? "退出批量编辑" : "批量编辑"} active={batch} onClick={() => setBatch(!batch)}>
-            <ListChecks size={15} />
+          <IconButton label="撤销" className="h-7 w-7" onClick={onUndo} disabled={!canUndo}><Undo2 size={14} /></IconButton>
+          <IconButton label="重做" className="h-7 w-7" onClick={onRedo} disabled={!canRedo}><Redo2 size={14} /></IconButton>
+          <IconButton label="管理大题" className="h-7 w-7" onClick={onManageSections}><FolderTree size={14} /></IconButton>
+          <IconButton label={batch ? "退出批量编辑" : "批量编辑"} className="h-7 w-7" active={batch} onClick={() => setBatch(!batch)}>
+            <ListChecks size={14} />
           </IconButton>
         </div>
       </div>
-      <motion.div layoutScroll className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" onClick={clickBackground}>
-        {exam.sections.map((s) => {
+      {/* 滚动容器自身不做布局动画：固定 layoutDependency，打字时不触发整树测量 */}
+      <motion.div layoutScroll layoutDependency={0} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" onClick={clickBackground}>
+        {exam.sections.map((s, sectionIndex) => {
           const open = !closed.has(s.id);
-          const meta = TYPE_META[s.type];
           const sum = s.questions.reduce((a, q) => a + q.score, 0);
           const start = n;
           n += s.questions.length;
@@ -348,24 +331,18 @@ export function Sidebar({
                 aria-label={`${open ? "收起" : "展开"}${s.title}题目列表`}
                 aria-expanded={open}
                 aria-controls={`sidebar-questions-${s.id}`}
-                className="sidebar-section-heading group flex w-full items-center gap-2 rounded-[10px] px-2 py-2 outline-none transition-colors hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="sidebar-section-heading group flex w-full items-center gap-1.5 rounded-[6px] px-2 pb-1 pt-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40"
               >
-                <span
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
-                  style={{ background: `color-mix(in srgb, ${meta.hue} 15%, transparent)`, color: meta.hue }}
-                >
-                  <QuestionTypeIcon type={s.type} width={19} height={19} />
-                </span>
-                <span className="min-w-0 flex-1 text-left text-[12.5px] font-medium">{s.title}</span>
-                <span className="shrink-0 text-[10.5px] tabular-nums text-faint">
+                <motion.span animate={{ rotate: open ? 0 : -90 }} transition={spring} className="-ml-0.5 text-faint opacity-60 transition-opacity group-hover:opacity-100">
+                  <ChevronDown size={13} />
+                </motion.span>
+                <span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold text-fg">{CN_NUM[sectionIndex] ?? sectionIndex + 1}、{s.title}</span>
+                <span className="shrink-0 text-[11px] tabular-nums text-faint">
                   {s.questions.length} 题 · {sum} 分
                 </span>
-                <motion.span animate={{ rotate: open ? 0 : -90 }} transition={spring} className="text-faint group-hover:text-muted">
-                  <ChevronDown size={14} />
-                </motion.span>
               </button>
-              {batch && s.questions.length > 0 && <button role="checkbox" aria-checked={s.questions.every(q => selected.has(q.id)) ? true : s.questions.some(q => selected.has(q.id)) ? "mixed" : false} className="mb-1 ml-3 flex items-center gap-2 rounded text-[11px] text-accent" onClick={() => onSelectSection(s.id)}><CheckboxIndicator checked={s.questions.every(q => selected.has(q.id)) ? true : s.questions.some(q => selected.has(q.id)) ? "mixed" : false} />{s.questions.every(q => selected.has(q.id)) ? "取消选择本大题" : "选择本大题"}</button>}
-              <AnimatePresence initial={false}>
+              {batch && s.questions.length > 0 && <button role="checkbox" aria-checked={s.questions.every(q => selected.has(q.id)) ? true : s.questions.some(q => selected.has(q.id)) ? "mixed" : false} className="mb-1 ml-2.5 flex items-center gap-2 rounded text-[12px] text-muted hover:text-fg" onClick={() => onSelectSection(s.id)}><CheckboxIndicator checked={s.questions.every(q => selected.has(q.id)) ? true : s.questions.some(q => selected.has(q.id)) ? "mixed" : false} />{s.questions.every(q => selected.has(q.id)) ? "取消选择本大题" : "选择本大题"}</button>}
+              <AnimatePresence initial={false} presenceAffectsLayout={false}>
                 {open && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
@@ -384,11 +361,11 @@ export function Sidebar({
           );
         })}
       </motion.div>
-      <div className="sidebar-actions grid grid-cols-2 gap-2 border-t border-line p-3">
-        <Button variant="secondary" className="min-w-0 px-2 text-[12px]" icon={<Plus size={14} />} onClick={() => onAdd(contextSectionId)}>
+      <div className="sidebar-actions grid grid-cols-2 gap-1 border-t border-line px-2 py-2">
+        <Button variant="ghost" className="min-w-0 justify-start px-2 text-[13px]" icon={<Plus size={15} />} onClick={() => onAdd(contextSectionId)}>
           新建题目
         </Button>
-        <Button variant="outline" className="min-w-0 px-2 text-[12px]" icon={<ScanText size={14} />} onClick={onOcr}>
+        <Button variant="ghost" className="min-w-0 justify-start px-2 text-[13px]" icon={<ScanText size={15} />} onClick={onOcr}>
           图片 OCR
         </Button>
       </div>

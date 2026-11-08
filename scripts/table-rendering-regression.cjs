@@ -51,7 +51,9 @@ async function main() {
       ipcMain.handle('model:recognize', () => { globalThis.__tablesModelCalls++; throw new Error('Table QA must not invoke a model'); });
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: target });
     }, pdf);
-    page = await app.firstWindow(); page.setDefaultTimeout(7000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(7000);
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { network++; return route.abort('blockedbyclient'); });

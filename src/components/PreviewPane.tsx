@@ -46,7 +46,7 @@ const ScaledPage = memo(function ScaledPage({ s, pw, ph, i, total, activeId, met
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...softSpring, delay: 0.05 + i * 0.07 }}
       style={{ width: w, height: h }}
-      className="relative shrink-0 rounded-[3px] bg-white shadow-[0_0_0_1px_rgba(255,255,255,.04),0_24px_60px_-18px_rgba(0,0,0,.75),0_8px_20px_-10px_rgba(0,0,0,.5)]"
+      className="preview-sheet relative shrink-0 rounded-[2px] bg-white"
     >
       <motion.div style={{ scale: s, originX: 0, originY: 0, width: pw, height: ph, containIntrinsicSize: `${pw}px ${ph}px`, contentVisibility: selected ? "visible" : undefined }} className="preview-page-content absolute left-0 top-0 overflow-hidden rounded-[3px]">
         {mounted ? children : <span className="sr-only">滚动至此页以查看内容</span>}
@@ -83,6 +83,15 @@ function PageCounter({ canvas, scale, ph, pages }: { canvas: RefObject<HTMLDivEl
     &nbsp;/ {pages} 页
   </span>;
 }
+
+const VIEW_OPTIONS = [
+  { value: "paper" as PreviewView, label: "题卷", icon: <FileText size={13} /> },
+  { value: "card" as PreviewView, label: "答题卡", icon: <LayoutGrid size={13} /> },
+];
+/** 独立 memo：预览随输入延后刷新时，高亮药丸不重复参与布局测量。 */
+const ViewSwitch = memo(function ViewSwitch({ view, setView }: { view: PreviewView; setView: (view: PreviewView) => void }) {
+  return <Segmented size="sm" value={view} onChange={setView} options={VIEW_OPTIONS} />;
+});
 
 export const PreviewPane = memo(function PreviewPane({
   exam,
@@ -160,24 +169,16 @@ export const PreviewPane = memo(function PreviewPane({
 
   return (
     <div className="relative flex h-full min-w-0 flex-col" data-preview-pending={preview.exam !== exam || undefined}>
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-3.5">
-        <Segmented
-          size="sm"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "paper", label: "题卷", icon: <FileText size={13} /> },
-            { value: "card", label: "答题卡", icon: <LayoutGrid size={13} /> },
-          ]}
-        />
+      <div className="preview-header flex h-11 shrink-0 items-center gap-3 border-b border-line px-3">
+        <ViewSwitch view={view} setView={setView} />
         <div className="min-w-0 flex-1 truncate text-[12px] text-faint">
           {paperLabel} · {count} 小题 · 满分 {score}
         </div>
         <IconButton label="导出 .tex" onClick={onTex}>
-          <FileCode2 size={15} />
+          <FileCode2 size={16} />
         </IconButton>
         <IconButton label={mode === "preview" ? "返回编辑" : "排版设置"} active={mode === "preview"} onClick={onLayout} kbd="Ctrl 2">
-          <SlidersHorizontal size={15} />
+          <SlidersHorizontal size={16} />
         </IconButton>
       </div>
 
@@ -189,7 +190,7 @@ export const PreviewPane = memo(function PreviewPane({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.985, transition: { duration: 0.14 } }}
             transition={softSpring}
-            className="flex min-w-fit flex-col items-center gap-7 px-8 pb-24 pt-8"
+            className="flex min-w-fit flex-col items-center gap-6 px-8 pb-24 pt-6"
           >
             {view === "paper" ? (
               <PaperPages
@@ -214,25 +215,25 @@ export const PreviewPane = memo(function PreviewPane({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...softSpring, delay: 0.3 }}
-        className="glass absolute bottom-4 left-1/2 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line-strong px-1 shadow-2xl"
+        className="glass ui-floating-bar absolute bottom-4 left-1/2 flex h-9 -translate-x-1/2 items-center gap-0.5 rounded-[8px] px-1"
       >
         <IconButton label="缩小" side="top" onClick={() => zoom.set(Math.max(0.5, +(zoom.get() - 0.1).toFixed(2)))}>
           <Minus size={15} />
         </IconButton>
         <button
           onClick={() => zoom.set(1)}
-          className="h-8 w-14 rounded-lg text-center text-[12px] font-medium tabular-nums text-muted transition-colors hover:bg-white/[0.06] hover:text-fg"
+          className="h-7 w-12 rounded-[6px] text-center text-[12px] font-medium tabular-nums text-muted transition-colors hover:bg-[var(--surface-hover)] hover:text-fg"
         >
           <motion.span>{percent}</motion.span>
         </button>
         <IconButton label="放大" side="top" onClick={() => zoom.set(Math.min(2.5, +(zoom.get() + 0.1).toFixed(2)))}>
           <Plus size={15} />
         </IconButton>
-        <span className="mx-1 h-4 w-px bg-line-strong" />
+        <span className="mx-1 h-4 w-px bg-line" />
         <IconButton label="适应宽度" side="top" onClick={() => zoom.set(1)}>
           <Maximize2 size={14} />
         </IconButton>
-        <span className="mx-1 h-4 w-px bg-line-strong" />
+        <span className="mx-1 h-4 w-px bg-line" />
         <PageCounter canvas={canvas} scale={s} ph={ph} pages={pages} />
       </motion.div>
     </div>

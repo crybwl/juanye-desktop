@@ -1,6 +1,7 @@
 /* Integrated-surface contract QA. Run after the app has been built; never builds itself.
  * Real Electron/preload/storage IPC, synthetic temporary data, no credentials or HTTP/model calls.
- * Nine Telegram palettes x light/dark + the two original modes = 20 settings-driven appearances.
+ * Nine Telegram palettes x light/dark + the two original modes = 20 settings-driven appearances,
+ * plus six 晴岚 (aura) palettes x light/dark = 32 in total.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -16,7 +17,9 @@ const suffix = packaged ? 'packaged' : 'source';
 const output = path.join(root, 'artifacts', 'qa-integrated-surfaces', suffix);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const paletteIds = ['ocean', 'spring', 'frost', 'gem', 'classroom', 'blossom', 'dusk', 'ember', 'neon'];
-const commonSurfaces = ['.app-bg > header', '.workspace-nav', '.question-sidebar', '.sidebar-rail', '.sidebar-drawer', '.sidebar-summary', '.sidebar-actions', '.workspace-exam-area > [class~="bg-panel/80"]', '.workspace-preview-stage > div > [class~="shrink-0"]', '[data-editor-workbench]', 'section[data-workbench-group]'];
+const auraIds = ['mist', 'glacier', 'apricot', 'dusk', 'sage', 'graphite'];
+// v0.6：目录展开时不再同时显示左侧题型栏（.sidebar-rail 只在收起态出现，由 sidebar / appearance-controls 回归覆盖）。
+const commonSurfaces = ['.app-bg > header', '.workspace-nav', '.question-sidebar', '.sidebar-drawer', '.sidebar-summary', '.sidebar-actions', '.workspace-exam-area > [class~="bg-panel/80"]', '.workspace-preview-stage > div > [class~="shrink-0"]', '[data-editor-workbench]', 'section[data-workbench-group]'];
 const bankSurfaces = ['.bank-library-summary', '.bank-library-sidebar', '.bank-catalog', '.bank-detail-pane', '.bank-basket', '.bank-preview-paper'];
 async function until(check, message, timeout = 12000) {
   const deadline = Date.now() + timeout;
@@ -153,6 +156,13 @@ async function main() {
       await dialog.getByRole('group', { name: 'Telegram 明暗模式', exact: true }).getByRole('tab', { name: scheme === 'light' ? '浅色' : '深色', exact: true }).click();
       await dialog.locator('label').filter({ has: page.locator(`input[name="juanye-telegram-theme"][value="${id}"]`) }).click();
     }
+    if (mode === 'aura') {
+      await dialog.getByRole('group', { name: '晴岚明暗模式', exact: true }).getByRole('tab', { name: scheme === 'light' ? '浅色' : '深色', exact: true }).click();
+      await dialog.locator('label').filter({ has: page.locator(`input[name="juanye-aura-palette"][value="${id}"]`) }).click();
+      await page.waitForFunction(({ scheme, id }) => document.documentElement.dataset.appearance === 'aura' && document.documentElement.dataset.theme === scheme && document.documentElement.style.colorScheme === scheme && document.documentElement.dataset.auraPalette === id, { scheme, id });
+      await pause(170);
+      return;
+    }
     await page.waitForFunction(({ mode, scheme, id }) => document.documentElement.dataset.theme === mode && document.documentElement.style.colorScheme === (mode === 'telegram' ? scheme : mode) && (mode !== 'telegram' || document.documentElement.dataset.telegramTheme === id), { mode, scheme, id });
     if (mode === 'telegram') await page.waitForFunction(() => document.documentElement.dataset.sceneReady === 'true');
     await pause(170);
@@ -172,7 +182,9 @@ async function main() {
       const painted = color => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return context.getImageData(0, 0, 1, 1).data[3] > 0; };
       return { count: nodes.length, hardBoxes: nodes.flatMap(node => {
         const style = getComputedStyle(node);
-        const border = ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(style[`border${side}Width`]) > 0 && painted(style[`border${side}Color`]));
+        // v0.6：描边按钮（outline）本身就是白底 + 1px 细边；其余中性按钮仍不得有边框。所有中性按钮都不得有阴影。
+        const outline = node.getAttribute('data-variant') === 'outline';
+        const border = !outline && ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(style[`border${side}Width`]) > 0 && painted(style[`border${side}Color`]));
         return border || style.boxShadow !== 'none' ? [{ name: node.getAttribute('aria-label') || node.textContent.trim(), border: style.borderColor, shadow: style.boxShadow }] : [];
       }) };
     });
@@ -196,7 +208,9 @@ async function main() {
         ipcMain.removeHandler(channel); ipcMain.handle(channel, () => { globalThis.__integratedSurfaces.modelCalls++; throw Error(`Model execution forbidden in surface QA: ${channel}`); });
       }
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(10000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(10000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { rendererRequests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1500, height: 980 }); await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -240,10 +254,32 @@ async function main() {
       await paper(mode); appearances.push({ mode, primaryContrast: primary.map(node => node.contrast), primaryHoverContrast: hovered[0].contrast });
       dialog = await settings();
     }
-    assert.equal(appearances.length, 20);
+    for (const scheme of ['light', 'dark']) for (const id of auraIds) {
+      await chooseAppearance(dialog, 'aura', scheme, id);
+      const label = `aura-${scheme}-${id}`;
+      // 晴岚：表面不得各自贴纹理；正文只在不透明表面上，主文字对比度照常 ≥ 4.5。
+      await inspect(label, [...commonSurfaces, ...bankSurfaces, '.glass[role="dialog"]', '.glass > aside', '[data-aura-gallery]'], false);
+      await neutralControls(label);
+      await close(dialog);
+      const primary = await inspect(`${label}-primary-actions`, ['.app-bg > header [data-ui-button][data-variant="primary"]'], null);
+      await page.locator('.app-bg > header [data-ui-button][data-variant="primary"]').hover(); await pause(220);
+      const hovered = await inspect(`${label}-primary-hover`, ['.app-bg > header [data-ui-button][data-variant="primary"]'], null);
+      await page.mouse.move(3, 3);
+      const frame = await page.evaluate(() => {
+        const backdrop = getComputedStyle(document.querySelector('.scene-backdrop')), stage = getComputedStyle(document.querySelector('.workspace-stage'));
+        return { display: backdrop.display, image: backdrop.backgroundImage.slice(0, 40), radius: parseFloat(stage.borderTopLeftRadius), stageBackground: stage.backgroundColor };
+      });
+      assert.equal(frame.display, 'block', `${label}: aura backdrop hidden`);
+      assert.match(frame.image, /radial-gradient/, `${label}: aura backdrop has no gradient`);
+      assert.ok(frame.radius >= 10, `${label}: workspace card is not rounded`);
+      assert.match(frame.stageBackground, /^rgb\(/, `${label}: workspace card is not opaque`);
+      await paper(label); appearances.push({ mode: 'aura', scheme, id, primaryContrast: primary.map(node => node.contrast), primaryHoverContrast: hovered[0].contrast });
+      dialog = await settings();
+    }
+    assert.equal(appearances.length, 32);
     console.log(JSON.stringify({ primaryContrast: appearances.map(({ mode, scheme, id, primaryContrast, primaryHoverContrast }) => ({ mode, scheme, id, primaryContrast, primaryHoverContrast })), contrastIssues }));
     await close(dialog);
-    checks.push('All 20 real settings-driven appearances: one decoded continuous scene across chrome/editor/bank/settings, no restarted pane textures, readable main text and normal/hover primary actions, neutral buttons without hard borders or shadows, ordinary modes without Telegram pattern, white paper');
+    checks.push('All 32 real settings-driven appearances (incl. 12 晴岚): one decoded continuous scene across chrome/editor/bank/settings, no restarted pane textures, readable main text and normal/hover primary actions, neutral buttons without hard borders or shadows, ordinary modes without Telegram pattern, white paper');
 
     for (const scheme of ['dark', 'light']) {
       progress(`complete ${scheme} Telegram interface tour`);

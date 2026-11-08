@@ -6,6 +6,8 @@ import "./index.css";
 import App from "./App";
 import { initializeAppearance } from "./appearance";
 import "./integrated-surfaces.css";
+import "./design-system.css";
+import "./aura.css";
 
 initializeAppearance();
 

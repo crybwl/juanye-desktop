@@ -1,15 +1,16 @@
 import { memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePlus2, Flame, Folder, FolderPlus, GripVertical, HardDrive, History, LayoutGrid, LayoutList, Library, Lightbulb, ListChecks, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, RefreshCw, RotateCcw, ScanText, Search, ShoppingBasket, Sparkles, Star, Tag, Trash2, Upload, X, ZoomIn } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePlus2, Flame, Folder, FolderPlus, GripVertical, HardDrive, History, SlidersHorizontal, LayoutGrid, LayoutList, Library, Lightbulb, ListChecks, Loader2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, RefreshCw, RotateCcw, ScanText, Search, ShoppingBasket, Sparkles, Star, Tag, Trash2, Upload, X, ZoomIn } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Exam, QType, Question, Section } from "../types";
 import { TYPE_META } from "../data";
 import { MathText, plain } from "../math";
 import { extractTikzBlocks, stripTikzBlocks } from "../drawing";
-import { questionFigures } from "../figures";
+import { hasOptions, questionFigures } from "../figures";
 import { TikzDrawing } from "../TikzDrawing";
 import { parseProject } from "../documents";
 import { changeQuestionType } from "../structure";
+import { AUTO_SECTION } from "../workspace-edits";
 import { bankBridge, BANK_DRAG_MIME, checkedBankDocument, cloneBankEntries, latestBankEntries, parseBankDrag, sortBankEntries, type BankDocument, type BankEntry, type BankFilters } from "../question-bank";
 import { planCollectionDrop } from "../collection-drop";
 import { Button, Field, IconButton, Modal, SharedPill, inputCls, useToast } from "../ui";
@@ -19,7 +20,6 @@ import { Editor } from "./Editor";
 import { ImportDialog } from "./ImportDialog";
 import { OcrDialog } from "./Ocr";
 import { PlotSvg } from "./Paper";
-import { QuestionTypeIcon } from "./QuestionTypeIcon";
 import { AnimatedNumber, DifficultyMeter, EmptyArt, FigureLightbox, FlightLayer, Reveal, StarBurst, TypeSpectrum, cardSpring, cardVariants, listVariants, useRichMotion, type Flight, type ZoomFigure } from "./bank-motion";
 import "./bank-workspace.css";
 
@@ -115,7 +115,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [target, setTarget] = useState(exam.sections[0]?.id ?? "");
+  const [target, setTarget] = useState(AUTO_SECTION);
   const [fileImport, setFileImport] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
   const [packageImport, setPackageImport] = useState<PackageImport | null>(null);
@@ -179,7 +179,7 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   const selectedEntries = useMemo(() => selected.map(id => byId.get(id)).filter((entry): entry is BankEntry => !!entry), [selected, byId]);
   const basketEntries = useMemo(() => basket.map(id => byId.get(id)).filter((entry): entry is BankEntry => !!entry && !entry.trashedAt), [basket, byId]);
   const totalScore = basketEntries.reduce((sum, entry) => sum + entry.question.score, 0);
-  const targetId = exam.sections.some(section => section.id === target) ? target : exam.sections[0]?.id ?? "";
+  const targetId = target === AUTO_SECTION || exam.sections.some(section => section.id === target) ? target : AUTO_SECTION;
   const knowledge = useMemo(() => [...new Set(live.flatMap(entry => entry.question.knowledge ?? []).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh")), [live]);
   const sources = useMemo(() => [...new Set(live.map(entry => entry.question.source?.trim() || entry.origin.examTitle).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh")), [live]);
   const title = view === "favorites" ? "我的收藏" : view === "review" ? "待核对" : view === "trash" ? "回收站" : activeCollection?.name ?? "全部题目";
@@ -509,26 +509,30 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
       <section className="bank-catalog" aria-label="题目列表" data-batch={selected.length > 0 || undefined}>
         <div className="bank-catalog-heading">
           <div className="bank-catalog-title" aria-label={`${title}，${filtered.length} 道题`}><span className="bank-catalog-count"><AnimatedNumber value={filtered.length} /> 道题</span><span className="bank-catalog-context"><AnimatePresence mode="popLayout" initial={false}><motion.h2 key={title} initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -8, opacity: 0 }} transition={motionTransition}>{title}</motion.h2></AnimatePresence></span></div>
+          <button type="button" className="bank-basket-chip" data-basket-anchor="" aria-label={`打开选题篮，已选 ${basketEntries.length} 题`} onClick={() => { setRightOpen(true); setBasketExpanded(true); }}><ShoppingBasket size={14} /><span>选题篮</span><b><AnimatedNumber value={basketEntries.length} /></b></button>
           <div className="bank-catalog-tools">
             <div className="bank-density" role="group" aria-label="题目显示方式">{(["list", "grid"] as const).map(mode => <button key={mode} aria-pressed={density === mode} aria-label={mode === "list" ? "列表视图" : "卡片视图"} title={mode === "list" ? "列表视图" : "卡片视图"} onClick={() => setDensity(mode)}>{density === mode && <SharedPill layoutId="bank-density-pill" className="bank-density-pill" transition={motionTransition} />}{mode === "list" ? <LayoutList size={15} /> : <LayoutGrid size={15} />}</button>)}</div>
             <IconButton label={rightOpen ? "收起题目详情" : "展开题目详情"} onClick={() => setRightOpen(value => !value)}>{rightOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}</IconButton>
           </div>
         </div>
         <div className="bank-search-toolbar"><div className="bank-search" data-filled={!!filters.query || undefined}><Search size={16} /><input ref={searchRef} className={`${inputCls} bank-search-input`} aria-label="搜索题库" placeholder="搜索题目…" value={filters.query ?? ""} onChange={event => updateFilters({ query: event.target.value })} onKeyDown={event => { if (event.key === "Escape" && filters.query) { event.stopPropagation(); updateFilters({ query: "" }); } }} />{filters.query ? <button aria-label="清空题库搜索" onClick={() => { updateFilters({ query: "" }); searchRef.current?.focus(); }}><X size={14} /></button> : <kbd aria-hidden="true">/</kbd>}<span className="bank-search-glow" aria-hidden="true" /></div>{toolbarActions}</div>
-        <div className="bank-type-rail" role="group" aria-label="按题型筛选">
+        <div className="bank-filter-bar">
+          <label className="bank-select-all" title="全选筛选结果"><Checkbox aria-label="全选筛选结果" disabled={busy || !filtered.length} checked={filtered.length > 0 && filtered.every(entry => selected.includes(entry.id)) ? true : filtered.some(entry => selected.includes(entry.id)) ? "mixed" : false} onCheckedChange={checked => setSelected(checked ? filtered.map(entry => entry.id) : [])} /></label>
+          <div className="bank-type-rail" role="group" aria-label="按题型筛选">
           <button aria-pressed={!filters.type} onClick={() => updateFilters({ type: "" })}>{!filters.type && <SharedPill layoutId="bank-type-pill" className="bank-type-pill" transition={motionTransition} />}<span>全部</span><small><AnimatedNumber value={typeBase.length} /></small></button>
           {typeCounts.filter(item => item.count || filters.type === item.key).map(item => <button key={item.key} aria-pressed={filters.type === item.key} style={hueStyle(item.key as QType)} onClick={() => updateFilters({ type: filters.type === item.key ? "" : item.key as QType })}>{filters.type === item.key && <SharedPill layoutId="bank-type-pill" className="bank-type-pill" transition={motionTransition} />}<i aria-hidden="true" /><span>{TYPE_META[item.key as QType].short}</span><small><AnimatedNumber value={item.count} /></small></button>)}
-        </div>
-        <div className="bank-filter-grid">
-          <Select aria-label="题库知识点" value={filters.knowledge ?? ""} onValueChange={knowledge => updateFilters({ knowledge })} options={[{ value: "", label: "全部知识点" }, ...knowledge.map(value => ({ value, label: value }))]} />
-          <Select aria-label="题库难度" value={filters.difficulty ?? ""} onValueChange={difficulty => updateFilters({ difficulty: difficulty as BankFilters["difficulty"] })} options={[{ value: "", label: "全部难度" }, ...Object.entries(DIFFICULTY).map(([value, label]) => ({ value, label })), { value: "unset", label: "未设置难度" }]} />
-          <Select aria-label="题库来源" value={filters.source ?? ""} onValueChange={source => updateFilters({ source })} options={[{ value: "", label: "全部来源" }, ...sources.map(value => ({ value, label: value }))]} />
+          </div>
+          <FilterPopover count={chips.filter(chip => chip.key === "knowledge" || chip.key === "difficulty" || chip.key === "source").length}>
+            <Field label="知识点"><Select aria-label="题库知识点" value={filters.knowledge ?? ""} onValueChange={knowledge => updateFilters({ knowledge })} options={[{ value: "", label: "全部知识点" }, ...knowledge.map(value => ({ value, label: value }))]} /></Field>
+            <Field label="难度"><Select aria-label="题库难度" value={filters.difficulty ?? ""} onValueChange={difficulty => updateFilters({ difficulty: difficulty as BankFilters["difficulty"] })} options={[{ value: "", label: "全部难度" }, ...Object.entries(DIFFICULTY).map(([value, label]) => ({ value, label })), { value: "unset", label: "未设置难度" }]} /></Field>
+            <Field label="来源"><Select aria-label="题库来源" value={filters.source ?? ""} onValueChange={source => updateFilters({ source })} options={[{ value: "", label: "全部来源" }, ...sources.map(value => ({ value, label: value }))]} /></Field>
+          </FilterPopover>
+          <Select aria-label="题库排序" className="bank-sort" value={filters.sort ?? "recent"} onValueChange={sort => updateFilters({ sort: sort as BankFilters["sort"] })} options={[{ value: "recent", label: "最近添加" }, { value: "used", label: "使用最多" }, { value: "score", label: "分值从高到低" }]} />
         </div>
         <AnimatePresence initial={false}>{chips.length > 0 && <motion.div key="chips" className="bank-active-filters" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={motionTransition}>
           <div><AnimatePresence mode="popLayout" initial={false}>{chips.map(chip => <motion.button layout key={chip.key} aria-label={`移除筛选 ${chip.label}`} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }} transition={motionTransition} onClick={chip.clear}><span>{chip.label}</span><X size={11} /></motion.button>)}</AnimatePresence><motion.button layout className="bank-text-action" onClick={resetFilters}>重置筛选</motion.button></div>
         </motion.div>}</AnimatePresence>
-        <div className="bank-result-toolbar"><label><Checkbox aria-label="全选筛选结果" disabled={busy || !filtered.length} checked={filtered.length > 0 && filtered.every(entry => selected.includes(entry.id)) ? true : filtered.some(entry => selected.includes(entry.id)) ? "mixed" : false} onCheckedChange={checked => setSelected(checked ? filtered.map(entry => entry.id) : [])} /><span>{selected.length ? <>已选 <AnimatedNumber value={selected.length} /></> : "全选"}</span></label>{selected.length > 0 && <button className="bank-text-action" onClick={() => setSelected([])}>清除</button>}<span className="bank-result-hint"><kbd>↑</kbd><kbd>↓</kbd> 切换预览</span><Select aria-label="题库排序" className="bank-sort" value={filters.sort ?? "recent"} onValueChange={sort => updateFilters({ sort: sort as BankFilters["sort"] })} options={[{ value: "recent", label: "最近添加" }, { value: "used", label: "使用最多" }, { value: "score", label: "分值从高到低" }]} /></div>
-        <motion.fieldset disabled={busy} layoutScroll className="bank-catalog-list" data-testid="bank-question-list" data-density={density} aria-label="题目与选择操作" aria-busy={busy || deferredQuery !== (filters.query ?? "")}>
+        <motion.fieldset disabled={busy} layoutScroll layoutDependency={0} className="bank-catalog-list" data-testid="bank-question-list" data-density={density} aria-label="题目与选择操作" aria-busy={busy || deferredQuery !== (filters.query ?? "")}>
           {busy && !loaded && <div className="bank-skeletons" role="status" aria-label="正在读取题库…">{[0, 1, 2, 3].map(index => <div key={index} className="bank-skeleton" style={{ "--i": index } as CSSProperties}><i /><i /><i /><i /></div>)}</div>}
           {loaded && !filtered.length && <motion.div key={`empty-${emptyKind}`} className="bank-workspace-empty" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={motionTransition}><EmptyArt kind={emptyKind} /><h3>{view === "trash" ? "回收站为空" : live.length ? "没有符合条件的题目" : "题库暂无题目"}</h3><p>{view === "trash" ? "移入回收站的题目会保留全部历史版本" : live.length ? "换个关键词，或重置筛选条件" : "新建题目，或从文件和试卷中保存"}</p>{chips.length > 0 && <Button size="sm" variant="outline" onClick={resetFilters} icon={<RotateCcw size={13} />}>重置筛选</Button>}{!live.length && view !== "trash" && <Button size="sm" variant="outline" onClick={() => setFileImport(true)} icon={<Upload size={13} />}>导入题目</Button>}</motion.div>}
           <motion.div key={listKey} className="bank-entry-grid" variants={listVariants} initial={rich ? "hidden" : false} animate="show">
@@ -554,10 +558,10 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={detailKey} className="bank-detail-body" initial={{ opacity: 0, x: 26 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18, transition: { duration: 0.11 } }} transition={motionTransition}>
           {draft ? <>
-            <div className="bank-question-editor" data-testid="bank-question-editor">{active && <Editor q={draft.question} focusTarget={draft.focusTarget} sec={draftSection} secIndex={0} num={1} total={1} dir={0} neighbors={{}} onChange={patch => setDraft(value => value ? { ...value, question: { ...value.question, ...patch } } : value)} onPrev={() => {}} onNext={() => {}} onConvert={() => setDraft(value => value ? { ...value, question: changeQuestionType(value.question, "essay") } : value)} onDelete={() => { if (canLeaveDraft()) setDraft(null); }} onStart={() => {}} onOcr={() => setOcrOpen(true)} />}</div>
+            <div className="bank-question-editor" data-testid="bank-question-editor">{active && <Editor q={draft.question} extrasOpen focusTarget={draft.focusTarget} sec={draftSection} secIndex={0} num={1} total={1} dir={0} neighbors={{}} onChange={patch => setDraft(value => value ? { ...value, question: { ...value.question, ...patch } } : value)} onPrev={() => {}} onNext={() => {}} onConvert={() => setDraft(value => value ? { ...value, question: changeQuestionType(value.question, "essay") } : value)} onDelete={() => { if (canLeaveDraft()) setDraft(null); }} onStart={() => {}} onOcr={() => setOcrOpen(true)} />}</div>
             <div className="bank-edit-footer"><span>{draft.entry ? `保存为版本 ${draft.entry.version + 1}` : "仅保存到题库"}</span><Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (canLeaveDraft()) setDraft(null); }}>取消</Button><Button size="sm" variant="primary" disabled={busy || (!!draft.entry && !dirty)} icon={busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} onClick={() => void saveDraft()}>保存</Button></div>
           </> : preview ? <>
-            <div className="bank-detail-tools" style={hueStyle(preview.question.type)}><span className="bank-type-tag"><QuestionTypeIcon type={preview.question.type} width={13} height={13} />{TYPE_META[preview.question.type].short}</span><span className="bank-detail-meta">{TYPE_META[preview.question.type].label} · {preview.question.score} 分{preview.version > 1 ? ` · v${preview.version}` : ""}</span><IconButton label="版本历史" className="bank-detail-action" active={historyOpen} onClick={() => setHistoryOpen(value => !value)}><History size={15} /></IconButton><Button className="bank-edit-main" size="sm" variant="outline" disabled={busy || !!preview.trashedAt || preview.id !== newest?.id} onClick={() => editEntry(preview)} icon={<Pencil size={12} />}>编辑题目</Button></div>
+            <div className="bank-detail-tools" style={hueStyle(preview.question.type)}><span className="bank-type-tag">{TYPE_META[preview.question.type].short}</span><span className="bank-detail-meta">{TYPE_META[preview.question.type].label} · {preview.question.score} 分{preview.version > 1 ? ` · v${preview.version}` : ""}</span><IconButton label="版本历史" className="bank-detail-action" active={historyOpen} onClick={() => setHistoryOpen(value => !value)}><History size={15} /></IconButton><Button className="bank-edit-main" size="sm" variant="outline" disabled={busy || !!preview.trashedAt || preview.id !== newest?.id} onClick={() => editEntry(preview)} icon={<Pencil size={12} />}>编辑题目</Button></div>
             <Reveal open={historyOpen} className="bank-version-reveal"><div className="bank-version-history" data-testid="bank-version-history"><h3><Clock3 size={12} />版本历史 · {versions.length}</h3>{versions.map((entry, index) => <motion.div key={entry.id} className="bank-version-row" data-current={entry.id === newest?.id || undefined} initial={rich ? { opacity: 0, x: -10 } : false} animate={{ opacity: 1, x: 0 }} transition={{ ...cardSpring, delay: index * 0.04 }}><i aria-hidden="true" /><button data-active={entry.id === preview.id} onClick={() => setPreviewId(entry.id)}><span>版本 {entry.version}{entry.id === newest?.id ? " · 当前" : ""}</span><small>{dateText(entry.createdAt)}</small></button>{entry.id !== newest?.id && !entry.trashedAt && <button className="bank-version-restore" aria-label={`恢复版本 ${entry.version} 为新版本`} disabled={busy} onClick={() => void task(async () => { if (!newest || !window.confirm(`将版本 ${entry.version} 的内容保存为新版本？所有历史版本均保留。`)) return; const result = await bankBridge().bankRevise({ id: newest.id, question: entry.question, expectedContentKey: newest.contentKey }); acceptBank(result.bank); setPreviewId(result.entry.id); toast({ title: "已保存为新版本" }); })}><RotateCcw size={13} /></button>}</motion.div>)}</div></Reveal>
             <div className="bank-preview-scroll" data-testid="bank-question-preview">
               <div className="bank-preview-paper" style={hueStyle(preview.question.type)}><BankQuestionPreview question={preview.question} onZoom={setZoom} onEdit={editPreview} editable={!busy && !preview.trashedAt && preview.id === newest?.id} /></div>
@@ -586,8 +590,8 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
             <TypeSpectrum segments={basketSegments} decorative className="bank-basket-spectrum" /><ChevronDown size={15} />
           </button>
           <Reveal open={basketOpen} className="bank-basket-body">
-            <motion.div layoutScroll className="bank-basket-list">{!basketEntries.length && <p className="bank-basket-empty"><ShoppingBasket size={18} /><span>点击题目上的“选题”，或把题目拖到这里</span></p>}{basketEntries.map((entry, index) => <motion.div layout={rich ? "position" : false} layoutDependency={basket.join("|")} className="bank-basket-item" key={entry.id} data-basket-id={entry.id} style={hueStyle(entry.question.type)} initial={rich ? { opacity: 0, x: 28, scale: 0.94 } : false} animate={{ opacity: 1, x: 0, scale: 1 }} transition={motionTransition}><span className="bank-basket-index">{index + 1}</span><button className="bank-basket-stem" onClick={() => choosePreview(entry.id)} title={plain(entry.question.stem)}><i>{TYPE_META[entry.question.type].short}</i>{plain(entry.question.stem) || "题图题目"}</button><small>{entry.question.score} 分</small><button aria-label={`上移选题 ${index + 1}`} disabled={index === 0 || busy} onClick={() => moveBasket(index, -1)}><ArrowUp size={12} /></button><button aria-label={`下移选题 ${index + 1}`} disabled={index === basketEntries.length - 1 || busy} onClick={() => moveBasket(index, 1)}><ArrowDown size={12} /></button><button aria-label={`移除选题 ${index + 1}`} disabled={busy} onClick={() => setBasket(value => value.filter(id => id !== entry.id))}><X size={13} /></button></motion.div>)}</motion.div>
-            <div className="bank-basket-insert"><Select aria-label="题库目标大题" value={targetId} onValueChange={setTarget} disabled={!exam.sections.length || busy} options={exam.sections.length ? exam.sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title || TYPE_META[section.type].label}` })) : [{ value: "", label: "当前试卷暂无大题" }]} /><Button size="sm" variant="primary" disabled={busy || !basketEntries.length || !targetId} onClick={() => void insertBasket(false)}>加入当前试卷</Button></div>
+            <motion.div layoutScroll layoutDependency={0} className="bank-basket-list">{!basketEntries.length && <p className="bank-basket-empty"><ShoppingBasket size={18} /><span>点击题目上的“选题”，或把题目拖到这里</span></p>}{basketEntries.map((entry, index) => <motion.div layout={rich ? "position" : false} layoutDependency={basket.join("|")} className="bank-basket-item" key={entry.id} data-basket-id={entry.id} style={hueStyle(entry.question.type)} initial={rich ? { opacity: 0, x: 28, scale: 0.94 } : false} animate={{ opacity: 1, x: 0, scale: 1 }} transition={motionTransition}><span className="bank-basket-index">{index + 1}</span><button className="bank-basket-stem" onClick={() => choosePreview(entry.id)} title={plain(entry.question.stem)}><i>{TYPE_META[entry.question.type].short}</i>{plain(entry.question.stem) || "题图题目"}</button><small>{entry.question.score} 分</small><button aria-label={`上移选题 ${index + 1}`} disabled={index === 0 || busy} onClick={() => moveBasket(index, -1)}><ArrowUp size={12} /></button><button aria-label={`下移选题 ${index + 1}`} disabled={index === basketEntries.length - 1 || busy} onClick={() => moveBasket(index, 1)}><ArrowDown size={12} /></button><button aria-label={`移除选题 ${index + 1}`} disabled={busy} onClick={() => setBasket(value => value.filter(id => id !== entry.id))}><X size={13} /></button></motion.div>)}</motion.div>
+            <div className="bank-basket-insert"><Select aria-label="题库目标大题" value={targetId} onValueChange={setTarget} disabled={busy} options={[{ value: AUTO_SECTION, label: "按题型自动归入" }, ...exam.sections.map((section, index) => ({ value: section.id, label: `${index + 1}. ${section.title || TYPE_META[section.type].label}` }))]} /><Button size="sm" variant="primary" disabled={busy || !basketEntries.length || !targetId} onClick={() => void insertBasket(false)}>加入当前试卷</Button></div>
             <div className="bank-basket-footer"><button disabled={busy || !basketEntries.length} onClick={() => setBasket([])}>清空选题篮</button><Button size="sm" variant="ghost" disabled={busy || !basketEntries.length} icon={<FilePlus2 size={13} />} onClick={() => void insertBasket(true)}>选题新建试卷</Button></div>
           </Reveal>
           <div className="bank-basket-drop" aria-hidden="true"><ShoppingBasket size={18} />松开即可加入选题篮</div>
@@ -607,16 +611,55 @@ export const BankWorkspace = memo(function BankWorkspace({ active = true, exam, 
   </motion.main>;
 });
 
+/** 次要筛选条件收进一个面板，列表上方只占一行；已选条件以标签显示在下方。 */
+function FilterPopover({ count, children }: { count: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const down = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target && (root.current?.contains(target) || target.closest("[data-select-menu]"))) return;
+      setOpen(false);
+    };
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.querySelector("[data-select-menu]")) setOpen(false); };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", down, true); document.removeEventListener("keydown", key); };
+  }, [open]);
+  return <div ref={root} className="bank-filter-popover">
+    <button type="button" className="bank-filter-trigger" aria-expanded={open} aria-haspopup="dialog" data-active={count > 0 || undefined} onClick={() => setOpen(value => !value)}>
+      <SlidersHorizontal size={14} /><span>筛选</span>{count > 0 && <b>{count}</b>}
+    </button>
+    <AnimatePresence>{open && <motion.div key="panel" role="dialog" aria-label="更多筛选条件" className="bank-filter-panel" initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ type: "spring", stiffness: 500, damping: 36 }}>{children}</motion.div>}</AnimatePresence>
+  </div>;
+}
+
 const BankQuestionCard = memo(function BankQuestionCard({ entry, active, inBasket, selected, rich, burst, knowledge, layoutKey, actions }: { entry: BankEntry; active: boolean; inBasket: boolean; selected: boolean; rich: boolean; burst: number; knowledge?: string; layoutKey: string; actions: MutableRefObject<BankCardActions> }) {
   const q = entry.question, transition = rich ? cardSpring : instantMotion;
   const content = useMemo(() => ({ figure: questionFigures(q)[0], stem: stripTikzBlocks(q.stem), label: plain(q.stem).slice(0, 28) || "空题干" }), [q]);
   return <motion.div className="bank-entry-motion" layout={rich ? "position" : false} layoutDependency={layoutKey} variants={cardVariants} transition={transition}>
     <article className="bank-entry" data-bank-id={entry.id} data-bank-entry={entry.id} data-active={active} data-selected={selected || undefined} data-in-basket={inBasket || undefined} data-testid="bank-entry" style={hueStyle(q.type)} draggable={!entry.trashedAt} onDragStart={event => { if (!actions.current.drag(entry, selected, event.dataTransfer)) event.preventDefault(); }} onDragEnd={() => actions.current.dragEnd()}>
-      <span className="bank-entry-accent" aria-hidden="true" />
-      <div className="bank-entry-top"><Checkbox aria-label={`选择题库题目 ${entry.id}`} checked={selected} onCheckedChange={checked => actions.current.select(entry.id, checked)} /><span className="bank-type-tag"><QuestionTypeIcon type={q.type} width={13} height={13} />{TYPE_META[q.type].short}</span><span className="bank-score-tag">{q.score} 分</span>{q.difficulty && <DifficultyMeter level={q.difficulty} label={DIFFICULTY[q.difficulty]} />}{entry.version > 1 && <span className="bank-version-tag">v{entry.version}</span>}{q.flag && <span className="bank-flag-tag" title={q.flag}>待核对</span>}<span className="bank-entry-grip" aria-hidden="true"><GripVertical size={14} /></span><button className="bank-favorite" data-favorite={entry.favorite} aria-label={entry.favorite ? "取消收藏题目" : "收藏题目"} disabled={!!entry.trashedAt} onClick={() => actions.current.favorite(entry)}><motion.span key={String(entry.favorite)} initial={rich && entry.favorite ? { scale: 0.3, rotate: -60 } : false} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 520, damping: 14 }}><Star size={15} fill={entry.favorite ? "currentColor" : "none"} /></motion.span><StarBurst burst={burst} /></button></div>
-      <button className="bank-entry-preview" aria-label={`预览题目 ${content.label}`} onClick={() => actions.current.preview(entry.id)}><div className="bank-entry-stem"><MathText text={content.stem} placeholder="（题图题目）" /></div>{content.figure && <img src={content.figure.src} alt="题图缩略图" loading="lazy" decoding="async" />}</button>
-      {!!q.knowledge?.length && <div className="bank-tags">{q.knowledge.slice(0, 4).map((tag, index) => <button key={`${tag}-${index}`} data-active={knowledge === tag || undefined} onClick={() => actions.current.knowledge(tag)}><Tag size={10} />{tag}</button>)}{q.knowledge.length > 4 && <span>+{q.knowledge.length - 4}</span>}</div>}
-      <div className="bank-entry-bottom"><span title={q.source || entry.origin.examTitle}>{q.source || entry.origin.examTitle || "未设置来源"}</span><small><Flame size={11} />{entry.usageCount}</small>{entry.trashedAt ? <Button className="bank-restore" size="sm" variant="ghost" onClick={() => actions.current.restore(entry.id)}>恢复</Button> : <Button size="sm" variant={inBasket ? "ghost" : "outline"} className="bank-pick" data-picked={inBasket || undefined} disabled={inBasket} icon={inBasket ? <Check size={12} /> : <Plus size={12} />} onClick={event => actions.current.pick(entry.id, event.currentTarget)}><motion.span key={String(inBasket)} initial={rich ? { y: 9, opacity: 0 } : false} animate={{ y: 0, opacity: 1 }} transition={transition}>{inBasket ? "已选" : "选题"}</motion.span></Button>}</div>
+      {/* 列表行：勾选 | 题干 + 一行灰色信息 | 收藏、拖动、选题（次要操作悬停出现） */}
+      <div className="bank-entry-check"><Checkbox aria-label={`选择题库题目 ${entry.id}`} checked={selected} onCheckedChange={checked => actions.current.select(entry.id, checked)} /></div>
+      <div className="bank-entry-main">
+        <button className="bank-entry-preview" aria-label={`预览题目 ${content.label}`} onClick={() => actions.current.preview(entry.id)}><div className="bank-entry-body"><div className="bank-entry-stem"><MathText text={content.stem} placeholder="（题图题目）" /></div>{hasOptions(q.type) && q.options.some(Boolean) && <div className="bank-entry-options" data-long={q.options.some(option => plain(option).length > 14) || undefined}>{q.options.slice(0, 6).map((option, index) => <span key={index} data-correct={q.answer.includes(String.fromCharCode(65 + index)) || undefined}><b>{String.fromCharCode(65 + index)}.</b><MathText text={option} /></span>)}</div>}</div>{content.figure && <img src={content.figure.src} alt="题图缩略图" loading="lazy" decoding="async" />}</button>
+        <div className="bank-entry-bottom bank-entry-meta">
+          <span className="bank-type-tag">{TYPE_META[q.type].short}</span>
+          <span className="bank-meta-item bank-score-tag">{q.score} 分</span>
+          {q.difficulty && <span className="bank-meta-item">{DIFFICULTY[q.difficulty]}</span>}
+          {q.knowledge?.slice(0, 2).map((tag, index) => <button key={`${tag}-${index}`} type="button" className="bank-meta-item bank-meta-link" data-active={knowledge === tag || undefined} title={`筛选知识点：${tag}`} onClick={() => actions.current.knowledge(tag)}>{tag}</button>)}
+          <span className="bank-meta-item bank-entry-source" title={q.source || entry.origin.examTitle}>{q.source || entry.origin.examTitle || "未设置来源"}</span>
+          <small className="bank-meta-item" title="加入试卷的次数">{entry.usageCount ? `用过 ${entry.usageCount} 次` : "未用过"}</small>
+          {entry.version > 1 && <span className="bank-version-tag">v{entry.version}</span>}
+          {q.flag && <span className="bank-flag-tag" title={q.flag}>待核对</span>}
+        </div>
+      </div>
+      <div className="bank-entry-actions">
+        <button className="bank-favorite" data-favorite={entry.favorite} aria-label={entry.favorite ? "取消收藏题目" : "收藏题目"} disabled={!!entry.trashedAt} onClick={() => actions.current.favorite(entry)}><motion.span key={String(entry.favorite)} initial={rich && entry.favorite ? { scale: 0.3, rotate: -60 } : false} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 520, damping: 14 }}><Star size={15} fill={entry.favorite ? "currentColor" : "none"} /></motion.span><StarBurst burst={burst} /></button>
+        <span className="bank-entry-grip" aria-hidden="true"><GripVertical size={14} /></span>
+        {entry.trashedAt ? <Button className="bank-restore" size="sm" variant="ghost" onClick={() => actions.current.restore(entry.id)}>恢复</Button> : <Button size="sm" variant={inBasket ? "ghost" : "outline"} className="bank-pick" data-picked={inBasket || undefined} disabled={inBasket} icon={inBasket ? <Check size={12} /> : <Plus size={12} />} onClick={event => actions.current.pick(entry.id, event.currentTarget)}><motion.span key={String(inBasket)} initial={rich ? { y: 9, opacity: 0 } : false} animate={{ y: 0, opacity: 1 }} transition={transition}>{inBasket ? "已选" : "选题"}</motion.span></Button>}
+      </div>
     </article>
   </motion.div>;
 });

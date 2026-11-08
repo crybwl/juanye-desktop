@@ -33,10 +33,12 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, cb) => { globalThis.__daylightRequests++; cb({ cancel: true }); });
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { globalThis.__daylightModelCalls++; throw Error('No OCR during theme QA'); });
     });
-    const page = await app.firstWindow(); page.setDefaultTimeout(8000); await page.setViewportSize({ width: 1500, height: 980 });
+    const page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(8000); await page.setViewportSize({ width: 1500, height: 980 });
     page.on('pageerror', error => errors.push(error.message));
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
-    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.telegram-theme.v1', 'ocean'); localStorage.setItem('juanye.telegram-scheme.v1', 'dark'); localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.telegram-theme.v1', 'ocean'); localStorage.setItem('juanye.telegram-scheme.v1', 'dark'); localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); });
     await page.reload(); await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
     await page.keyboard.press('Control+,'); const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: '外观', exact: true }).click();
@@ -83,6 +85,8 @@ async function main() {
     }
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(profile, 'appearance.json'), 'utf8')), { mode: 'telegram', telegramScheme: 'light' });
     checks.push('Dark/light switching preserves the selected palette; reload restores daylight and the opaque native window background');
+    // 来源 / 难度在“题图 · 绘图 · 属性”折叠区内，先展开（与 teacher-workflow 相同）。
+    if (await page.locator('.editor-extras-head[aria-expanded="false"]').count()) await page.locator('.editor-extras-head').first().click();
     const source = page.getByRole('textbox', { name: '题目来源', exact: true }); await source.fill('本地浅色样例');
     const sourceColors = await source.evaluate(el => ({ foreground: getComputedStyle(el).color, background: getComputedStyle(el).backgroundColor }));
     assert.ok(contrast(sourceColors.foreground, sourceColors.background) >= 4.5);
@@ -93,11 +97,14 @@ async function main() {
     await page.getByRole('button', { name: '批量编辑', exact: true }).click();
     await page.getByRole('checkbox', { name: '第 1 题，未选择', exact: true }).click();
     await page.locator('.checkbox-indicator[data-checked="true"]').first().waitFor();
-    const checkboxColors = await page.locator('.checkbox-indicator[data-checked="true"]').first().evaluate(el => ({ foreground: getComputedStyle(el).color, background: getComputedStyle(el).backgroundImage }));
-    assert.equal(checkboxColors.foreground, 'rgb(255, 255, 255)'); assert.ok(checkboxColors.background.includes('gradient'));
+    // v0.6 规范：勾选框为强调色实色填充（不再用渐变），白色对勾需清晰可辨。
+    const checkboxColors = await page.locator('.checkbox-indicator[data-checked="true"]').first().evaluate(el => ({ foreground: getComputedStyle(el).color, background: getComputedStyle(el).backgroundColor, image: getComputedStyle(el).backgroundImage }));
+    assert.equal(checkboxColors.foreground, 'rgb(255, 255, 255)'); assert.equal(checkboxColors.image, 'none');
+    assert.ok(contrast(checkboxColors.foreground, checkboxColors.background) >= 3, `Checked indicator fill too light: ${checkboxColors.background}`);
     const closeBatch = page.getByRole('button', { name: '关闭批量面板', exact: true });
     if (await closeBatch.count()) await closeBatch.click(); else await page.getByRole('button', { name: '退出批量编辑', exact: true }).click();
-    const wallpaper = await page.locator('.workspace-wallpaper').evaluate(el => { const style = getComputedStyle(el, '::before'); return { image: style.backgroundImage, animation: style.animationName, opacity: style.opacity }; });
+    // 壁纸只有一层：.scene-backdrop-art（旧的每面板 .workspace-wallpaper 已不显示）。
+    const wallpaper = await page.locator('.scene-backdrop-art').evaluate(el => { const style = getComputedStyle(el); return { image: style.backgroundImage, animation: style.animationName, opacity: style.opacity }; });
     assert.ok(wallpaper.image.startsWith('url(')); assert.equal(wallpaper.animation, 'workspace-wallpaper-drift');
     assert.ok(await page.locator('.workspace-preview-stage .katex').count());
     assert.equal(await page.locator('.workspace-preview-stage .katex-error').count(), 0);

@@ -64,7 +64,9 @@ async function main() {
       ipcMain.removeHandler('document:text'); ipcMain.handle('document:text', (_event, options) => { globalThis.__metadataCsv = options.content; return { canceled: true }; });
       for (const channel of ['model:recognize', 'model:generate']) { ipcMain.removeHandler(channel); ipcMain.handle(channel, () => { globalThis.__metadataBlocked++; throw Error('Metadata QA forbids OCR/generation'); }); }
     }, endpoint);
-    page = await app.firstWindow(); page.setDefaultTimeout(10000); await page.setViewportSize({ width: 1440, height: 900 });
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(10000); await page.setViewportSize({ width: 1440, height: 900 });
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { outsideRequests++; return route.abort('blockedbyclient'); });
     await editor().waitFor();

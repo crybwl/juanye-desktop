@@ -51,3 +51,12 @@ test("a missing target type creates the same standard section as the existing wo
   assert.equal(next.sections[3].questions[0].id, "a");
   assert.strictEqual(next.sections[1], original.sections[1]);
 });
+
+test("basket questions are routed to sections of the same type", async () => {
+  const { distributeByType } = await import("../src/workspace-edits");
+  const exam = { title: "t", subtitle: "", duration: 0, notice: [], sections: [{ id: "s1", type: "single" as const, title: "单选", note: "", questions: [] }] };
+  const q = (id: string, type: "single" | "essay") => ({ id, type, score: 5, stem: id, options: [], answer: [], analysis: "" });
+  const next = distributeByType(exam, [q("a", "single"), q("b", "essay"), q("c", "essay")]);
+  assert.deepEqual(next.sections.map(section => [section.type, section.questions.map(item => item.id)]), [["single", ["a"]], ["essay", ["b", "c"]]]);
+  assert.equal(exam.sections[0].questions.length, 0, "input exam is not mutated");
+});

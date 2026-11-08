@@ -1,0 +1,224 @@
+/* ============================================================
+   卷页 v0.6 界面规范（最后加载）
+   - 灰阶：Radix Colors slate（MIT）；强调色只有一个，按钮实色。
+   - 尺寸：Ant Design seed token 体系（MIT）——4px 网格、控件 28/32、
+     字号 12 / 13 / 14 / 16 / 20，字重 400 / 500 / 600。
+   - 圆角：控件 6px、浮层 8px；除圆点/头像外不再使用 12/16/全圆。
+   - 分组靠留白和 1px 分隔线，不再一层层套边框卡片。
+   只借数值体系，不引入任何组件库；所有 Motion 动效保持不变。
+   ============================================================ */
+@media screen {
+  /* 圆角收敛：旧组件里零散的 12px 大圆角统一为浮层级 8px（Tailwind 工具类在 layer 内，这里的普通规则优先） */
+  .rounded-xl, .rounded-2xl { border-radius: 8px; }
+
+  /* ---------- 应用骨架：顶栏 / 目录 / 编辑区 / 预览 ---------- */
+  .app-header { background: var(--surface-header); border-bottom: 1px solid var(--color-line); }
+  .app-header .workspace-nav { background: transparent; }
+  .app-brand .brand-logo { width: 22px; height: 22px; }
+  .app-header .workspace-nav-tab { height: 100%; border-radius: 0; background: transparent; }
+  :root .app-header .workspace-tabs .workspace-nav-tab[aria-current="page"] { color: var(--color-fg); background: transparent; }
+  :root .app-header .workspace-nav-pill {
+    position: absolute; inset: auto 12px -1px; z-index: 1; height: 2px;
+    border-radius: 2px 2px 0 0; background: var(--accent-fill); box-shadow: none;
+  }
+  :root .app-header .workspace-nav-pill::after { content: none; }
+  .app-header-sep { width: 1px; height: 16px; flex-shrink: 0; margin: 0 8px; background: var(--color-line-strong); }
+  .app-doc-title { max-width: 280px; }
+  .app-doc-title:hover { background: var(--surface-hover); }
+  .titlebar-search:hover { background: var(--surface-hover); }
+  .titlebar-search-label { font-size: 12px; }
+  .app-window-controls { margin-left: 4px; }
+  .export-split { gap: 0; }
+  .export-split > .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  :root .export-split .export-split-more {
+    width: 24px; height: 28px; border-radius: 0 6px 6px 0;
+    background: var(--accent-fill); color: var(--accent-ink, #fff);
+  }
+  :root .export-split .export-split-more::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 1px; background: rgb(255 255 255 / .28); content: ""; }
+  :root .export-split .export-split-more:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-fill) 88%, #000); color: var(--accent-ink, #fff); }
+  @media (max-width: 1360px) { .titlebar-search-label, .titlebar-search-keys { display: none; } }
+  .save-badge-label { white-space: nowrap; }
+  @media (max-width: 1240px) { .app-doc-title { max-width: 180px; } .save-badge-label { display: none; } }
+  @media (max-width: 1120px) { .app-brand-name, .save-badge-label { display: none; } .app-doc-title { max-width: 140px; } }
+
+  :root:not([data-theme="telegram"]) .workspace-outline-stage { background: var(--surface-sidebar); }
+  :root:not([data-theme="telegram"]) .workspace-editor-stage { background: var(--surface-editor); }
+  :root:not([data-theme="telegram"]) :is(.question-sidebar, .sidebar-rail, .sidebar-drawer, .sidebar-actions) { background: transparent; }
+
+  .preview-header { background: var(--surface-editor); }
+  :root[data-theme="telegram"] .preview-header { background: transparent; }
+  .preview-sheet { box-shadow: 0 0 0 1px rgb(0 0 51 / .06), 0 1px 3px rgb(0 0 51 / .08), 0 6px 20px -8px rgb(0 0 51 / .12); }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .preview-sheet { box-shadow: 0 0 0 1px rgb(255 255 255 / .05), 0 10px 30px -10px rgb(0 0 0 / .7); }
+  .preview-resizer::after { background: var(--color-line-strong); }
+  .preview-resizer:hover::after, .preview-resizer[data-resizing]::after { opacity: 1; background: var(--accent-fill); }
+
+  /* ---------- 试卷目录 ---------- */
+  .sidebar-summary { border-bottom: 1px solid var(--color-line); }
+  .sidebar-section-heading:hover { background: transparent; }
+  .sidebar-section-heading:hover > span:nth-child(2) { color: var(--color-fg); }
+  .sidebar-row-pill { background: var(--surface-active); }
+  :root[data-theme="light"] .sidebar-row-pill { background: color-mix(in srgb, var(--color-fg) 6.5%, transparent); }
+  .sidebar-row { contain-intrinsic-size: auto 52px; }
+  .sidebar-row-score { transition: opacity .15s; }
+  .sidebar-row:hover .sidebar-row-score, .sidebar-row:focus-within .sidebar-row-score { opacity: 0; }
+  .sidebar-actions .btn { color: var(--color-muted); }
+
+  /* ---------- 题目编辑区：平铺分组，字段像文档一样直接显示 ---------- */
+  .editor-section { min-width: 0; }
+  .editor-section .workbench-section-tools { opacity: 0; transition: opacity .15s; }
+  .editor-section:is(:hover, :focus-within) .workbench-section-tools,
+  .editor-section[data-workbench-group="answers"] .workbench-section-tools,
+  .editor-section.editor-tools-visible .workbench-section-tools { opacity: 1; }
+  .editor-section[data-workbench-group="answers"] { padding-top: 16px; border-top: 1px solid var(--color-line); }
+  .editor-section[data-workbench-group="answers"] ~ .editor-section[data-workbench-group="answers"] { padding-top: 0; border-top: 0; }
+  .editor-locator { min-height: 18px; }
+  .editor-heading .workbench-heading { margin-right: 4px; letter-spacing: -0.01em; }
+  :root .editor-heading .select-trigger.editor-meta-select { width: auto; height: 28px; padding: 0 6px 0 8px; gap: 4px; border-color: transparent; background: transparent; color: var(--color-muted); font-size: 13px; }
+  :root .editor-heading .select-trigger.editor-meta-select:hover:not(:disabled) { border-color: transparent; background: var(--surface-hover); color: var(--color-fg); }
+  :root .editor-heading .select-trigger.editor-meta-select:is(:focus-visible, [aria-expanded="true"]) { border-color: transparent; background: var(--surface-hover); box-shadow: none; }
+  :root .editor-heading .select-trigger.editor-meta-select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  .score-stepper { color: var(--color-muted); transition: background-color .15s; }
+  .score-stepper:hover, .score-stepper:focus-within { background: var(--surface-hover); }
+  .editor-flag { background: color-mix(in srgb, var(--color-warn) 9%, transparent); }
+
+  /* 可视字段：静止时无框（与题目正文对齐），悬停浅灰底，编辑时细描边 */
+  .editor-section .mtf:not(.is-inline) {
+    margin: 0 -10px;
+    padding: 6px 10px;
+    border-color: transparent;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 15px;
+    min-height: min(var(--mtf-min, 92px), 52px);
+  }
+  .editor-section .mtf:not(.is-inline):hover { border-color: transparent; background: var(--surface-hover); }
+  .editor-section .mtf:not(.is-inline):is([data-active], :focus-visible) {
+    border-color: color-mix(in srgb, var(--color-accent) 60%, transparent);
+    background: var(--surface-editor);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+  :root[data-theme="telegram"] .editor-section .mtf:not(.is-inline):is([data-active], :focus-visible) { background: var(--surface-input); }
+  .workbench-live-preview { background: var(--surface-inset); }
+
+  /* 选项：无边框行，正确答案只看字母圆标 */
+  .workbench-option:hover, .workbench-option:focus-within { background: var(--surface-hover); }
+  .workbench-option-letter { border: 1px solid var(--color-line-strong); background: var(--surface-editor); color: var(--color-muted); }
+  .workbench-option-letter:hover { border-color: color-mix(in srgb, var(--color-ok) 60%, transparent); color: var(--color-ok); }
+  .workbench-option[data-correct] .workbench-option-letter { border-color: var(--color-ok); background: var(--color-ok); color: #fff; }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .workbench-option[data-correct] .workbench-option-letter { color: #0b1a12; }
+  /* 设为正确答案时的弹出动画改为一圈外环，不再在字母上叠一个小勾 */
+  .workbench-option-check { inset: -3px; border: 1.5px solid color-mix(in srgb, var(--color-ok) 45%, transparent); background: transparent; }
+  .workbench-option-check > svg { display: none; }
+  .workbench-option .mtf.is-inline { font-size: 15px; }
+
+  /* 题图 · 绘图 · 属性 */
+  .editor-extras { border-top: 1px solid var(--color-line); padding-top: 8px; }
+  .editor-extras-head { margin: 0 -8px; width: calc(100% + 16px); border-radius: 6px; }
+  .editor-extras-head:hover { background: var(--surface-hover); }
+  :root .editor-extras-chip { height: 20px; padding: 0 6px; border-radius: 4px; background: var(--surface-inset); color: var(--color-muted); font-size: 12px; }
+  .editor-extras-body > .editor-section + .editor-section { padding-top: 16px; border-top: 1px dashed var(--color-line); }
+  .editor-extras > div > div > section { border-color: transparent; background: transparent; }
+
+  /* Telegram 主题：编辑区浮在壁纸上，分组保留半透明底板以保证可读性 */
+  :root[data-theme="telegram"] .editor-section { padding: 14px 16px; border-radius: 8px; }
+  :root[data-theme="telegram"] .editor-section[data-workbench-group="answers"] { padding-top: 14px; border-top: 0; }
+  :root[data-theme="telegram"] .editor-section .mtf:not(.is-inline) { margin: 0 -10px; }
+  :root[data-theme="telegram"] .editor-extras { padding: 6px 10px; border-top: 0; border-radius: 8px; background: color-mix(in srgb, var(--color-panel) 86%, transparent); }
+  :root[data-theme="telegram"] .workbench-footer { border-top: 0; }
+
+  .editor-empty-sheet { border: 1px solid var(--color-line); background: var(--surface-editor); box-shadow: 0 1px 3px rgb(0 0 0 / .06); }
+  .editor-empty-line { background: var(--color-line-strong); }
+
+  /* ---------- 弹窗页头：标题 + 一行说明，不放装饰图标 ---------- */
+  :root .dialog-header { min-height: 56px; padding: 12px 12px 12px 20px; }
+  :root .dialog-header-icon { display: none; }
+  :root .dialog-title { font-size: 15px; font-weight: 600; line-height: 22px; letter-spacing: 0; }
+  :root .dialog-subtitle { margin-top: 1px; font-size: 12px; line-height: 18px; color: var(--color-faint); }
+  /* 侧边面板遮罩：专用类，避免被浅色主题的旧颜色映射换成不透明灰底 */
+  :root .ui-sheet-overlay { background: var(--surface-overlay); }
+
+  /* 命令面板 */
+  :root .palette-highlight { background: var(--surface-active); }
+
+  /* 导入：空状态是可点击、可拖入的投放区；结果为分隔线列表 */
+  .import-dropzone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    width: 100%; min-height: 220px; border: 1px dashed var(--color-line-strong); border-radius: 8px;
+    color: var(--color-muted); cursor: pointer; transition: background-color .15s, border-color .15s;
+  }
+  .import-dropzone:hover:not(:disabled) { background: var(--surface-hover); }
+  .import-dropzone:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .import-dropzone[data-over] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 7%, transparent); }
+  .import-dropzone-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 8px; border-radius: 8px; background: var(--surface-inset); color: var(--color-muted); transition: transform .2s cubic-bezier(.2,.9,.25,1.2); }
+  .import-dropzone[data-over] .import-dropzone-icon { transform: translateY(-3px); color: var(--color-accent); }
+  .import-row { padding: 10px 4px; border-bottom: 1px solid var(--color-line); }
+  .import-row:last-child { border-bottom: 0; }
+
+  /* 生成草稿 */
+  .generate-label { margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--color-faint); }
+  .generate-draft { border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-line)); }
+
+  /* OCR */
+  .ocr-source { background: var(--canvas-bg); }
+
+  /* 历史记录：按天分组，时间等宽数字，恢复按钮悬停出现 */
+  .history-day { padding: 12px 10px 4px; font-size: 12px; font-weight: 500; color: var(--color-faint); }
+  .history-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 6px; transition: background-color .15s; }
+  .history-row:hover { background: var(--surface-hover); }
+  .history-dot { width: 8px; height: 8px; flex: none; border: 1.5px solid var(--color-line-strong); border-radius: 999px; }
+  .history-row[data-current] .history-dot { border-color: var(--accent-fill); background: var(--accent-fill); }
+  .history-time { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .history-restore { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12px; color: var(--color-muted); opacity: 0; transition: opacity .15s, background-color .15s, color .15s; }
+  .history-row:hover .history-restore, .history-restore:focus-visible { opacity: 1; }
+  .history-restore:hover { background: var(--surface-active); color: var(--color-fg); }
+
+  /* 管理大题：分隔线列表，标题就地编辑，次要操作悬停出现 */
+  .structure-list { margin: -16px; }
+  .structure-section { padding: 12px 16px 14px; border-bottom: 1px solid var(--color-line); }
+  .structure-head { display: flex; align-items: center; gap: 2px; min-height: 32px; }
+  .structure-index { flex: none; font-size: 14px; font-weight: 600; color: var(--color-muted); }
+  .structure-title-input {
+    min-width: 0; flex: 1; height: 30px; margin-left: -2px; padding: 0 6px;
+    border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-fg);
+    font-size: 14px; font-weight: 600; outline: none; transition: background-color .15s, border-color .15s, box-shadow .15s;
+  }
+  .structure-title-input:hover { background: var(--surface-hover); }
+  .structure-title-input:focus { border-color: var(--color-accent); background: var(--color-panel); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+  .structure-count { flex: none; margin: 0 4px; font-size: 12px; color: var(--color-faint); }
+  .structure-actions { display: flex; flex: none; opacity: 0; transition: opacity .15s; }
+  .structure-section:is(:hover, :focus-within) .structure-actions { opacity: 1; }
+  .structure-actions [data-ui-button="icon"] { width: 28px; height: 28px; }
+  .structure-note {
+    display: block; width: 100%; min-height: 52px; margin-top: 6px; padding: 6px 8px; resize: vertical;
+    border: 1px solid var(--color-line); border-radius: 6px; background: transparent; color: var(--color-fg);
+    font-size: 13px; line-height: 20px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .structure-note:hover { border-color: var(--color-line-strong); }
+  .structure-note:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+  .structure-note::placeholder { color: var(--color-faint); }
+  .structure-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .structure-score { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-muted); }
+  .structure-score input {
+    width: 52px; height: 28px; padding: 0 6px; border: 1px solid var(--color-line-strong); border-radius: 6px;
+    background: transparent; color: var(--color-fg); font-size: 13px; font-variant-numeric: tabular-nums; text-align: center;
+    outline: none; appearance: textfield;
+  }
+  .structure-score input::-webkit-inner-spin-button, .structure-score input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+  .structure-score input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+  .structure-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--color-line-strong); }
+  .structure-add { padding: 14px 16px 16px; }
+  .structure-add-label { margin-bottom: 8px; font-size: 12px; font-weight: 500; color: var(--color-faint); }
+  :root[data-theme="telegram"] .structure-section { background: color-mix(in srgb, var(--color-panel) 72%, transparent); }
+
+  /* ---------- 细节手感 ---------- */
+  /* 光标跟随强调色；数字用等宽字形，分值和计数变化时不左右跳动 */
+  :root :is(input, textarea, [contenteditable="true"], math-field) { caret-color: var(--color-accent); }
+  .sidebar-row-score, .sidebar-row-num, .score-stepper, .sidebar-summary, .history-time,
+  .bank-score-tag, .ui-floating-bar, .structure-count { font-variant-numeric: tabular-nums; }
+  /* 外观切换的整页淡入淡出（View Transitions）；减少动效时不播放 */
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+  @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+  /* 右侧抽屉（历史、本地题库选题）：与弹窗同一套浮层阴影 */
+  :root .ui-sheet { border: 0; box-shadow: 0 12px 40px rgb(0 0 0 / .16), 0 0 0 1px var(--color-line); }
+  :root:is([data-theme="dark"], [data-theme="telegram"]:not([data-telegram-scheme="light"])) .ui-sheet { box-shadow: 0 12px 40px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .08); }
+}

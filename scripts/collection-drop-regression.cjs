@@ -29,7 +29,9 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, cb) => { globalThis.__folderRequests.http++; cb({ cancel: true }); });
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { globalThis.__folderRequests.model++; throw Error('No model calls allowed'); });
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(10000); page.on('pageerror', error => errors.push(error.message));
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(10000); page.on('pageerror', error => errors.push(error.message));
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
     const initial = await page.evaluate(async questions => {
       await window.juanye.bankSave({ questions, origin: { examTitle: '隔离题库' } });

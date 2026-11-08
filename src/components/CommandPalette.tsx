@@ -37,8 +37,8 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
   let lastGroup = "";
   return (
     <Modal open={open} onClose={onClose} align="top" className="w-[620px]">
-      <div className="flex h-14 items-center gap-3 border-b border-line px-4">
-        <Search size={17} className="text-faint" />
+      <div className="flex h-12 items-center gap-3 border-b border-line px-4">
+        <Search size={16} className="text-faint" />
         <input
           autoFocus
           value={q}
@@ -49,7 +49,7 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
             if (e.key === "Enter") run(items[idx]);
           }}
           placeholder="搜索题目、执行命令…"
-          className="h-full flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
+          className="h-full flex-1 bg-transparent text-[14px] text-fg outline-none placeholder:text-faint"
         />
         <Kbd>Esc</Kbd>
       </div>
@@ -57,7 +57,7 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
         {hl && (
           <motion.div
             aria-hidden
-            className="pointer-events-none absolute left-2 right-2 top-0 rounded-[10px] bg-white/[0.07] ring-1 ring-inset ring-white/[0.06]"
+            className="palette-highlight pointer-events-none absolute left-2 right-2 top-0 rounded-[6px]"
             initial={false}
             animate={{ y: hl.y, height: hl.h }}
             transition={spring}
@@ -69,7 +69,7 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
           lastGroup = c.group;
           return (
             <div key={c.id}>
-              {header && <div className="px-3 pb-1.5 pt-3 text-[11.5px] font-medium text-faint first:pt-1">{c.group}</div>}
+              {header && <div className="px-2.5 pb-1 pt-3 text-[12px] font-medium text-faint first:pt-1">{c.group}</div>}
               <motion.button
                 data-i={i}
                 initial={{ opacity: 0, y: 4 }}
@@ -77,12 +77,12 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
                 transition={{ delay: Math.min(i, 10) * 0.015 }}
                 onMouseMove={() => setIdx(i)}
                 onClick={() => run(c)}
-                className={cx("relative flex h-11 w-full items-center gap-3 rounded-[10px] px-3 text-left", i === idx ? "text-fg" : "text-fg/80")}
+                className={cx("relative flex h-9 w-full items-center gap-2.5 rounded-[6px] px-2.5 text-left", i === idx ? "text-fg" : "text-muted")}
               >
-                                <span className={cx("relative grid h-7 w-7 place-items-center rounded-lg transition-colors", i === idx ? "bg-accent/15 text-accent" : "bg-white/[0.05] text-muted")}>
+                <span className={cx("relative grid h-5 w-5 place-items-center transition-colors", i === idx ? "text-fg" : "text-faint")}>
                   {c.icon}
                 </span>
-                <span className="relative min-w-0 flex-1 truncate text-[13.5px]">{c.title}</span>
+                <span className="relative min-w-0 flex-1 truncate text-[13px]">{c.title}</span>
                 {c.hint && <span className="relative max-w-[200px] truncate text-[12px] text-faint">{c.hint}</span>}
                 {c.kbd && (
                   <span className="relative">
@@ -97,7 +97,7 @@ export function CommandPalette({ open, onClose, commands }: { open: boolean; onC
           );
         })}
       </div>
-      <div className="flex items-center gap-4 border-t border-line px-4 py-2.5 text-[11.5px] text-faint">
+      <div className="flex items-center gap-4 border-t border-line px-4 py-2 text-[12px] text-faint">
         <span className="flex items-center gap-1.5">
           <Kbd>↑</Kbd>
           <Kbd>↓</Kbd> 选择

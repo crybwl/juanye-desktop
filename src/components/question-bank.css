@@ -35,3 +35,21 @@
 /* The question-bank sheet is portaled to body, outside the app preference node. */
 :root:has(.app-bg[data-interface-motion="reduced"]) :is(.question-bank-card, .question-bank-empty, .question-bank-empty > svg) { animation: none !important; }
 :root:has(.app-bg[data-interface-motion="reduced"]) .question-bank-card:hover { translate: none; }
+
+/* v0.6：选题抽屉改为分隔线列表，题型不再着色；入场与拖动动效保留。 */
+.question-bank-list { gap: 0; margin: 0 -16px; border-top: 1px solid var(--color-line); }
+.question-bank-card { padding: 12px 16px; border: 0; border-bottom: 1px solid var(--color-line); border-radius: 0; background: transparent; transition: background-color .15s; }
+.question-bank-card::before, .question-bank-card::after { content: none; }
+.question-bank-card:hover { translate: none; border-color: var(--color-line); background: var(--surface-hover); box-shadow: none; }
+.question-bank-card[data-selected] { border-color: var(--color-line); background: color-mix(in srgb, var(--color-accent) 6%, transparent); box-shadow: none; }
+.question-bank-type-dot { display: none; }
+.question-bank-card-top { margin-bottom: 4px; }
+.question-bank-stem { max-height: 96px; font-size: 14px; line-height: 1.7; }
+.question-bank-tags { margin: 6px 0 2px; }
+.question-bank-tags:empty { display: none; }
+.question-bank-tags > span { border-radius: 4px; box-shadow: none; font-size: 11px; }
+.question-bank-card:hover .question-bank-thumbnail { scale: 1; }
+.question-bank-search > input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+.question-bank-search:focus-within > svg { color: var(--color-muted); }
+.question-bank-insert { border-top-color: var(--color-line); box-shadow: none; }
+.question-bank-empty > svg { color: var(--color-faint); }

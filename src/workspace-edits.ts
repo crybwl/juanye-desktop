@@ -23,3 +23,15 @@ export function patchWorkspaceQuestion(exam: Exam, id: string, patch: Partial<Qu
   }
   return { ...exam, sections };
 }
+
+/** 选题篮“按题型自动归入”：放进同题型的第一个大题，没有则按题型新建大题。 */
+export const AUTO_SECTION = "__auto__";
+export function distributeByType(exam: Exam, questions: Question[]): Exam {
+  const sections = [...exam.sections];
+  for (const question of questions) {
+    const index = sections.findIndex(section => section.type === question.type);
+    if (index < 0) sections.push({ id: uid(), type: question.type, title: TYPE_META[question.type].label, note: "", questions: [question] });
+    else sections[index] = { ...sections[index], questions: [...sections[index].questions, question] };
+  }
+  return { ...exam, sections };
+}

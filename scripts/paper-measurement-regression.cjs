@@ -56,7 +56,9 @@ async function main() {
         return { canceled: true };
       });
     });
-    page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.on('pageerror', error => errors.push(error.message));
     await capture('A4-full-answers-long-table-TikZ');
     await page.locator('.workspace-editor-stage textarea[placeholder="输入题干…"]').fill(`${questions[0].stem}\n\n追加输入 $x=2$。`);
     await page.waitForFunction(() => document.querySelector('.workspace-preview-stage .p-q[data-qid="measure-1"]')?.textContent.includes('追加输入'));

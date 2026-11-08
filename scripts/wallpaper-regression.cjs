@@ -66,6 +66,15 @@ async function main() {
       for (const selector of ['.workspace-editor-stage', '.canvas-dots']) {
         const host = document.querySelector(selector);
         if (!host) { result[selector] = null; continue; }
+        // 现行架构：整个应用只有一层解码后的壁纸（.scene-backdrop，integrated-surfaces 回归要求各面板不得再各贴一层），
+        // 编辑区与预览区都透出这同一层；旧的每面板 .workspace-wallpaper 已改为不显示的占位。
+        const scene = document.querySelector('[data-scene-backdrop]');
+        if (scene) {
+          const sceneStyle = getComputedStyle(scene), art = describe(getComputedStyle(scene.querySelector('.scene-backdrop-art')), 'element');
+          if (sceneStyle.display === 'none') art.display = 'none';
+          result[selector] = { ...art, layerHost: '.scene-backdrop', hostBackground: getComputedStyle(host).backgroundColor, clipOverflow: sceneStyle.overflow, clipPointerEvents: sceneStyle.pointerEvents };
+          continue;
+        }
         const shared = host.closest('.workspace-stage');
         const clippingLayer = shared?.querySelector(':scope > .workspace-wallpaper');
         const explicit = shared ? shared.querySelector(':scope > [data-wallpaper-layer]') : host.querySelector(':scope > [data-wallpaper-layer]');
@@ -153,12 +162,14 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_details, callback) => { globalThis.__wallpaperRequests++; callback({ cancel: true }); });
     });
     page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 });
     page.setDefaultTimeout(9000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { rendererRequests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForSelector('textarea');
-    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.telegram-theme.v1', 'ember'); localStorage.setItem('juanye.sidebar-expanded.v1', 'true'); });
+    await page.evaluate(() => { localStorage.setItem('juanye.appearance.v1', 'telegram'); localStorage.setItem('juanye.telegram-theme.v1', 'ember'); localStorage.setItem('juanye.sidebar-expanded.v2', 'true'); });
     await page.reload();
     await page.waitForSelector('.workspace-editor-stage textarea');
     await page.locator('.paper[data-sheet]').first().waitFor();

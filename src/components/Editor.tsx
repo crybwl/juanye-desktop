@@ -1,12 +1,11 @@
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from "motion/react";
-import { createContext, forwardRef, memo, useCallback, useContext, useDeferredValue, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, forwardRef, memo, useCallback, useContext, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
   Check,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Minus,
   Plus,
   ScanText,
@@ -23,15 +22,17 @@ import {
   Image,
   SlidersHorizontal,
   ListChecks,
+  Code2,
 } from "lucide-react";
 import type { Question, Section, QType, Layout } from "../types";
 import { CN_NUM, LETTERS, TYPE_META } from "../data";
-import { MathText, highlightTex } from "../math";
+import { MathText } from "../math";
 import { Button, IconButton, cx, spring, softSpring, inputCls } from "../ui";
 import { PlotSvg } from "./Paper";
 import { FigureEditor } from "./FigureEditor";
 import { DrawingEditor } from "./DrawingEditor";
-import { FormulaEditor } from "./FormulaEditor";
+import { MathTextField, SourcePreview, preloadVisualEditing, setEditorInputMode, useEditorInputMode, type MathTextHandle } from "./MathTextField";
+import { canEditVisually } from "../math-text-doc";
 import { SourceOcr } from "./SourceOcr";
 import { Select } from "./Select";
 import { changeQuestionType } from "../structure";
@@ -50,67 +51,6 @@ const AnimatedEditorBody = forwardRef<HTMLDivElement, HTMLMotionProps<"div">>(fu
   const present = useIsPresent();
   return <motion.div {...props} ref={ref} {...(!present ? { inert: "" } : {})} aria-hidden={present ? undefined : true} />;
 });
-
-/* ---------- 带语法高亮的 LaTeX 编辑器（透明 textarea 叠在高亮层上） ---------- */
-export type TexHandle = { insert: (snippet: string, caretBack?: number) => void };
-export const TexEditor = forwardRef<TexHandle, { value: string; onChange: (v: string) => void; onCommit?: (v: string) => void; placeholder?: string; minH?: number }>(
-  function TexEditor({ value, onChange, onCommit, placeholder, minH = 92 }, ref) {
-    const ta = useRef<HTMLTextAreaElement>(null);
-    const [formula, setFormula] = useState(false);
-    const [initial, setInitial] = useState("");
-    const highlighted = useMemo(() => highlightTex(value), [value]);
-    const selection = useRef({ start: 0, end: 0 });
-    const insert = (snippet: string, caretBack = 0) => {
-      const el = ta.current!;
-      const s = el.selectionStart ?? value.length;
-      const e = el.selectionEnd ?? value.length;
-      onChange(value.slice(0, s) + snippet + value.slice(e));
-      requestAnimationFrame(() => { el.focus(); const pos = s + snippet.length - caretBack; el.setSelectionRange(pos, pos); });
-    };
-    useImperativeHandle(
-      ref,
-      () => ({
-        insert,
-      }),
-      [value, onChange],
-    );
-    return (
-      <div
-        className="relative rounded-xl border border-line-strong bg-[#0a0c11] transition-[border-color,box-shadow] duration-200 hover:border-white/[0.16] focus-within:border-accent/55 focus-within:shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-accent)_12%,transparent)]"
-        style={{ minHeight: minH }}
-      >
-        <pre
-          aria-hidden
-          className="tex-editor m-0 px-4 py-3 text-fg/80"
-          style={{ minHeight: minH }}
-          dangerouslySetInnerHTML={{ __html: highlighted }}
-        />
-        <textarea
-          ref={ta}
-          value={value}
-          spellCheck={false}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => { if (!e.currentTarget.closest("[inert]")) onCommit?.(e.currentTarget.value); }}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData("text/plain");
-            if (!onCommit || !text) return;
-            e.preventDefault();
-            const start = e.currentTarget.selectionStart, end = e.currentTarget.selectionEnd;
-            onCommit(value.slice(0, start) + text + value.slice(end));
-            requestAnimationFrame(() => {
-              const el = ta.current;
-              if (el) { const position = Math.min(start + text.length, el.value.length); el.setSelectionRange(position, position); }
-            });
-          }}
-          className="tex-editor absolute inset-0 h-full w-full resize-none overflow-hidden border-0 bg-transparent px-4 py-3 text-transparent caret-accent outline-none placeholder:text-faint"
-        />
-        <button type="button" aria-label="打开公式编辑器" title="公式编辑器" className="absolute bottom-1 right-1 grid h-6 w-6 place-items-center rounded bg-panel text-faint hover:text-accent" onMouseDown={event => event.preventDefault()} onClick={() => { const el = ta.current!; selection.current = { start: el.selectionStart, end: el.selectionEnd }; setInitial(value.slice(el.selectionStart, el.selectionEnd)); setFormula(true); }}><Sigma size={13} /></button>
-        <FormulaEditor open={formula} initial={initial} onClose={() => setFormula(false)} onInsert={snippet => { ta.current!.setSelectionRange(selection.current.start, selection.current.end); insert(snippet); }} />
-      </div>
-    );
-  },
-);
 
 /* ---------- 小部件 ---------- */
 const item = {
@@ -131,9 +71,9 @@ const WORKBENCH_GROUPS = [
 function Card({ title, right, children, className, group = "question" }: { title?: string; right?: ReactNode; children: ReactNode; className?: string; group?: WorkbenchGroup }) {
   const workbench = useContext(WorkbenchContext);
   return (
-    <motion.section variants={item} data-workbench-group={group} hidden={workbench.enabled && workbench.group !== group} className={cx(workbench.enabled ? "workbench-section" : "rounded-2xl border border-line bg-white/[0.018] p-5", className)}>
-      {title && <div className="workbench-section-header mb-3.5 flex min-h-8 items-center gap-3">
-        <h3 className="text-[13px] font-semibold text-fg">{title}</h3>
+    <motion.section variants={item} data-workbench-group={group} hidden={workbench.enabled && workbench.group !== group} className={cx(workbench.enabled ? "workbench-section" : "editor-section", className)}>
+      {title && <div className="workbench-section-header mb-1.5 flex min-h-7 items-center gap-3">
+        <h3 className="editor-section-title text-[12px] font-medium text-faint">{title}</h3>
         <div className="workbench-section-tools ml-auto flex items-center gap-1">{right}</div>
       </div>}
       {children}
@@ -144,7 +84,7 @@ function Card({ title, right, children, className, group = "question" }: { title
 const LivePreview = memo(function LivePreview({ text, image }: { text: string; image?: boolean }) {
   const deferredText = useDeferredValue(text);
   return (
-    <div className="workbench-live-preview mt-3 rounded-xl bg-white/[0.025] px-4 py-3.5 ring-1 ring-inset ring-white/[0.04]">
+    <div className="workbench-live-preview mt-3 rounded-[6px] px-4 py-3">
       <div className="mb-2 flex items-center gap-2 text-[11.5px] text-faint">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok/60" />
@@ -152,7 +92,7 @@ const LivePreview = memo(function LivePreview({ text, image }: { text: string; i
         </span>
         预览
       </div>
-      <div className="font-serif text-[15.5px] leading-[1.9] text-fg/95">
+      <div className="font-serif text-[15px] leading-[1.9] text-fg">
         <MathText text={deferredText} placeholder="在上方输入题干…" />
       </div>
       {image && (
@@ -166,15 +106,15 @@ const LivePreview = memo(function LivePreview({ text, image }: { text: string; i
 
 function ScoreStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex h-9 items-center rounded-[10px] bg-white/[0.05] ring-1 ring-inset ring-white/[0.06]">
-      <motion.button whileTap={{ scale: 0.8 }} aria-label="减少分值" onClick={() => onChange(Math.max(1, value - 1))} className="grid h-9 w-8 place-items-center text-muted hover:text-fg">
+    <div className="score-stepper flex h-7 items-center rounded-[6px]">
+      <motion.button whileTap={{ scale: 0.8 }} aria-label="减少分值" onClick={() => onChange(Math.max(1, value - 1))} className="grid h-7 w-6 place-items-center text-faint hover:text-fg">
         <Minus size={14} />
       </motion.button>
-      <div className="flex min-w-[46px] items-center justify-center gap-0.5 text-[14px] font-semibold">
-        <input aria-label="本题分值" type="number" min={0} max={200} step={0.5} value={value} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next)) onChange(Math.max(0, Math.min(200, next))); }} className="w-10 bg-transparent text-center text-fg outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-        <span className="text-[12px] font-normal text-muted">分</span>
+      <div className="flex min-w-[40px] items-center justify-center gap-0.5 text-[13px] font-medium">
+        <input aria-label="本题分值" type="number" min={0} max={200} step={0.5} value={value} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next)) onChange(Math.max(0, Math.min(200, next))); }} className="w-8 bg-transparent text-center text-fg outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+        <span className="text-[12px] font-normal text-faint">分</span>
       </div>
-      <motion.button whileTap={{ scale: 0.8 }} aria-label="增加分值" onClick={() => onChange(Math.min(30, value + 1))} className="grid h-9 w-8 place-items-center text-muted hover:text-fg">
+      <motion.button whileTap={{ scale: 0.8 }} aria-label="增加分值" onClick={() => onChange(Math.min(30, value + 1))} className="grid h-7 w-6 place-items-center text-faint hover:text-fg">
         <Plus size={14} />
       </motion.button>
     </div>
@@ -188,6 +128,7 @@ function OptionCard({
   onToggle,
   onChange,
   onRemove,
+  layoutKey,
 }: {
   letter: string;
   text: string;
@@ -195,25 +136,23 @@ function OptionCard({
   onToggle: () => void;
   onChange: (v: string) => void;
   onRemove: () => void;
+  layoutKey: string;
 }) {
-  const [editing, setEditing] = useState(false);
   return (
     <motion.div
       layout
+      layoutDependency={layoutKey}
       transition={spring}
-      className={cx(
-        "workbench-option group relative flex min-h-[58px] items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200",
-        correct ? "border-ok/40 bg-ok/[0.07]" : "border-line-strong bg-white/[0.015] hover:border-white/[0.16] hover:bg-white/[0.03]",
-      )}
+      data-correct={correct || undefined}
+      className="workbench-option group relative flex min-h-[40px] items-center gap-2.5 rounded-[6px] px-2 py-1 transition-colors duration-150"
     >
       <motion.button
         whileTap={{ scale: 0.86 }}
         onClick={onToggle}
         aria-label={`将 ${letter} 设为正确答案`}
-        className={cx(
-          "workbench-option-letter relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[13px] font-semibold transition-colors duration-200",
-          correct ? "bg-ok text-[#06160e]" : "bg-white/[0.07] text-muted hover:bg-white/[0.12] hover:text-fg",
-        )}
+        aria-pressed={correct}
+        title={correct ? "正确答案（点击取消）" : "设为正确答案"}
+        className="workbench-option-letter relative grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold transition-colors duration-150"
       >
         {letter}
         <AnimatePresence>
@@ -223,48 +162,41 @@ function OptionCard({
               animate={{ scale: 1, rotate: 0 }}
               exit={{ scale: 0 }}
               transition={{ type: "spring", stiffness: 600, damping: 22 }}
-              className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#0d0f14] text-ok ring-2 ring-[#0d0f14]"
+              className="workbench-option-check pointer-events-none absolute grid place-items-center rounded-full"
             >
-              <Check size={11} strokeWidth={3.5} />
+              <Check size={9} strokeWidth={4} />
             </motion.span>
           )}
         </AnimatePresence>
       </motion.button>
-      <div className="min-w-0 flex-1 cursor-text" onClick={() => setEditing(true)}>
-        <AnimatePresence mode="wait" initial={false}>
-          {editing ? (
-            <motion.input
-              key="i"
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.12 }}
-              autoFocus
-              value={text}
-              aria-label={`选项 ${letter}`}
-              spellCheck={false}
-              onChange={(e) => onChange(e.target.value)}
-              onBlur={() => setEditing(false)}
-              onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && (e.target as HTMLInputElement).blur()}
-              className="tex-editor h-8 w-full rounded-md bg-black/30 px-2 text-fg outline-none ring-1 ring-accent/40"
-            />
-          ) : (
-            <motion.div
-              key="v"
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.12 }}
-              className="workbench-option-text truncate font-serif text-[15px] text-fg/95"
-            >
-              <MathText text={text} placeholder="（空）点击输入" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <button type="button" aria-label={`删除选项 ${letter}`} className="shrink-0 text-faint hover:text-danger" onClick={onRemove}><Trash2 size={12} /></button>
+      <MathTextField className="workbench-option-text min-w-0 flex-1" singleLine value={text} onChange={onChange} label={`选项 ${letter}`} field={`option-${letter}`} placeholder="点击输入选项" />
+      <button type="button" aria-label={`删除选项 ${letter}`} className="grid h-6 w-6 shrink-0 place-items-center rounded-[4px] text-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 focus-visible:opacity-100" onClick={onRemove}><Trash2 size={13} /></button>
     </motion.div>
   );
+}
+
+/** 题图、绘图、原图与属性：低频内容默认折叠，有内容时自动展开对应部分。 */
+function ExtrasSection({ q, children, defaultOpen = false }: { q: Question; children: ReactNode; defaultOpen?: boolean }) {
+  const figures = questionFigures(q).length + (q.image === "plot" ? 1 : 0);
+  const hasMedia = Boolean(figures || q.drawing?.trim() || q.sourceImage);
+  const [open, setOpen] = useState(hasMedia || defaultOpen);
+  const difficulty = q.difficulty ? { easy: "基础", medium: "中等", hard: "较难" }[q.difficulty] : "";
+  const chips = [
+    figures ? `${figures} 张题图` : "", q.drawing?.trim() ? "有绘图" : "", q.sourceImage ? "有原图" : "",
+    q.knowledge?.filter(Boolean).length ? q.knowledge.filter(Boolean).slice(0, 2).join("、") : "", difficulty, q.source || "",
+  ].filter(Boolean);
+  return <motion.section variants={item} className="editor-extras">
+    <button type="button" className="editor-extras-head flex w-full items-center gap-2 rounded-[6px] px-2 py-2 text-left" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+      <motion.span animate={{ rotate: open ? 0 : -90 }} transition={spring} className="text-faint"><ChevronDown size={14} /></motion.span>
+      <span className="text-[12px] font-medium text-muted">题图 · 绘图 · 属性</span>
+      <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">{chips.length ? chips.map(chip => <span key={chip} className="editor-extras-chip">{chip}</span>) : <span className="text-[12px] text-faint">题图、TikZ 绘图、来源、知识点、难度</span>}</span>
+    </button>
+    <AnimatePresence initial={false}>
+      {open && <motion.div key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={softSpring} className="overflow-hidden">
+        <div className="editor-extras-body flex flex-col gap-5 px-2 pb-2 pt-2">{children}</div>
+      </motion.div>}
+    </AnimatePresence>
+  </motion.section>;
 }
 
 /* ---------- 空状态 ---------- */
@@ -287,24 +219,24 @@ const Empty = forwardRef<HTMLDivElement, { onStart: () => void; onOcr: () => voi
         ].map((c, i) => (
           <motion.div
             key={i}
-            className="absolute left-1/2 top-0 h-[140px] w-[108px] -ml-[54px] rounded-xl border border-white/10 bg-gradient-to-b from-[#1b1f2b] to-[#12151d] p-3 shadow-2xl"
+            className="editor-empty-sheet absolute left-1/2 top-0 h-[140px] w-[108px] -ml-[54px] rounded-[6px] p-3"
             initial={{ rotate: c.r, x: c.x, y: c.y + 20, opacity: 0 }}
             animate={{ rotate: c.r, x: c.x, y: [c.y, c.y - 6, c.y], opacity: 1 }}
             transition={{ y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: c.d }, opacity: { delay: c.d * 0.3 } }}
           >
-            <div className="mb-2 h-1.5 w-12 rounded bg-white/20" />
+            <div className="editor-empty-line mb-2 h-1.5 w-12 rounded" />
             {Array.from({ length: 6 }).map((_, j) => (
-              <div key={j} className="mb-1.5 h-1 rounded bg-white/[0.07]" style={{ width: `${60 + ((j * 37) % 40)}%` }} />
+              <div key={j} className="editor-empty-line mb-1.5 h-1 rounded opacity-60" style={{ width: `${60 + ((j * 37) % 40)}%` }} />
             ))}
             {i === 2 && (
-              <div className="mt-3 grid h-8 place-items-center rounded-md bg-accent/15 font-serif text-[13px] text-accent">
+              <div className="mt-3 grid h-8 place-items-center rounded-[4px] font-serif text-[13px] text-muted">
                 <MathText text="$\int_0^1 x\,dx$" />
               </div>
             )}
           </motion.div>
         ))}
       </div>
-      <h2 className="text-[20px] font-semibold tracking-tight">选择一道题，开始校对</h2>
+      <h2 className="text-[16px] font-semibold">选择一道题，开始校对</h2>
       <div className="mt-6 flex gap-2.5">
         <Button variant="primary" onClick={onStart} icon={<MousePointerClick size={15} />}>
           从第 1 题开始
@@ -337,6 +269,7 @@ export const Editor = memo(function Editor({
   neighbors,
   onDuplicate, onMove, sections,
   focusTarget,
+  extrasOpen,
 }: {
   q: Question | null;
   dataReady?: boolean;
@@ -359,8 +292,12 @@ export const Editor = memo(function Editor({
   sections?: Section[];
   /** Optional entry intent for a newly opened versioned bank draft. */
   focusTarget?: "question" | "answer" | "analysis";
+  /** 题图 · 绘图 · 属性默认展开（题库编辑需要直接看到来源、知识点、难度）。 */
+  extrasOpen?: boolean;
 }) {
-  const stemRef = useRef<TexHandle>(null);
+  const stemRef = useRef<MathTextHandle>(null);
+  const inputMode = useEditorInputMode();
+  useEffect(() => { preloadVisualEditing(); }, []);
   const editorRoot = useRef<HTMLDivElement>(null);
   const [workbench] = useExperimentalWorkbench();
   const [group, setGroup] = useState<WorkbenchGroup>(focusTarget && focusTarget !== "question" ? "answers" : "question");
@@ -380,9 +317,10 @@ export const Editor = memo(function Editor({
     const focus = () => {
       const body = [...root.querySelectorAll<HTMLElement>("[data-editor-question]")].find(node => node.dataset.editorQuestion === questionId);
       if (!body) return;
-      const selectors = focusTarget === "question" ? 'textarea[placeholder="输入题干…"]'
-        : focusTarget === "analysis" ? 'textarea[placeholder="写下解题思路…"]'
-        : '[aria-label^="正确选项 "], [aria-label^="将 "][aria-label$=" 设为正确答案"], textarea[placeholder="输入答案…"]';
+      const field = (name: string) => `[data-exam-field="${name}"][role="textbox"], [data-exam-field="${name}"] textarea`;
+      const selectors = focusTarget === "question" ? field("stem")
+        : focusTarget === "analysis" ? field("analysis")
+        : `[aria-label^="正确选项 "], [aria-label^="将 "][aria-label$=" 设为正确答案"], ${field("answer-0")}`;
       const target = [...body.querySelectorAll<HTMLElement>(selectors)].find(node => !node.closest("[hidden],[inert]") && node.getClientRects().length > 0);
       if (!target) return;
       target.focus({ preventScroll: true });
@@ -431,41 +369,25 @@ export const Editor = memo(function Editor({
             initial="enter"
             animate="center"
             exit="exit"
-            className="workbench-body mx-auto flex max-w-[780px] flex-col gap-4 px-10 pb-16 pt-7"
+            className="workbench-body mx-auto flex max-w-[760px] flex-col gap-5 px-8 pb-16 pt-5"
           >
             {/* 头部 */}
             <motion.div variants={item}>
-              <div className="flex items-center gap-2 text-[12px] text-faint">
-                <span
-                  className="grid h-5 w-5 place-items-center rounded-[6px] text-[11px] font-semibold"
-                  style={{ background: `color-mix(in srgb, ${TYPE_META[sec.type].hue} 16%, transparent)`, color: TYPE_META[sec.type].hue }}
-                >
-                  {CN_NUM[secIndex]}
-                </span>
-                {sec.title}
-                <ChevronRight size={12} />
-                <span className="text-muted">第 {num} 题</span>
-                <span className="ml-auto tabular-nums">
-                  {num} / {total}
-                </span>
+              <div className="editor-locator flex items-center gap-1.5 text-[12px] text-faint">
+                <span>{CN_NUM[secIndex]}、{sec.title}</span>
+                <ChevronRight size={12} className="opacity-60" />
+                <span className="tabular-nums">{num} / {total}</span>
               </div>
-              <div className="workbench-heading-row mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="workbench-heading text-[26px] font-semibold tracking-tight">第 {num} 题</h1>
-                <Select aria-label="题型" className="max-w-[140px]" value={q.type} onValueChange={type => onChange(changeQuestionType(q, type as QType))} options={Object.entries(TYPE_META).map(([value, meta]) => ({ value, label: meta.label }))} />
-                <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                  <ScoreStepper value={q.score} onChange={(score) => onChange({ score })} />
-                  <div className="ml-1 flex items-center">
-                    <IconButton label="上一题" kbd="Alt ↑" onClick={onPrev} disabled={!neighbors.prev}>
-                      <ChevronUp size={17} />
-                    </IconButton>
-                    <IconButton label="下一题" kbd="Alt ↓" onClick={onNext} disabled={!neighbors.next}>
-                      <ChevronDown size={17} />
-                    </IconButton>
-                    <IconButton label="删除题目" onClick={onDelete} className="hover:!text-danger">
-                      <Trash2 size={15} />
-                    </IconButton>
-                    <IconButton label="复制题目" onClick={onDuplicate} disabled={!onDuplicate}><Copy size={15} /></IconButton>
-                  </div>
+              <div className="workbench-heading-row editor-heading mt-1 flex flex-wrap items-center gap-2">
+                <h1 className="workbench-heading text-[20px] font-semibold">第 {num} 题</h1>
+                <Select aria-label="题型" className="editor-meta-select max-w-[132px]" value={q.type} onValueChange={type => onChange(changeQuestionType(q, type as QType))} options={Object.entries(TYPE_META).map(([value, meta]) => ({ value, label: meta.label }))} />
+                <ScoreStepper value={q.score} onChange={(score) => onChange({ score })} />
+                <div className="ml-auto flex items-center gap-0.5">
+                  <IconButton label={inputMode === "source" ? "改回可视编辑" : "LaTeX 源码编辑"} active={inputMode === "source"} onClick={() => setEditorInputMode(inputMode === "source" ? "visual" : "source")}><Code2 size={16} /></IconButton>
+                  <IconButton label="复制题目" onClick={onDuplicate} disabled={!onDuplicate}><Copy size={16} /></IconButton>
+                  <IconButton label="删除题目" onClick={onDelete} className="hover:!text-danger">
+                    <Trash2 size={16} />
+                  </IconButton>
                 </div>
               </div>
             </motion.div>
@@ -481,11 +403,11 @@ export const Editor = memo(function Editor({
                   transition={softSpring}
                   className="overflow-hidden"
                 >
-                  <div className="flex items-center gap-3 rounded-xl border border-warn/25 bg-warn/[0.07] px-4 py-3">
-                    <AlertTriangle size={16} className="shrink-0 text-warn" />
+                  <div className="editor-flag flex items-center gap-3 rounded-[8px] px-3 py-2.5">
+                    <AlertTriangle size={15} className="shrink-0 text-warn" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-medium text-warn">{q.flag}</div>
-                      {!/待核对|B卷|AI/.test(q.flag) && <div className="text-[12px] text-warn/70">建议转为解答题，并从题干中提取分值。</div>}
+                      <div className="text-[13px] font-medium text-fg">{q.flag}</div>
+                      {!/待核对|B卷|AI/.test(q.flag) && <div className="text-[12px] text-muted">建议转为解答题，并从题干中提取分值。</div>}
                     </div>
                     {!/待核对|B卷|AI/.test(q.flag) && <Button size="sm" variant="secondary" icon={<ArrowRightLeft size={13} />} onClick={onConvert}>
                       转为解答题
@@ -525,32 +447,114 @@ export const Editor = memo(function Editor({
               title="题干"
               right={
                 <>
-                  <IconButton label="行内公式" onClick={() => stemRef.current?.insert("$x$", 1)}>
+                  <IconButton label="行内公式（或输入 $）" onMouseDown={event => event.preventDefault()} onClick={() => stemRef.current?.insertMath("", "$x$", 1)}>
                     <Sigma size={15} />
                   </IconButton>
-                  <IconButton label="分式" onClick={() => stemRef.current?.insert("$\\frac{}{}$", 4)}>
+                  <IconButton label="分式" onMouseDown={event => event.preventDefault()} onClick={() => stemRef.current?.insertMath("\\frac{#0}{#?}", "$\\frac{}{}$", 4)}>
                     <Divide size={15} />
                   </IconButton>
-                  <IconButton label="根号" onClick={() => stemRef.current?.insert("$\\sqrt{}$", 2)}>
+                  <IconButton label="根号" onMouseDown={event => event.preventDefault()} onClick={() => stemRef.current?.insertMath("\\sqrt{#0}", "$\\sqrt{}$", 2)}>
                     <SquareRadical size={15} />
                   </IconButton>
-                  <IconButton label="填空横线" onClick={() => stemRef.current?.insert("______")}>
+                  <IconButton label="填空横线" onMouseDown={event => event.preventDefault()} onClick={() => stemRef.current?.insertText("______")}>
                     <Underline size={15} />
                   </IconButton>
-                  <IconButton label="插入表格" onClick={() => stemRef.current?.insert("\n\n| 项目 | 数值 | 合计 |\n| --- | --- | --- |\n| 内容 | $1$ | $1$ |\n| 内容 | $2$ | $2$ |\n\n")}>
+                  <IconButton label="插入表格（源码）" onMouseDown={event => event.preventDefault()} onClick={() => stemRef.current?.insertSource("\n\n| 项目 | 数值 | 合计 |\n| --- | --- | --- |\n| 内容 | $1$ | $1$ |\n| 内容 | $2$ | $2$ |\n\n")}>
                     <Table2 size={15} />
                   </IconButton>
-                  <span className="mx-1 h-4 w-px bg-line-strong" />
+                  <span className="mx-1 h-4 w-px bg-line" />
                   <IconButton label="打开图片识别" onClick={onOcr}>
                     <Sparkles size={15} />
                   </IconButton>
                 </>
               }
             >
-              <TexEditor ref={stemRef} value={q.stem} onChange={(stem) => onChange({ stem })} onCommit={commitStem} placeholder="输入题干…" />
-              <LivePreview text={q.stem} image={q.image === "plot"} />
+              <MathTextField ref={stemRef} field="stem" label="题干" value={q.stem} onChange={stem => onChange({ stem })} onCommit={commitStem} placeholder="输入题干…" visualPlaceholder="输入题干…（输入 $ 插入公式）" />
+              {(inputMode === "source" || !canEditVisually(q.stem)) ? <LivePreview text={q.stem} image={q.image === "plot"} /> : q.image === "plot" && <div className="mt-3 flex justify-center"><PlotSvg ink="#c9cddb" accent="var(--color-accent)" width={250} /></div>}
             </Card>
 
+            {/* 选项 */}
+            {hasOptions(q.type) && (
+              <Card
+                title="选项"
+                className="editor-tools-visible"
+                right={
+                  <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => onChange({ options: [...q.options, ""] })} disabled={q.options.length >= 6}>
+                    添加选项
+                  </Button>
+                }
+              >
+                <div className="workbench-options -mx-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  {q.options.map((o, i) => {
+                    const L = LETTERS[i];
+                    const on = q.answer.includes(L);
+                    return (
+                      <OptionCard
+                        key={i}
+                        letter={L}
+                        layoutKey={`${q.id}:${q.options.length}`}
+                        text={o}
+                        correct={on}
+                        onChange={(v) => onChange({ options: q.options.map((x, j) => (j === i ? v : x)) })}
+                        onRemove={() => onChange({ options: q.options.filter((_, j) => j !== i), answer: q.answer.flatMap(answer => { const index = LETTERS.indexOf(answer); return index < 0 ? [answer] : index === i ? [] : [LETTERS[index > i ? index - 1 : index]]; }) })}
+                        onToggle={() =>
+                          onChange({
+                            answer: q.type !== "multi" ? (on ? [] : [L]) : on ? q.answer.filter((a) => a !== L) : [...q.answer, L].sort(),
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* 答案 */}
+            {!hasOptions(q.type) && (
+              <Card group="answers" title={q.type === "blank" ? "答案" : "参考答案"}>
+                <div className="space-y-3">{(q.answer.length ? q.answer : [""]).map((answer, index) => <div key={index}>
+                  {q.answer.length > 1 && <div className="mb-1.5 text-[12px] text-muted">答案 {index + 1}</div>}
+                  <MathTextField field={`answer-${index}`} label={index ? `第 ${index + 1} 项答案` : "答案"} minH={q.type === "blank" ? 48 : 92} value={answer} onChange={value => { const answers = q.answer.length ? [...q.answer] : [""]; answers[index] = value; onChange({ answer: answers }); }} placeholder={index ? `输入第 ${index + 1} 项答案…` : "输入答案…"} />
+                  {answer && (inputMode === "source" || !canEditVisually(answer)) && <SourcePreview text={answer} />}
+                </div>)}</div>
+              </Card>
+            )}
+
+            {/* 解析 */}
+            {workbench && hasOptions(q.type) && <Card group="answers" title="答案">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="本题正确选项">
+                {q.options.map((_, index) => {
+                  const letter = LETTERS[index];
+                  const selected = q.answer.includes(letter);
+                  return <motion.button key={letter} type="button" whileTap={{ scale: .92 }} aria-label={`正确选项 ${letter}`} aria-pressed={selected} className={cx("grid h-9 w-9 place-items-center rounded-full border text-[13px] font-semibold transition-colors", selected ? "border-ok/40 bg-ok/10 text-ok" : "border-line-strong text-muted hover:text-fg")} onClick={() => onChange({ answer: q.type !== "multi" ? (selected ? [] : [letter]) : selected ? q.answer.filter(value => value !== letter) : [...q.answer, letter].sort() })}>{letter}</motion.button>;
+                })}
+              </div>
+            </Card>}
+            <Card
+              group="answers"
+              title="解析"
+              right={
+                <motion.button
+                  onClick={() => setShowAnalysis((v) => !v)}
+                  className="grid h-7 w-7 place-items-center rounded-[6px] text-faint hover:bg-[var(--surface-hover)] hover:text-fg"
+                  aria-label="展开或收起解析"
+                >
+                  <motion.span animate={{ rotate: showAnalysis ? 0 : -90 }} transition={spring}>
+                    <ChevronDown size={15} />
+                  </motion.span>
+                </motion.button>
+              }
+            >
+              <AnimatePresence initial={false}>
+                {showAnalysis && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={softSpring} className="overflow-hidden">
+                    <MathTextField field="analysis" label="解析" minH={64} value={q.analysis} onChange={analysis => onChange({ analysis })} placeholder="写下解题思路…" />
+                    {q.analysis && (inputMode === "source" || !canEditVisually(q.analysis)) && <SourcePreview text={q.analysis} />}
+            </motion.div>
+                )}
+              </AnimatePresence>
+            </Card>
+            {workbench ? <>
             {q.sourceImage && <Card group="figures" title="原图对照"><SourceOcr key={q.id} question={q} onChange={onChange} /></Card>}
             <Card group="figures"><FigureEditor key={q.id} question={q} onChange={onChange} /></Card>
             <Card group="figures"><QuestionDrawingEditor key={q.id} value={q.drawing || ""} onChange={changeDrawing} /></Card>
@@ -587,104 +591,62 @@ export const Editor = memo(function Editor({
               </Card>
             )}
 
-            {/* 选项 */}
-            {hasOptions(q.type) && (
+            </> : <ExtrasSection q={q} defaultOpen={extrasOpen}>
+            {q.sourceImage && <Card group="figures" title="原图对照"><SourceOcr key={q.id} question={q} onChange={onChange} /></Card>}
+            <Card group="figures"><FigureEditor key={q.id} question={q} onChange={onChange} /></Card>
+            <Card group="figures"><QuestionDrawingEditor key={q.id} value={q.drawing || ""} onChange={changeDrawing} /></Card>
+            <Card group="properties" title="属性">
+              <div className="space-y-3 text-[12px]">
+                {onMove && sections && <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">所属大题</span><Select aria-label="移动到大题" value={sec.id} onValueChange={onMove} options={sections.map(section => ({ value: section.id, label: section.title }))} /></label>}
+                <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">来源</span><input aria-label="题目来源" className={inputCls} value={q.source || ""} onChange={event => onChange({ source: event.target.value })} /></label>
+                <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">知识点</span><input aria-label="题目知识点" className={inputCls} value={q.knowledge?.join("，") || ""} onChange={event => onChange({ knowledge: event.target.value.split(/[,，、;；]/) })} /></label>
+                <label className="flex items-center gap-3"><span className="w-16 shrink-0 text-muted">难度</span><Select aria-label="题目难度" value={q.difficulty || ""} onValueChange={value => onChange({ difficulty: (value || undefined) as Question["difficulty"] })} options={[{ value: "", label: "未设置" }, { value: "easy", label: "基础" }, { value: "medium", label: "中等" }, { value: "hard", label: "较难" }]} /></label>
+                {isLongAnswer(q.type) && <label className="flex items-center gap-3"><span className="w-20 shrink-0 text-muted">答题卡空间</span><Select aria-label="答题卡空间" value={q.answerSpace ?? "auto"} onValueChange={value => onChange({ answerSpace: value as Question["answerSpace"] })} options={[{ value: "auto", label: "自动" }, { value: "quarter", label: "四分之一页" }, { value: "half", label: "半页" }, { value: "full", label: "整页" }]} /></label>}
+                {isLongAnswer(q.type) && paperMode === "integrated" && <label className="flex items-center gap-3"><span className="w-20 shrink-0 text-muted">卷内答题空间</span><Select aria-label="卷内答题空间" value={q.paperAnswerSpace ?? "follow"} onValueChange={value => onChange({ paperAnswerSpace: value === "follow" ? undefined : value as Question["paperAnswerSpace"] })} options={[{ value: "follow", label: "跟随答题卡" }, { value: "auto", label: "自动紧凑" }, { value: "quarter", label: "四分之一页" }, { value: "half", label: "半页" }, { value: "full", label: "整页" }]} /></label>}
+                <div className="flex items-center justify-between"><span>题前分页</span><Switch label="题前分页" checked={Boolean(q.pageBreakBefore)} onChange={pageBreakBefore => onChange({ pageBreakBefore })} /></div>
+              </div>
+            </Card>
+
+            {/* 题图 */}
+            {q.image === "plot" && (
               <Card
-                title="选项"
+                group="figures"
+                title="题图"
                 right={
-                  <Button size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => onChange({ options: [...q.options, ""] })} disabled={q.options.length >= 6}>
-                    添加选项
-                  </Button>
+                  <>
+                    <IconButton label="删除图片" onClick={() => onChange({ image: undefined })}>
+                      <Trash2 size={14} />
+                    </IconButton>
+                  </>
                 }
               >
-                <div className="workbench-options grid grid-cols-2 gap-2.5">
-                  {q.options.map((o, i) => {
-                    const L = LETTERS[i];
-                    const on = q.answer.includes(L);
-                    return (
-                      <OptionCard
-                        key={i}
-                        letter={L}
-                        text={o}
-                        correct={on}
-                        onChange={(v) => onChange({ options: q.options.map((x, j) => (j === i ? v : x)) })}
-                        onRemove={() => onChange({ options: q.options.filter((_, j) => j !== i), answer: q.answer.flatMap(answer => { const index = LETTERS.indexOf(answer); return index < 0 ? [answer] : index === i ? [] : [LETTERS[index > i ? index - 1 : index]]; }) })}
-                        onToggle={() =>
-                          onChange({
-                            answer: q.type !== "multi" ? (on ? [] : [L]) : on ? q.answer.filter((a) => a !== L) : [...q.answer, L].sort(),
-                          })
-                        }
-                      />
-                    );
-                  })}
+                <div className="flex items-center gap-4">
+                  <div className="grid h-[104px] w-[150px] place-items-center rounded-lg bg-white">
+                    <PlotSvg width={136} />
+                  </div>
                 </div>
               </Card>
             )}
 
-            {/* 答案 */}
-            {!hasOptions(q.type) && (
-              <Card group="answers" title={q.type === "blank" ? "答案" : "参考答案"}>
-                <div className="space-y-3">{(q.answer.length ? q.answer : [""]).map((answer, index) => <div key={index}>
-                  {q.answer.length > 1 && <div className="mb-1.5 text-[12px] text-muted">答案 {index + 1}</div>}
-                  <TexEditor minH={q.type === "blank" ? 48 : 92} value={answer} onChange={value => { const answers = q.answer.length ? [...q.answer] : [""]; answers[index] = value; onChange({ answer: answers }); }} placeholder={index ? `输入第 ${index + 1} 项答案…` : "输入答案…"} />
-                  {answer && <LivePreview text={answer} />}
-                </div>)}</div>
-              </Card>
-            )}
-
-            {/* 解析 */}
-            {workbench && hasOptions(q.type) && <Card group="answers" title="答案">
-              <div className="flex flex-wrap gap-2" role="group" aria-label="本题正确选项">
-                {q.options.map((_, index) => {
-                  const letter = LETTERS[index];
-                  const selected = q.answer.includes(letter);
-                  return <motion.button key={letter} type="button" whileTap={{ scale: .92 }} aria-label={`正确选项 ${letter}`} aria-pressed={selected} className={cx("grid h-9 w-9 place-items-center rounded-full border text-[13px] font-semibold transition-colors", selected ? "border-ok/40 bg-ok/10 text-ok" : "border-line-strong text-muted hover:text-fg")} onClick={() => onChange({ answer: q.type !== "multi" ? (selected ? [] : [letter]) : selected ? q.answer.filter(value => value !== letter) : [...q.answer, letter].sort() })}>{letter}</motion.button>;
-                })}
-              </div>
-            </Card>}
-            <Card
-              group="answers"
-              title="解析"
-              right={
-                <motion.button
-                  onClick={() => setShowAnalysis((v) => !v)}
-                  className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-white/[0.06] hover:text-fg"
-                  aria-label="展开或收起解析"
-                >
-                  <motion.span animate={{ rotate: showAnalysis ? 0 : -90 }} transition={spring}>
-                    <ChevronDown size={15} />
-                  </motion.span>
-                </motion.button>
-              }
-            >
-              <AnimatePresence initial={false}>
-                {showAnalysis && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={softSpring} className="overflow-hidden">
-                    <TexEditor minH={64} value={q.analysis} onChange={(analysis) => onChange({ analysis })} placeholder="写下解题思路…" />
-                    {q.analysis && <LivePreview text={q.analysis} />}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Card>
+            </ExtrasSection>}
             </motion.div>
 
             {/* 上下题 */}
-            <motion.div variants={item} className="workbench-footer grid grid-cols-2 gap-3 pt-2">
+            <motion.div variants={item} className="workbench-footer grid grid-cols-2 gap-3 border-t border-line pt-3">
               {[neighbors.prev, neighbors.next].map((n, i) => (
                 <motion.button
                   key={i}
                   disabled={!n}
                   onClick={i === 0 ? onPrev : onNext}
-                  whileHover={n ? { y: -2 } : undefined}
                   whileTap={n ? { scale: 0.98 } : undefined}
                   transition={spring}
                   className={cx(
-                    "rounded-xl border border-line px-4 py-3 text-left transition-colors hover:border-white/[0.14] hover:bg-white/[0.025] disabled:opacity-0",
+                    "min-w-0 rounded-[6px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-0",
                     i === 1 && "text-right",
                   )}
                 >
-                  <div className="text-[11.5px] text-faint">{i === 0 ? "← 上一题" : "下一题 →"}</div>
-                  {n && <div className="mt-1 truncate text-[13px] text-muted">第 {n.num} 题 · {n.stem}</div>}
+                  <div className="text-[12px] text-faint">{i === 0 ? "← 上一题" : "下一题 →"}</div>
+                  {n && <div className="mt-0.5 truncate text-[13px] text-muted">第 {n.num} 题 · {n.stem}</div>}
                 </motion.button>
               ))}
             </motion.div>

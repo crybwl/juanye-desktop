@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Check, Moon, Sun } from "lucide-react";
-import { setAppearance } from "../appearance";
+import { setAppearance, withThemeTransition } from "../appearance";
 import { TELEGRAM_THEMES, useTelegramTheme } from "../telegram-themes";
 import { useTelegramScheme } from "../telegram-scheme";
 import { Segmented } from "../ui";
@@ -13,11 +13,11 @@ export function TelegramThemePicker() {
     <legend className="px-1.5 text-[13px] font-medium text-accent">Telegram 主题</legend>
     <div className="mb-4 flex items-center justify-between gap-3" role="group" aria-label="Telegram 明暗模式">
       <span className="text-[12.5px] text-muted">明暗模式</span>
-      <Segmented size="sm" value={scheme} onChange={setScheme} options={[{ value: "dark", label: "深色", icon: <Moon size={13} /> }, { value: "light", label: "浅色", icon: <Sun size={13} /> }]} />
+      <Segmented size="sm" value={scheme} onChange={value => withThemeTransition(() => setScheme(value))} options={[{ value: "dark", label: "深色", icon: <Moon size={13} /> }, { value: "light", label: "浅色", icon: <Sun size={13} /> }]} />
     </div>
     <div className="grid grid-cols-3 gap-3">
       {TELEGRAM_THEMES.map(theme => <label key={theme.id} className="telegram-theme-choice relative cursor-pointer" style={{ "--theme-wallpaper": theme.wallpaper, "--theme-accent": scheme === "light" ? theme.fill[0] : theme.accent, "--theme-fill": theme.fill[0], "--theme-fill-2": theme.fill[1] } as CSSProperties}>
-        <input className="peer sr-only" type="radio" name="juanye-telegram-theme" value={theme.id} checked={selected === theme.id} onChange={() => { setSelected(theme.id); setAppearance("telegram"); }} />
+        <input className="peer sr-only" type="radio" name="juanye-telegram-theme" value={theme.id} checked={selected === theme.id} onChange={() => withThemeTransition(() => { setSelected(theme.id); setAppearance("telegram"); })} />
         <span className="telegram-theme-card">
           <span className="telegram-theme-bubble telegram-theme-bubble-out" aria-hidden="true" />
           <span className="telegram-theme-bubble telegram-theme-bubble-in" aria-hidden="true" />

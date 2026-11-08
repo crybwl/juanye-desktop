@@ -21,7 +21,6 @@
 .env.*
 !.env.example
 *.juanye
-*.juanye-book
 *.paperflow
 draft.json
 model.json

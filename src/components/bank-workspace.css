@@ -556,10 +556,8 @@
   .bank-catalog-tools,
   .bank-detail-action,
   .bank-detail-collapse,
-  .bank-entry-top > .checkbox-control,
   .bank-entry-grip,
   .bank-favorite:not([data-favorite="true"]),
-  .bank-entry-bottom > :is(.bank-pick:not([data-picked]), .bank-restore),
   .bank-basket-item > button:not(.bank-basket-stem),
   .bank-preview-bottom-actions {
     opacity: 0;
@@ -594,4 +592,259 @@
   :is(.bank-nav-pill, .bank-sidebar-surface) { transition: none; }
   :is(.bank-workspace, .bank-workspace *, .bank-dialog *, .bank-lightbox *) { animation: none !important; }
   :is(.bank-entry, .bank-entry *, .bank-type-rail button, .bank-hero-stat, .bank-complete-options > div, .bank-nav-icon) { translate: none !important; scale: none !important; rotate: none !important; }
+}
+
+/* ---------- 单行筛选栏 ---------- */
+.bank-filter-bar { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 0 22px 10px; border-bottom: 1px solid var(--color-line); }
+.bank-filter-bar .bank-type-rail { min-width: 0; flex: 1; padding: 0 4px; }
+.bank-select-all { display: grid; flex-shrink: 0; place-items: center; width: 28px; height: 30px; }
+.bank-filter-bar .bank-sort { width: 128px; flex-shrink: 0; height: 30px; border-radius: 9px; font-size: 11.5px; }
+.bank-filter-popover { position: relative; flex-shrink: 0; }
+.bank-filter-trigger { display: inline-flex; height: 30px; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid var(--color-line); border-radius: 9px; color: var(--color-muted); font-size: 11.5px; transition: color .15s, border-color .15s, background .15s; }
+.bank-filter-trigger:hover, .bank-filter-trigger[aria-expanded="true"] { border-color: var(--color-line-strong); color: var(--color-fg); }
+.bank-filter-trigger[data-active] { border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); color: var(--color-accent); }
+.bank-filter-trigger b { display: grid; min-width: 16px; height: 16px; place-items: center; padding: 0 4px; border-radius: 99px; background: var(--color-accent); color: var(--color-bg); font-size: 10px; font-weight: 700; }
+.bank-filter-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; display: grid; width: 300px; gap: 10px; padding: 14px; border: 1px solid var(--color-line-strong); border-radius: 14px; background: var(--surface-popup); box-shadow: 0 18px 48px -16px rgb(0 0 0 / .5); }
+.bank-filter-panel .select-trigger { width: 100%; height: 34px; border-radius: 10px; font-size: 12px; }
+.bank-active-filters { border-bottom: 1px solid var(--color-line); }
+
+/* ---------- 卡片：选项预览、选题篮入口 ---------- */
+.bank-entry-body { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.bank-entry-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 12px; color: var(--color-muted); font-size: 12px; line-height: 1.7; }
+.bank-entry-options[data-long] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bank-entry-options > span { display: flex; min-width: 0; gap: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bank-entry-options > span > b { flex-shrink: 0; font-weight: 600; }
+.bank-entry-options > span[data-correct] > b { color: var(--color-ok); }
+.bank-entry-options .math-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bank-catalog-list[data-density="grid"] .bank-entry-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bank-entry { padding-top: 12px; padding-bottom: 10px; }
+.bank-basket-chip { display: inline-flex; height: 28px; flex-shrink: 0; align-items: center; gap: 6px; margin-left: auto; padding: 0 10px; border: 1px solid var(--color-line); border-radius: 99px; color: var(--color-muted); font-size: 11.5px; transition: color .15s, border-color .15s; }
+.bank-basket-chip:hover { border-color: var(--color-line-strong); color: var(--color-fg); }
+.bank-basket-chip b { color: var(--color-accent); font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+ * v0.6 界面规范：题库改为“列表行”，去掉题型配色、光晕、渐变与发光。
+ * 只覆盖外观；拖拽、选题飞入、收藏星爆、分页翻动等动效全部保留。
+ * ============================================================ */
+:root { --bank-hover: var(--surface-hover); --bank-accent-soft: color-mix(in srgb, var(--color-accent) 10%, transparent); --bank-inset: var(--surface-inset); }
+:is(.bank-entry, .bank-detail-tools, .bank-preview-paper, .bank-basket-item, .bank-type-rail button, .bank-flight, .bank-drag-ghost) { --type-ink: var(--color-muted); }
+.bank-workspace { background: var(--surface-editor); }
+:root[data-theme="telegram"] .bank-workspace { background: transparent; }
+.bank-workspace kbd, .bank-preview-empty kbd { border-bottom-width: 1px; border-radius: 4px; font-weight: 500; }
+
+/* 左侧题库导航 */
+.bank-library-sidebar { background: var(--surface-sidebar); border-right: 1px solid var(--color-line); }
+:root[data-theme="telegram"] .bank-library-sidebar { background: transparent; }
+.bank-sidebar-surface { border-right-color: var(--color-line); background: var(--surface-sidebar); }
+.bank-library-sidebar[data-expanded="true"] .bank-sidebar-surface { box-shadow: 8px 0 24px -16px rgb(0 0 0 / .25); }
+.bank-sidebar-toggle { border-radius: 6px; }
+.bank-sidebar-toggle:hover { color: var(--color-fg); }
+.bank-sidebar-label { font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.bank-nav-item { min-height: 34px; border-radius: 6px; font-size: 13px; }
+.bank-nav-item[data-active="true"] { font-weight: 500; }
+.bank-nav-pill { border-radius: 6px; background: var(--surface-active); box-shadow: none; }
+.bank-nav-pill::before { content: none; }
+.bank-nav-icon { width: 24px; height: 24px; border-radius: 6px; background: transparent; }
+.bank-nav-item:hover .bank-nav-icon { scale: 1; rotate: 0deg; }
+.bank-nav-item[data-active="true"] .bank-nav-icon { color: var(--color-fg); background: transparent; }
+.bank-nav-item[data-tone="trash"][data-active="true"] .bank-nav-icon { background: transparent; }
+.bank-nav-item small { background: transparent; font-size: 12px; font-weight: 400; }
+.bank-nav-item[data-active="true"] small { color: var(--color-muted); background: transparent; }
+.bank-collection-row .bank-nav-icon { color: var(--color-muted); }
+.bank-collection-tools { background: var(--surface-sidebar); }
+.bank-empty-collection { border-radius: 6px; font-size: 12px; }
+.bank-sidebar-footer { border: 0; border-radius: 6px; background: transparent; font-size: 12px; }
+.bank-sidebar-footer small { font-size: 11px; }
+.bank-library-summary, .bank-sidebar-stat { font-size: 12px; }
+
+/* 标题、搜索、筛选 */
+.bank-catalog-heading { min-height: 44px; padding: 8px 24px 4px; }
+.bank-catalog-count, .bank-catalog-title h2 { font-size: 12px; }
+.bank-basket-chip { height: 28px; border-radius: 6px; font-size: 12px; }
+.bank-basket-chip:hover { background: var(--surface-hover); }
+.bank-basket-chip b { color: var(--color-fg); }
+.bank-density { padding: 2px; border: 0; border-radius: 8px; }
+.bank-density button { width: 28px; height: 24px; border-radius: 6px; }
+.bank-density-pill { border-radius: 6px; background: var(--color-panel); box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--color-line); }
+.bank-search-toolbar { margin: 0 24px 10px; gap: 4px; }
+.bank-search > svg { left: 10px; }
+.bank-search .bank-search-input { height: 32px; padding-left: 32px; padding-right: 36px; border-radius: 6px; font-size: 13px; }
+.bank-search:focus-within > svg { color: var(--color-muted); scale: 1; }
+.bank-search:focus-within .bank-search-input { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+.bank-search > kbd { right: 9px; }
+.bank-search-glow { display: none; }
+.bank-workspace-actions > span > button:hover { color: var(--color-fg); }
+.bank-more > summary { border-radius: 6px; }
+.bank-more-menu { border: 0; border-radius: 8px; background: var(--surface-popup); box-shadow: var(--shadow-popup); padding: 4px; }
+.bank-more-group { font-size: 11px; font-weight: 500; letter-spacing: 0; }
+.bank-more-menu button { padding: 7px 8px; border-radius: 4px; font-size: 13px; }
+.bank-more-menu button:hover:not(:disabled) { padding-left: 8px; color: var(--color-fg); background: var(--surface-hover); }
+.bank-more-menu button:hover:not(:disabled) > svg { color: var(--color-fg); }
+.bank-filter-bar { gap: 6px; padding: 0 24px 8px; }
+.bank-type-rail { gap: 2px; mask-image: none; }
+.bank-type-rail button { height: 28px; gap: 5px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; }
+.bank-type-rail button:hover { translate: none; }
+.bank-type-rail button > i { display: none; }
+.bank-type-rail button small { font-size: 12px; }
+.bank-type-rail button[aria-pressed="true"] { color: var(--color-fg); font-weight: 500; }
+.bank-type-pill { inset: 0; border-radius: 6px; }
+.bank-filter-trigger { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+.bank-filter-trigger:hover, .bank-filter-trigger[aria-expanded="true"] { background: var(--surface-hover); }
+.bank-filter-trigger[data-active] { border-color: var(--color-line-strong); color: var(--color-fg); }
+.bank-filter-trigger b { background: var(--accent-fill); color: var(--accent-ink, #fff); }
+:root .bank-filter-bar .bank-sort { width: 120px; height: 28px; border-radius: 6px; font-size: 12px; }
+.bank-filter-panel { border: 0; border-radius: 8px; box-shadow: var(--shadow-popup); }
+:root .bank-filter-panel .select-trigger { height: 32px; border-radius: 6px; font-size: 13px; }
+.bank-active-filters button:not(.bank-text-action) { height: 24px; border-radius: 4px; color: var(--color-fg); background: var(--surface-inset); box-shadow: none; font-size: 12px; }
+.bank-active-filters button:not(.bank-text-action):hover { background: var(--surface-active); }
+.bank-text-action { font-size: 12px; }
+
+/* 题目列表：分隔线行，不再是彩色卡片 */
+.bank-catalog-list { padding: 0 0 24px; }
+.bank-entry-grid { gap: 0; }
+.bank-entry {
+  display: grid; height: auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto; grid-template-areas: "check main actions";
+  align-items: start; column-gap: 12px;
+  padding: 12px 24px; border: 0; border-bottom: 1px solid var(--color-line); border-radius: 0;
+  background: transparent; cursor: grab;
+  transition: background-color .15s;
+}
+.bank-entry::after { content: none; }
+.bank-entry:hover { translate: none; border-color: var(--color-line); background: var(--surface-hover); box-shadow: none; }
+.bank-entry[data-active="true"] { border-color: var(--color-line); background: color-mix(in srgb, var(--color-accent) 7%, transparent); box-shadow: inset 2px 0 0 var(--accent-fill); }
+.bank-entry[data-selected] { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
+.bank-entry-check { grid-area: check; display: grid; place-items: center; width: 20px; height: 22px; }
+.bank-entry-check .checkbox-control { width: 20px; height: 20px; flex-basis: 20px; }
+.bank-entry-main { grid-area: main; min-width: 0; }
+.bank-entry-actions { grid-area: actions; display: flex; align-items: center; gap: 2px; height: 24px; }
+.bank-entry-preview { gap: 12px; padding: 0; border-radius: 4px; }
+.bank-entry-stem { font-size: 13px; line-height: 1.75; -webkit-line-clamp: 2; }
+.bank-entry-options { margin-top: 2px; color: var(--color-muted); font-size: 12px; line-height: 1.65; }
+.bank-entry-options > span > b { color: var(--color-faint); font-weight: 500; }
+.bank-entry-options > span[data-correct] > b { color: var(--color-ok); font-weight: 600; }
+.bank-entry-preview > img { width: 64px; height: 48px; border-radius: 4px; box-shadow: 0 0 0 1px var(--color-line); }
+.bank-entry:hover .bank-entry-preview > img { scale: 1; rotate: 0deg; }
+.bank-entry-meta { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 0; margin-top: 4px; padding-top: 0; border-top: 0; color: var(--color-faint); font-size: 12px; line-height: 20px; }
+.bank-entry-bottom.bank-entry-meta > * { flex: none; min-width: 0; }
+.bank-entry-meta > .bank-meta-item::before { content: "·"; margin: 0 6px; color: var(--color-faint); }
+.bank-entry-bottom.bank-entry-meta > span.bank-entry-source { flex: 0 1 auto; min-width: 0; max-width: 220px; overflow: hidden; color: var(--color-faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.bank-entry-bottom.bank-entry-meta > small { margin: 0; color: var(--color-faint); font-size: 12px; }
+.bank-meta-link { color: var(--color-faint); font-size: 12px; transition: color .15s; }
+.bank-meta-link:hover, .bank-meta-link[data-active] { color: var(--color-fg); text-decoration: underline; text-underline-offset: 3px; }
+.bank-type-tag { height: auto; gap: 0; padding: 0; border-radius: 0; color: var(--color-muted); background: transparent; box-shadow: none; font-size: 12px; font-weight: 500; }
+.bank-score-tag { color: var(--color-faint); font-weight: 400; }
+.bank-version-tag { margin-left: 8px; padding: 0 5px; border-color: var(--color-line-strong); border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 16px; }
+.bank-flag-tag { margin-left: 8px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 18px; }
+.bank-entry-grip { margin-left: 0; translate: none; }
+.bank-entry:hover .bank-entry-grip { translate: none; }
+.bank-favorite { width: 28px; height: 28px; border-radius: 6px; }
+.bank-favorite[data-favorite="true"] svg { filter: none; }
+.bank-entry-actions > .btn { height: 26px; margin-left: 4px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+:root .bank-pick:not(:disabled):hover { border-color: color-mix(in srgb, var(--color-fg) 22%, transparent); color: var(--color-fg); background: var(--surface-hover); box-shadow: none; }
+.bank-pick[data-picked] { color: var(--color-ok); }
+/* 卡片视图：同样克制的白底卡片 */
+.bank-catalog-list[data-density="grid"] { padding: 16px 24px 24px; }
+.bank-catalog-list[data-density="grid"] .bank-entry-grid { gap: 12px; }
+.bank-catalog-list[data-density="grid"] .bank-entry {
+  height: 100%; grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: auto 1fr;
+  grid-template-areas: "check actions" "main main"; row-gap: 8px;
+  padding: 12px; border: 1px solid var(--color-line); border-radius: 8px;
+}
+.bank-catalog-list[data-density="grid"] .bank-entry-actions { justify-self: end; }
+.bank-catalog-list[data-density="grid"] .bank-entry[data-active="true"] { border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-line)); box-shadow: none; }
+
+/* 骨架、空状态、批量条、分页 */
+.bank-skeletons { gap: 0; }
+.bank-skeleton { border: 0; border-bottom: 1px solid var(--color-line); border-radius: 0; background: transparent; padding: 12px 24px; }
+.bank-empty-halo { display: none; }
+.bank-batch-toolbar { bottom: 56px; padding: 6px 6px 6px 10px; border: 0; border-radius: 8px; background: var(--surface-popup); box-shadow: var(--shadow-popup); backdrop-filter: none; }
+.bank-batch-count { font-size: 12px; }
+.bank-batch-count b { min-width: 22px; height: 22px; border-radius: 4px; color: var(--accent-ink, #fff); background: var(--accent-fill); box-shadow: none; font-weight: 600; }
+.bank-batch-toolbar > .btn, .bank-assign-collection > .btn { height: 28px; font-size: 12px; }
+.bank-pagination { min-height: 40px; padding: 4px 18px; background: transparent; font-size: 12px; }
+
+/* 右侧详情：标题 + 题目正文 + 键值属性，不再层层套卡片 */
+.bank-detail-pane { background: var(--surface-editor); }
+:root[data-theme="telegram"] .bank-detail-pane { background: color-mix(in srgb, var(--color-panel) 18%, transparent); }
+.bank-detail-heading { min-height: 44px; padding: 6px 12px 6px 20px; }
+.bank-detail-heading h2 { font-size: 13px; font-weight: 600; }
+.bank-detail-subtitle { border-radius: 4px; color: var(--color-muted); background: var(--surface-inset); font-size: 11px; font-weight: 500; }
+.bank-detail-subtitle[data-dirty] { animation: none; }
+.bank-detail-tools { min-height: 44px; padding: 8px 16px 0 20px; }
+.bank-detail-meta { font-size: 12px; color: var(--color-faint); }
+.bank-detail-tools > .btn { height: 28px; font-size: 12px; }
+.bank-version-history { border: 0; border-radius: 6px; }
+.bank-version-row[data-current] > i { box-shadow: 0 0 0 3px var(--color-panel); }
+.bank-version-row > button:first-of-type { border-radius: 4px; font-size: 12px; }
+.bank-version-history button[data-active="true"] { color: var(--color-fg) !important; background: var(--surface-active); }
+.bank-preview-scroll { padding: 4px 20px 24px; }
+.bank-preview-paper { padding: 8px 0 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.bank-preview-paper::before { content: none; }
+.bank-complete-preview { font-family: var(--font-serif); font-size: 15px; line-height: 1.9; }
+.bank-complete-options { gap: 2px; margin-top: 10px; }
+.bank-complete-options > div { padding: 4px 30px 4px 6px; border: 0; border-radius: 6px; background: transparent; }
+.bank-complete-options > div:hover { translate: none; background: var(--surface-hover); }
+.bank-complete-options b { width: 22px; height: 22px; border: 1px solid var(--color-line-strong); border-radius: 50%; background: transparent; font-family: var(--font-sans); font-size: 12px; font-weight: 600; }
+.bank-complete-options > div[data-correct="true"] { border: 0; background: transparent; }
+.bank-complete-options > div[data-correct="true"] b { border-color: var(--color-ok); color: #fff; background: var(--color-ok); }
+.bank-answer-block { margin-top: 12px; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+.bank-answer-block h3, .bank-answer-block[data-kind="answer"] h3, .bank-answer-block[data-kind="analysis"] h3 { color: var(--color-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.bank-answer-block h3 > button { font-size: 12px; }
+.bank-figure-zoom { border-radius: 4px; box-shadow: 0 0 0 1px var(--color-line); }
+.bank-preview-metadata { gap: 0; margin-top: 16px; border-top: 1px solid var(--color-line); }
+.bank-meta-tile { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 9px 0; border: 0; border-bottom: 1px solid var(--color-line); border-radius: 0; font-size: 13px; }
+.bank-meta-tile:hover { border-color: var(--color-line); }
+.bank-meta-tile > span { width: 56px; flex-shrink: 0; font-size: 12px; }
+.bank-meta-tile > b { font-weight: 400; }
+.bank-meta-tile > small { font-size: 12px; }
+.bank-preview-metadata > .bank-meta-tile:not(.bank-meta-wide):nth-child(odd) { padding-right: 12px; }
+.bank-review-note { background: transparent; }
+.bank-tags > *, .bank-meta-tags > button { border-radius: 4px; font-size: 12px; }
+.bank-tags button:hover, .bank-tags button[data-active], .bank-meta-tags > button:hover { translate: none; color: var(--color-fg); background: var(--surface-active); }
+.bank-preview-collections > button { border-radius: 4px; font-size: 12px; }
+.bank-preview-bottom-actions .btn { height: 28px; font-size: 12px; }
+
+/* 选题篮 */
+.bank-basket { border-top-color: var(--color-line); background: var(--surface-sidebar); }
+:root[data-theme="telegram"] .bank-basket { background: color-mix(in srgb, var(--color-panel) 18%, transparent); }
+.bank-basket::before { content: none; }
+.bank-basket-heading { min-height: 44px; padding: 8px 16px; }
+.bank-basket-icon { width: 24px; height: 24px; border-radius: 6px; color: var(--color-muted); background: transparent; box-shadow: none; }
+.bank-basket-heading strong { font-size: 13px; font-weight: 600; }
+.bank-basket-summary { font-size: 12px; }
+.bank-basket-empty { border-radius: 6px; font-size: 12px; }
+.bank-basket-empty > svg { color: var(--color-faint); }
+.bank-basket-item { border: 0; border-radius: 6px; background: transparent; }
+.bank-basket-item:hover { background: var(--surface-hover); }
+.bank-basket-index { border-radius: 4px; color: var(--color-muted); background: var(--surface-inset); font-weight: 600; }
+.bank-basket-item .bank-basket-stem { font-size: 12px; }
+.bank-basket-stem > i { color: var(--color-muted); }
+.bank-basket-insert > .btn { height: 32px; font-size: 12px; }
+.bank-basket-footer > button:first-child { font-size: 12px; }
+.bank-basket-footer > .btn { font-size: 12px; }
+.bank-basket-drop { border-radius: 8px; }
+.bank-workspace[data-dragging] .bank-basket { box-shadow: 0 -8px 24px -16px rgb(0 0 0 / .3); }
+.bank-detail-rail { background: var(--surface-sidebar); }
+.bank-detail-rail:hover { color: var(--color-fg); background: var(--surface-hover); }
+.bank-detail-rail > b { color: var(--accent-ink, #fff); background: var(--accent-fill); box-shadow: none; }
+.bank-edit-footer { min-height: 48px; background: var(--surface-editor); }
+.bank-question-editor .workbench-body { gap: 16px; padding: 16px 20px 24px; }
+.bank-question-editor .workbench-body > section, .bank-question-editor .workbench-panel--classic > section { padding: 0; border-radius: 0; }
+.bank-question-editor .workbench-panel--classic > section[data-workbench-group="answers"] { padding-top: 16px; }
+
+/* 弹窗与飞入、拖动、灯箱 */
+.bank-dialog-title > span { border-radius: 6px; color: var(--color-muted); background: var(--surface-inset); box-shadow: none; }
+.bank-import-summary { border-radius: 6px; }
+.bank-import-summary b { color: var(--color-fg); }
+.bank-flight > span { border-radius: 6px; color: var(--accent-ink, #fff); background: var(--accent-fill); box-shadow: 0 6px 16px -6px rgb(0 0 0 / .35); }
+.bank-drag-ghost { border-color: var(--color-line-strong); border-radius: 8px; box-shadow: var(--shadow-popup); }
+.bank-drag-ghost b { border-radius: 4px; color: var(--accent-ink, #fff); background: var(--accent-fill); }
+.bank-lightbox { backdrop-filter: none; }
+.bank-lightbox img { border-radius: 4px; }
+
+@media (max-width: 1190px) { .bank-entry { padding-right: 16px; padding-left: 16px; } .bank-catalog-heading, .bank-filter-bar { padding-right: 16px; padding-left: 16px; } .bank-search-toolbar { margin-right: 16px; margin-left: 16px; } }
+@media (max-width: 920px) { .bank-entry-meta > .bank-meta-link, .bank-entry-meta > small { display: none; } }
+@media (hover: hover) and (pointer: fine) {
+  .bank-entry:is(:hover, :focus-within) :is(.checkbox-control, .bank-entry-grip, .bank-favorite, .bank-pick, .bank-restore) { opacity: 1; }
 }

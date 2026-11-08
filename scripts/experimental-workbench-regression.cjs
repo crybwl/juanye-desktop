@@ -128,7 +128,9 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, callback) => { globalThis.__workbenchRequests++; callback({ cancel: true }); });
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { globalThis.__workbenchModelCalls++; throw Error('No OCR during workbench QA'); });
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(8000); await page.setViewportSize({ width: 1500, height: 980 });
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(8000); await page.setViewportSize({ width: 1500, height: 980 });
     page.on('pageerror', error => errors.push(error.message));
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
     assert.equal(await editor().getAttribute('data-editor-workbench'), 'classic');

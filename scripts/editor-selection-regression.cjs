@@ -33,7 +33,9 @@ const stem = index => `本地性能样例第 ${index} 题：已知函数 $f_${in
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_request, done) => { globalThis.__editorSelectionRequests++; done({ cancel: true }); });
       for (const name of ['model:recognize', 'model:test', 'model:generate', 'exam:analyze']) { ipcMain.removeHandler(name); ipcMain.handle(name, () => { globalThis.__editorSelectionRequests++; throw Error('Editor QA must not invoke a model'); }); }
     });
-    page = await app.firstWindow(); page.setDefaultTimeout(8000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(8000);
     page.on('pageerror', error => errors.push(error.message));
     await page.route(/^https?:\/\//, route => { requests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1440, height: 900 });

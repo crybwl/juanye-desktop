@@ -11,6 +11,7 @@ import { pdfOptions } from "../pdf";
 import { errorMessage } from "../errors";
 import { isOcrPasteTarget, OrderedOcrImports, pendingOcrPages, removeOcrPage } from "../ocr-queue";
 import { OcrImageEditor } from "./OcrImageEditor";
+import { DialogHeader } from "./DialogChrome";
 import { Select } from "./Select";
 import { Checkbox } from "./Checkbox";
 
@@ -190,11 +191,7 @@ export function OcrDialog({ open, onClose, onAdd, incomingPaste }: { open: boole
 
   return (
     <Modal open={open} onClose={() => imageEditing ? setImageEditing(undefined) : close()} className="flex h-[680px] max-h-[90vh] w-[1020px] max-w-full flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-6">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/15 text-accent"><ScanText size={18} /></span>
-        <div className="text-[14.5px] font-semibold">识别题目</div>
-        <button onClick={close} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-faint hover:bg-white/[0.06] hover:text-fg" aria-label="关闭"><X size={17} /></button>
-      </div>
+      <DialogHeader title="识别题目" subtitle="图片或 PDF 识别成题目，逐题核对后再加入" closeLabel="关闭" onClose={close} />
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-6 py-3">
         <Segmented size="sm" value={multiple ? "multiple" : "single"} onChange={(value) => { if (!busy) setMultiple(value === "multiple"); }} options={[{ value: "single", label: "单题识别" }, { value: "multiple", label: "多题识别" }]} />
         {reading && <Loader2 size={14} className="animate-spin text-accent" aria-label="正在读取文件" />}
@@ -204,14 +201,14 @@ export function OcrDialog({ open, onClose, onAdd, incomingPaste }: { open: boole
       {error && <div role="alert" className="border-b border-danger/20 bg-danger/10 px-6 py-3 text-[12.5px] text-danger">{error}</div>}
       <div className={cx("relative min-h-0 flex-1", over && "ring-2 ring-inset ring-accent")} onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setOver(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(false); }} onDrop={(event) => { event.preventDefault(); setOver(false); void load([...event.dataTransfer.files]); }}>
         {!pages.length ? (
-          <motion.div onClick={() => input.current?.click()} animate={{ scale: over ? 1.01 : 1 }} transition={spring} className={cx("m-6 flex h-[calc(100%-48px)] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong", over ? "bg-accent/10" : "bg-white/[0.015] hover:bg-white/[0.03]")}>
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-accent/25 to-accent-2/10 text-accent">{reading ? <Loader2 size={28} className="animate-spin" /> : <ImagePlus size={28} />}</span>
+          <motion.div onClick={() => input.current?.click()} animate={{ scale: over ? 1.01 : 1 }} transition={spring} className={cx("m-6 flex h-[calc(100%-48px)] cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-line-strong transition-colors", over ? "bg-accent/10" : "hover:bg-[var(--surface-hover)]")}>
+            <span className="grid h-14 w-14 place-items-center rounded-[8px] bg-[var(--surface-inset)] text-muted">{reading ? <Loader2 size={28} className="animate-spin" /> : <ImagePlus size={28} />}</span>
             <div className="mt-5 text-[16px] font-medium">{reading ? "正在读取文件…" : "拖入图片或 PDF"}</div>
             <div className="mt-2 text-[12.5px] text-faint">Ctrl + V 粘贴 · 最多 30 页</div>
           </motion.div>
         ) : (
           <div className="grid h-full min-h-0 grid-cols-[0.95fr_1.05fr]">
-            <div className="flex min-h-0 flex-col border-r border-line bg-black/10">
+            <div className="ocr-source flex min-h-0 flex-col border-r border-line">
               <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4"><span className="text-[12px] text-muted">原图</span><Select aria-label="选择识别页面" className="min-w-0 flex-1" value={active?.id ?? ""} onValueChange={setCurrent} options={pages.map(page => ({ value: page.id, label: `${page.name} · ${({ ready: "待识别", running: "识别中", done: "已识别", error: "失败" })[page.status]}` }))} /><button aria-label="裁剪或旋转本页" title="裁剪 / 旋转" disabled={busy} onClick={() => setImageEditing(active?.id)} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-white/10 hover:text-accent disabled:opacity-40"><Crop size={14} /></button><button aria-label="删除本页" title="删除本页" disabled={active?.status === "running"} onClick={() => active && remove(active.id)} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-40"><Trash2 size={14} /></button></div>
               <div aria-label="识别页面队列" className="flex h-[85px] shrink-0 gap-2 overflow-x-auto border-b border-line p-2">
                 {pages.map((page, index) => <div key={page.id} className={cx("group relative h-[67px] w-[54px] shrink-0 rounded-md border", active?.id === page.id ? "border-accent ring-1 ring-accent/30" : "border-line")}>
@@ -225,8 +222,8 @@ export function OcrDialog({ open, onClose, onAdd, incomingPaste }: { open: boole
             </div>
             <div className="min-h-0 overflow-y-auto p-5">
               {!questions.length && <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[12.5px] text-faint">{busy ? <><Loader2 className="animate-spin text-accent" size={26} />正在识别 {active?.name}</> : "待识别"}</div>}
-              {pages.map((page) => page.questions.length > 0 && <div key={page.id} className="mb-5"><button className="mb-2 max-w-full truncate text-[11px] text-faint hover:text-accent" onClick={() => setCurrent(page.id)}>{page.name} · {page.questions.length} 道题</button>{page.questions.map((q) => <div key={q.id} className={cx("mb-3 rounded-xl border p-3 transition-colors", picked.has(q.id) ? "border-accent/35 bg-accent/[0.05]" : "border-line opacity-60")}>
-                <div className="mb-2 flex items-center gap-2"><Checkbox aria-label="选择此题" checked={picked.has(q.id)} onCheckedChange={() => setPicked((previous) => { const next = new Set(previous); if (next.has(q.id)) next.delete(q.id); else next.add(q.id); return next; })} /><span className="text-[11.5px]" style={{ color: TYPE_META[q.type].hue }}>{TYPE_META[q.type].label} · {q.score} 分</span><button className="ml-auto text-[11.5px] text-accent" onClick={() => { setEditing(editing === q.id ? undefined : q.id); setCurrent(page.id); }}>{editing === q.id ? "完成" : "编辑"}</button></div>
+              {pages.map((page) => page.questions.length > 0 && <div key={page.id} className="mb-5"><button className="mb-2 max-w-full truncate text-[11px] text-faint hover:text-accent" onClick={() => setCurrent(page.id)}>{page.name} · {page.questions.length} 道题</button>{page.questions.map((q) => <div key={q.id} className={cx("ocr-result mb-2 rounded-[8px] border p-3 transition-colors", picked.has(q.id) ? "border-line-strong" : "border-line opacity-60")}>
+                <div className="mb-2 flex items-center gap-2"><Checkbox aria-label="选择此题" checked={picked.has(q.id)} onCheckedChange={() => setPicked((previous) => { const next = new Set(previous); if (next.has(q.id)) next.delete(q.id); else next.add(q.id); return next; })} /><span className="text-[12px] text-muted">{TYPE_META[q.type].label} · {q.score} 分</span><button className="ml-auto text-[11.5px] text-accent" onClick={() => { setEditing(editing === q.id ? undefined : q.id); setCurrent(page.id); }}>{editing === q.id ? "完成" : "编辑"}</button></div>
                 {editing === q.id ? <div className="space-y-2"><Select aria-label="题型" value={q.type} onValueChange={type => patch(page.id, { questions: page.questions.map((item) => item.id === q.id ? { ...item, type: type as Question["type"] } : item) })} options={Object.entries(TYPE_META).map(([value, meta]) => ({ value, label: meta.label }))} /><textarea aria-label="识别题干" className={cx(inputCls, "h-36 py-2 font-mono text-[12px]")} value={q.stem} onChange={(event) => patch(page.id, { questions: page.questions.map((item) => item.id === q.id ? { ...item, stem: event.target.value } : item) })} />{q.options.map((option, index) => <input key={index} aria-label={`选项 ${String.fromCharCode(65 + index)}`} className={cx(inputCls, "h-8 text-[12px]")} value={option} onChange={(event) => patch(page.id, { questions: page.questions.map((item) => item.id === q.id ? { ...item, options: item.options.map((value, i) => i === index ? event.target.value : value) } : item) })} />)}</div> : <><MathText text={q.stem} className="select-text text-[12.5px] leading-relaxed" />{q.options.map((option, index) => <div key={index} className="mt-1 flex gap-1.5 text-[12px]"><span>{String.fromCharCode(65 + index)}.</span><MathText text={option} /></div>)}</>}
               </div>)}</div>)}
             </div>

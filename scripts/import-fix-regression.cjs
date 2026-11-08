@@ -24,7 +24,9 @@ async function main() {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_, cb) => { globalThis.__requests++; cb({ cancel: true }); });
       ipcMain.removeHandler('model:recognize'); ipcMain.handle('model:recognize', () => { throw Error('Models forbidden'); });
     });
-    const page = await app.firstWindow(); page.setDefaultTimeout(7000);
+    const page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(7000);
     page.on('pageerror', e => errors.push(e.message));
     await page.getByPlaceholder('输入题干…', { exact: true }).waitFor();
     async function waitFor(predicate) {

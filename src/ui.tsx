@@ -44,14 +44,15 @@ export function Button({ variant = "secondary", size = "md", icon, className, ch
       className={cx(
         "btn relative inline-flex shrink-0 select-none items-center justify-center gap-2 overflow-hidden whitespace-nowrap font-medium outline-none",
         "focus-visible:ring-2 focus-visible:ring-accent/50 disabled:pointer-events-none disabled:opacity-40",
-        size === "sm" && "h-8 rounded-lg px-3 text-[12.5px]",
-        size === "md" && "h-9 rounded-[10px] px-3.5 text-[13px]",
-        size === "lg" && "h-11 rounded-xl px-5 text-[14px]",
-        variant === "primary" && "btn-primary text-[#0b0d18]",
-        variant === "secondary" && "bg-white/[0.06] text-fg hover:bg-white/[0.1]",
-        variant === "ghost" && "text-muted hover:bg-white/[0.06] hover:text-fg",
-        variant === "outline" && "border border-line-strong text-fg hover:border-white/20 hover:bg-white/[0.04]",
-        variant === "danger" && "bg-danger/12 text-danger hover:bg-danger/20",
+        // 控件尺寸：28 / 32 / 40（Ant Design controlHeight 体系），圆角统一 6px。
+        size === "sm" && "h-7 rounded-[6px] px-2.5 text-[12px]",
+        size === "md" && "h-8 rounded-[6px] px-3 text-[13px]",
+        size === "lg" && "h-10 rounded-[8px] px-4 text-[14px]",
+        variant === "primary" && "btn-primary",
+        variant === "secondary" && "ui-btn-secondary text-fg",
+        variant === "ghost" && "ui-btn-ghost text-muted hover:text-fg",
+        variant === "outline" && "ui-btn-outline border text-fg",
+        variant === "danger" && "ui-btn-danger text-danger",
         "transition-colors duration-150",
         className,
       )}
@@ -81,9 +82,9 @@ export function IconButton({
         whileTap={{ scale: 0.9 }}
         transition={spring}
         className={cx(
-          "relative grid h-8 w-8 place-items-center rounded-lg text-muted outline-none transition-colors",
-          "hover:bg-white/[0.07] hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50",
-          active && "bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent",
+          "relative grid h-8 w-8 place-items-center rounded-[6px] text-muted outline-none transition-colors",
+          "hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50",
+          active && "text-accent hover:text-accent",
           className,
         )}
         {...rest}
@@ -136,7 +137,7 @@ export function Tooltip({
             exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.08 } }}
             transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
             className={cx(
-              "pointer-events-none absolute z-[80] flex items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-[#1c1f29] px-2 py-1 text-[12px] text-fg shadow-xl",
+              "ui-tooltip pointer-events-none absolute z-[80] flex items-center gap-2 whitespace-nowrap rounded-[6px] px-2 py-1 text-[12px]",
               pos,
             )}
           >
@@ -151,7 +152,7 @@ export function Tooltip({
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-white/10 bg-white/[0.06] px-1 font-sans text-[10.5px] font-medium text-muted">
+    <kbd className="ui-kbd inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] px-1 font-sans text-[11px] font-medium text-muted">
       {children}
     </kbd>
   );
@@ -178,7 +179,7 @@ export function Segmented<T extends string | number>({
     <div
       role="tablist"
       className={cx(
-        "relative inline-flex items-center gap-0.5 rounded-[10px] bg-white/[0.045] p-[3px] ring-1 ring-inset ring-white/[0.05]",
+        "ui-segmented relative inline-flex items-center gap-0.5 rounded-[8px] p-[2px]",
         full && "flex w-full",
         className,
       )}
@@ -192,9 +193,9 @@ export function Segmented<T extends string | number>({
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cx(
-              "relative z-0 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] font-medium outline-none transition-colors duration-200",
+              "relative z-0 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] font-medium outline-none transition-colors duration-200",
               "focus-visible:ring-2 focus-visible:ring-accent/50",
-              size === "sm" ? "h-7 px-2.5 text-[12px]" : "h-8 px-3 text-[13px]",
+              size === "sm" ? "h-6 px-2.5 text-[12px]" : "h-7 px-3 text-[13px]",
               full && "flex-1",
               on ? "text-fg" : "text-muted hover:text-fg",
             )}
@@ -203,7 +204,7 @@ export function Segmented<T extends string | number>({
               <SharedPill
                 layoutId={`seg-${id}`}
                 transition={spring}
-                className="absolute inset-0 -z-10 rounded-[8px] bg-[#262a37] shadow-[0_1px_2px_rgba(0,0,0,.4),inset_0_1px_0_rgba(255,255,255,.06)]"
+                className="ui-segmented-pill absolute inset-0 -z-10 rounded-[6px]"
               />
             )}
             {o.icon}
@@ -226,14 +227,14 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
       className={cx(
         "relative flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-[3px] outline-none transition-colors duration-300",
         "focus-visible:ring-2 focus-visible:ring-accent/50",
-        checked ? "bg-accent" : "bg-white/[0.12]",
+        checked ? "ui-switch-on" : "ui-switch-off",
       )}
     >
       <motion.span
         initial={false}
         animate={{ x: checked ? 16 : 0 }}
         transition={{ type: "spring", stiffness: 700, damping: 35 }}
-        className={cx("h-4 w-4 rounded-full shadow-md", checked ? "bg-[#0d1020]" : "bg-white/70")}
+        className="h-4 w-4 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/.25)]"
       />
     </button>
   );
@@ -286,20 +287,20 @@ export function Slider({
         aria-valuemin={min}
         aria-valuemax={max}
       >
-        <div className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 overflow-hidden rounded-full bg-white/[0.08]">
+        <div className="ui-slider-track absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full">
           <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-accent/70 to-accent"
+            className="ui-slider-range h-full rounded-full"
             animate={{ width: `${pct}%` }}
             transition={drag ? { duration: 0 } : spring}
           />
         </div>
         <motion.div
-          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_4px_rgba(157,177,255,.18),0_2px_6px_rgba(0,0,0,.5)]"
+          className="ui-slider-thumb absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
           animate={{ left: `${pct}%`, scale: drag ? 1.18 : 1 }}
           transition={drag ? { left: { duration: 0 }, scale: spring } : spring}
         />
       </div>
-      <span className="w-14 text-right font-mono text-[12px] tabular-nums text-accent">{format(value)}</span>
+      <span className="w-14 text-right text-[12px] tabular-nums text-muted">{format(value)}</span>
     </div>
   );
 }
@@ -409,7 +410,7 @@ export function Modal({
       exit={{ opacity: 0, transition: { duration: 0.18 } }}
       transition={{ duration: visible ? 0.2 : 0.18 }}
     >
-      <div className="absolute inset-0 bg-[#05060a]/60 backdrop-blur-[6px]" onClick={onClose} />
+      <div className="ui-modal-overlay absolute inset-0" onClick={onClose} />
       <motion.div
         ref={surface}
         role="dialog"
@@ -426,7 +427,7 @@ export function Modal({
         onAnimationComplete={() => alignScene(surface.current)}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
         className={cx(
-          "glass relative overflow-hidden rounded-2xl border border-line-strong shadow-[0_30px_80px_-20px_rgba(0,0,0,.8)]",
+          "glass ui-modal relative overflow-hidden rounded-[8px]",
           className,
         )}
       >
@@ -463,7 +464,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 40, scale: 0.96, transition: { duration: 0.2 } }}
                 transition={{ type: "spring", stiffness: 480, damping: 34 }}
-                className="glass pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-xl border border-line-strong px-4 py-3 shadow-2xl"
+                className="glass ui-toast pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-[8px] px-4 py-3"
               >
                 <span className={cx("mt-0.5", t.tone === "warn" ? "text-warn" : t.tone === "info" ? "text-accent" : "text-ok")}>
                   {t.tone === "warn" ? <AlertTriangle size={17} /> : t.tone === "info" ? <Info size={17} /> : <CheckCircle2 size={17} />}
@@ -480,7 +481,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   <X size={14} />
                 </button>
                 <motion.span
-                  className="absolute bottom-0 left-0 h-[2px] bg-accent/50"
+                  className="absolute bottom-0 left-0 h-[2px] bg-line-strong"
                   initial={{ width: "100%" }}
                   animate={{ width: "0%" }}
                   transition={{ duration: 3.2, ease: "linear" }}
@@ -500,7 +501,7 @@ export function Field({ label, hint, children, right }: { label: string; hint?: 
   return (
     <label className="block">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[12.5px] font-medium text-muted">{label}</span>
+        <span className="text-[12px] font-medium text-muted">{label}</span>
         {right}
       </div>
       {children}
@@ -510,4 +511,4 @@ export function Field({ label, hint, children, right }: { label: string; hint?: 
 }
 
 export const inputCls =
-  "h-10 w-full rounded-[10px] border border-line-strong bg-white/[0.03] px-3 text-[13px] text-fg outline-none transition-[border-color,box-shadow,background] duration-200 placeholder:text-faint hover:border-white/20 focus:border-accent/60 focus:bg-white/[0.05] focus:shadow-[0_0_0_4px_rgba(157,177,255,.12)]";
+  "ui-input h-8 w-full rounded-[6px] border px-2.5 text-[13px] text-fg outline-none transition-[border-color,box-shadow,background] duration-150 placeholder:text-faint";

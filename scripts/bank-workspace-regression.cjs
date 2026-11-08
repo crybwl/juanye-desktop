@@ -25,7 +25,9 @@ async function main() {
     const flags = ['--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'];
     app = await _electron.launch({ executablePath: path.join(root, packaged ? 'release/win-unpacked/卷页.exe' : 'node_modules/electron/dist/electron.exe'), args: packaged ? flags : [root, ...flags], env, timeout: 30000 });
     await app.evaluate(({ BrowserWindow }) => { globalThis.fetch = () => { throw Error('HTTP disabled in isolated bank test'); }; const win = BrowserWindow.getAllWindows()[0]; win.webContents.setBackgroundThrottling(false); win.setPosition(-16000, -16000); win.setContentSize(1280, 800); win.showInactive(); });
-    page = await app.firstWindow(); page.setDefaultTimeout(12000);
+    page = await app.firstWindow();
+    // 本脚本断言 LaTeX 源码输入框：沿用“源码编辑”偏好（可视编辑另见 exam-visual-editor-regression）。
+    await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.evaluate(() => localStorage.setItem('juanye.editor-input.v1', 'source')); await page.reload(); await page.waitForSelector('[aria-label="试卷目录"]', { timeout: 30000 }); await page.waitForFunction(() => document.querySelectorAll('[data-editor-question]').length <= 1, null, { timeout: 30000 }); page.setDefaultTimeout(12000);
     page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
     await page.route(/^https?:\/\//, route => { externalRequests++; return route.abort('blockedbyclient'); });
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -191,6 +193,8 @@ async function main() {
 
     progress('insert cloned snapshots and create a separate paper');
     const expectedOrder = await basket.locator('[data-basket-id]').evaluateAll(items => items.map(item => item.dataset.basketId));
+    // 默认“按题型自动归入”另见 exam-visual-editor-regression；此处显式指定大题，检查按顺序插入快照。
+    await select(basket, '题库目标大题', '1. 解答题');
     await basket.getByRole('button', { name: '加入当前试卷', exact: true }).click();
     await until(async () => (await loadDraft()).exam.sections.flatMap(section => section.questions).length === 3, 'Basket insertion failed');
     const afterInsert = (await loadDraft()).exam.sections[0].questions;

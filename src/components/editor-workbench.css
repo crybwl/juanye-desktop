@@ -131,3 +131,9 @@
   .experimental-workbench .workbench-options { grid-template-columns: minmax(0, 1fr); }
   .workbench-tab { font-size: 11px; }
 }
+
+/* 题图 · 绘图 · 属性：折叠区摘要 */
+.editor-extras-head { border-radius: 16px; transition: background-color .15s; }
+.editor-extras-head:hover { background: color-mix(in srgb, var(--color-fg) 3%, transparent); }
+.editor-extras-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--color-fg) 6%, transparent); color: var(--color-muted); font-size: 11.5px; white-space: nowrap; }
+.editor-extras > div > div > section { border-color: var(--color-line); background: transparent; }

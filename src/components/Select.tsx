@@ -60,7 +60,8 @@ export function Select<T extends string>({ value, onValueChange, options, classN
       if (!anchor) return;
       const padding = 10, gap = 6;
       const width = Math.min(Math.max(anchor.width, 156), window.innerWidth - padding * 2);
-      const wantedHeight = Math.min(280, options.length * 38 + 12);
+      // 与 v0.6 选项尺寸一致：每项 32px，菜单上下内边距各 4px。
+      const wantedHeight = Math.min(280, options.length * 32 + 8);
       const below = window.innerHeight - anchor.bottom - padding - gap, above = anchor.top - padding - gap;
       const upward = below < Math.min(wantedHeight, 160) && above > below;
       const height = Math.max(48, Math.min(wantedHeight, upward ? above : below));
